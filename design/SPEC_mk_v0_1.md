@@ -171,7 +171,7 @@ Total bytes for a typical 1-stub mainnet card with std-table indicator and finge
 **Rationale for ordering** (closure-locked):
 
 - Stubs first → a recovery tool scanning many cards can fast-filter by Policy ID before parsing the rest.
-- Origin fingerprint + path next → matches BIP 32 origin notation `[fp/path]` reading order.
+- Origin fingerprint + path next → matches BIP 380 origin notation `[fp/path]` reading order.
 - Xpub last → fixed-size, end-of-payload, simplest streaming-parser shape; also positions the largest field at a known offset.
 
 ### 3.3 Policy ID stub format

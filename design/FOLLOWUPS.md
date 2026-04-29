@@ -42,14 +42,14 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
-### `chunk-set-id-rename` — rename "wallet identifier" to `chunk_set_id` in md1
+### `chunk-set-id-rename` — rename "wallet identifier" to `chunk_set_id` in md1 (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-5(d)).
 - **Where:** `descriptor-mnemonic` repo — BIP draft `bip/bip-mnemonic-descriptor.mediawiki` line ~188; `md-codec` reference implementation symbols carrying "wallet identifier" naming; mk1's own SPEC §2.5 already uses `chunk_set_id` per closure lock.
 - **What:** md1 v0.8.0 shipped with the 20-bit chunked-header random tag named "wallet identifier" — a name that conflicts with `Policy ID` and `Wallet Instance ID` and means neither. Closure design Q-5 locks the rename to `chunk_set_id` across both repos. Wire format unchanged; this is purely a documentation and code-symbol rename.
 - **Why deferred:** Lives in the descriptor-mnemonic repo, not this one. mk1's spec already uses the new name.
 - **Sequencing requirement:** the rename MUST land in md-codec (likely a docs-and-symbols-only release, e.g. md-codec v0.9.0) **before** mk1's BIP draft is submitted. mk1's BIP cites md1 by field name; mk1 cannot publish referencing a name md1 itself does not use.
-- **Status:** `open`
+- **Status:** `resolved by md-codec-v0.9.0` ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0), merge commit `9eeb9ab` in `bg002h/descriptor-mnemonic`). The rename landed across ~85 sites / ~150 references in md-codec docs + symbols. mk1's BIP-submission gate is cleared. Cross-update pass on the mk1 side: BIP §"Naming and identifiers" updated past-tense; DECISIONS D-15 sequencing-requirement updated past-tense.
 - **Tier:** `cross-repo`
 
 ### `md-per-N-path-tag-allocation` — md1's per-`@N` path bytecode tag allocation (Q-4)
@@ -70,22 +70,22 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open`
 - **Tier:** `pre-bip-submission`
 
-### `hrp-mk-collision-check` — formal HRP `mk` collision verification
+### `hrp-mk-collision-check` — formal HRP `mk` collision verification (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (D-9 / pre-BIP-submission audit item (2)).
 - **Where:** SLIP-0173 (informal segwit-HRP registry); recent bitcoin-dev mailing-list archives; BIPs PR history.
 - **What:** Search for any soft `mk` claim before formal SLIP-0173 registration. None expected, but confirmation is the registration gate. Alternatives `mx`, `mkc`, `mpk` documented in D-9 if collision is found.
 - **Why deferred:** Not a v0.1 gate; gates formal HRP registration.
-- **Status:** `open`
+- **Status:** `resolved` — see [`design/AUDIT_hrp_mk_collision.md`](AUDIT_hrp_mk_collision.md). SLIP-0173 has no `mk` registration; closest neighbours (`ms` BIP 93, `md` Mnemonic Descriptor, `mm` Miden, `my` Myriad) are at Hamming distance 1 but BIP 173 HRP-mixing prevents cross-HRP false-positive validation (≈ 2⁻⁶⁵ collision probability), and mk1's NUMS-derived target residues are independent from md1's and codex32's. Formal SLIP-0173 registration of `mk` is folded into the BIP-submission workflow.
 - **Tier:** `pre-bip-submission`
 
-### `bip-cross-reference-completeness` — BIP draft cross-reference audit
+### `bip-cross-reference-completeness` — BIP draft cross-reference audit (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (pre-BIP-submission audit item (3)).
 - **Where:** `bip/bip-mnemonic-key.mediawiki` — final cross-reference pass before submission.
 - **What:** mk1's BIP draft must cross-reference: BIP 93 (codex32 plumbing reuse), BIP 32 (xpub serialization), BIP 380 (origin notation), BIP 388 (wallet policy / Policy ID semantics), and the published md1 BIP (linkage protocol, shared-parser conventions, `chunk_set_id` field). Any post-rename of "wallet identifier" → `chunk_set_id` in md1 (see `chunk-set-id-rename` above) MUST land before mk1's draft is finalized.
 - **Why deferred:** Final pre-submission audit step; depends on `chunk-set-id-rename` landing first.
-- **Status:** `open`
+- **Status:** `resolved` — see [`design/AUDIT_bip_cross_reference_completeness.md`](AUDIT_bip_cross_reference_completeness.md). 74 cross-references audited across 8 categories; 9 drifts found (1 blocker, 3 important, 5 minor) and all 9 fixed inline. Notable fixes: removed phantom `Error::FingerprintFlagMismatch` cite (retired in v0.1.0 Phase 4); added `Error::MixedHeaderTypes` to §"Decoder validity rules" (added in v0.1.1 Phase 1); refreshed the stale "rename in flight" claim for `chunk_set_id` (md-codec v0.9.0/v0.9.1 has shipped); fixed BIP 380 attribution in SPEC §3.2; corrected several internal heading-quote mismatches. `chunk-set-id-rename` cross-repo dependency is now noted as resolved-on-md1-side; mk1's BIP draft is internally consistent and parity-correct with md1 v0.9.1.
 - **Tier:** `pre-bip-submission`
 
 ### `decoder-error-variant-parity` — Error-variant ↔ negative-vector parity
@@ -97,13 +97,13 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `resolved 1e42354 + 59878ca` (v0.1.1 Phase 3 + Phase 3 review fixup). 22 negative vectors N1..N21, N23 cover every `Error` variant reachable from `decode`'s string-input path; `every_error_variant_has_negative_vector` integration test enforces variant coverage. `Error::CardPayloadTooLarge` is documented exempt (encoder-only — no decoder path can trigger it). The Phase 3 fixup commit `59878ca` reshaped N17 to actually trigger `InvalidPathComponent` (LEB128 overflow at 6 × 0x80) — the original 1e42354 form surfaced as `UnexpectedEnd` and left `InvalidPathComponent` exempt. Compile-time exhaustiveness via strum is recorded as `error-variant-exhaustiveness-gate-strum` for v0.2.
 - **Tier:** `pre-bip-submission`
 
-### `md-path-dictionary-0x16-gap` — md1 path dictionary missing testnet 0x16 entry
+### `md-path-dictionary-0x16-gap` — md1 path dictionary missing testnet 0x16 entry (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 v0.1 Phase 2 BIP review (commit 4728230).
 - **Where:** `descriptor-mnemonic` repo — md1 BIP `bip-mnemonic-descriptor.mediawiki` §"Path dictionary" lines ~339-349. Testnet rows list 0x11, 0x12, 0x13, 0x14, 0x15, 0x17 — **0x16 omitted** (no testnet pair for mainnet 0x06 = `m/48'/1'/0'/1'`, BIP 48 nested-segwit multisig testnet).
 - **What:** Mainnet has 0x06 (`m/48'/0'/0'/1'`, BIP 48 nested-segwit multisig) but the testnet companion 0x16 (`m/48'/1'/0'/1'`) is absent from md1's published BIP table. mk1's spec and BIP both claim "exact dictionary mirrors md1's `Tag::SharedPath` table byte-for-byte"; mk1 inherits the gap. mk1 v0.1 BIP §"Origin path encoding" footnotes this — `0x16` is reserved-pending-md1-update — but the cleanest fix is to add the missing 0x16 row in md1.
 - **Why deferred:** Lives in the descriptor-mnemonic repo. Not blocking mk1 v0.1 wire-level interop because no encoder can legitimately emit 0x16 today (md1 would reject).
-- **Status:** `open`
+- **Status:** `resolved by md-codec-v0.9.0` ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0)). The 0x16 row was added to md1's path-dictionary table in v0.9.0 (`m/48'/1'/0'/1'`). mk1 v0.1 vector corpus still skips 0x16 (no fixture covers it); a v0.1.2 or v0.2 corpus expansion can add the missing vector now that md1 publishes the indicator. Tracked as a follow-on: not new FOLLOWUPS until someone wants to add the vector.
 - **Tier:** `cross-repo`
 
 ### `chunked-header-total-chunks-wire-encoding-clarification` — SPEC §2.5 wording on `total_chunks` field
@@ -163,11 +163,11 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Sequencing requirement:** if a future format extension lands a smaller bytecode (e.g., the Compact-65 mode discussed in SPEC §3.6, which would drop `xpub.version` + `xpub.parent_fingerprint` and bring some bytecodes below 56 bytes), this item MUST be re-opened **before the format extension ships**. The silent-drop semantics is friendly today but masks an encoder-side determinism bug under any wire format that makes SingleString reachable. Any future smaller-bytecode design pass (or a Compact-65-shaped FOLLOWUPS entry) MUST cite this requirement and re-open the issue.
 - **Tier:** `v0.1-nice-to-have`
 
-### `path-dictionary-mirror-stewardship` — formalize mk1↔md1 path-dictionary inheritance contract
+### `path-dictionary-mirror-stewardship` — formalize mk1↔md1 path-dictionary inheritance contract (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 v0.1 Phase 2 BIP review open observation (commit 4728230).
 - **Where:** mk1 SPEC §3.5; mk1 BIP §"Origin path encoding"; md1 BIP §"Path dictionary".
 - **What:** mk1's path dictionary is contractually identical to md1's `Tag::SharedPath` table. If md1 allocates new dictionary entries (e.g., closing the 0x16 gap, or adding new BIP-style accounts in future md1 revisions), mk1 inherits the allocation by the byte-for-byte mirror clause — but the contract is currently a prose statement, not a tracked invariant. A future md1 path-dictionary entry could land without an mk1 spec amendment and produce silent drift.
 - **Why deferred:** Process / stewardship concern, not a v0.1 release blocker.
-- **Status:** `open`
+- **Status:** `resolved by md-codec-v0.9.0` ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0)). The mirror-stewardship contract was formalized in md-codec v0.9-p3 (commit `abbec54`): md1's BIP §"Path dictionary" gained an explicit "Stewardship contract" subsection naming mk1 as the mirror-inheritor and committing both repos to the byte-for-byte mirror invariant. mk1's own SPEC §3.5 already cites this contract; no mk1-side text change required. Future md1 dictionary additions automatically extend mk1's coverage by the contract, with the Path dictionary table at `bytecode/path::STD_PATHS` as the single source of truth.
 - **Tier:** `cross-repo`

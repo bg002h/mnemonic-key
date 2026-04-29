@@ -103,7 +103,7 @@ Replace the current chunk-type table with the full string-layer header layout fr
 
 - 2-char single-string header (version + type)
 - 8-char chunked header (version + type + chunk_set_id + total_chunks + chunk_index)
-- Use `chunk_set_id` naming (not "wallet identifier")
+- Use `chunk_set_id` naming (md-codec v0.9.0 closed the legacy "wallet identifier" naming as a cross-repo prerequisite)
 - Reserved chunk-type range `0x02..0x1F` exhausts the 5-bit field; note this for future authors
 
 - [ ] **Step 1.1.4: §3.1 — bit-2 fingerprint flag**
@@ -207,7 +207,7 @@ Convert each open-question row to a closed-decision entry with a one-sentence su
 
 - [ ] **Step 1.2.3: Add D-15 — `chunk_set_id` rename across both repos**
 
-> The 20-bit per-encoding random tag in the chunked string-layer header is named `chunk_set_id` in mk1 from day 1. md1 currently calls the same field "wallet identifier"; that name conflicts with `Policy ID` and `Wallet Instance ID` and is misleading. The rename in md1 is tracked as `chunk-set-id-rename` in `design/FOLLOWUPS.md` and is a sequencing prerequisite for mk1's BIP submission per the closure design.
+> The 20-bit per-encoding random tag in the chunked string-layer header is named `chunk_set_id` in mk1 from day 1. md1 v0.8.x originally called the same field "wallet identifier"; that name conflicted with `Policy ID` and `Wallet Instance ID` and was misleading. The rename in md1 was a sequencing prerequisite for mk1's BIP submission per the closure design and shipped in [md-codec v0.9.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0); the cross-repo coordination is now resolved.
 
 ### Task 1.3 — Build + commit + review
 
@@ -267,7 +267,7 @@ Per closure Q-5: capacities 48/56/45/53; max chunks 32; cross-chunk hash 4 bytes
 
 - [ ] **Step 2.1.3: §"Header" (string-layer)**
 
-Single-string 2-char (version + type); chunked 8-char (version + type + chunk_set_id 20 bits + total_chunks + chunk_index). Mirror md1's wording with `chunk_set_id` substituted for "wallet identifier."
+Single-string 2-char (version + type); chunked 8-char (version + type + chunk_set_id 20 bits + total_chunks + chunk_index). Mirror md1's wording (md-codec v0.9.0 already uses `chunk_set_id`).
 
 - [ ] **Step 2.1.4: §"Cross-chunk integrity hash"**
 

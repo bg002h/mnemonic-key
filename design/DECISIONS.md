@@ -185,7 +185,7 @@ For wallets where the user holds every seed, MD's omission is fine — the seeds
 
 ### D-15. `chunk_set_id` rename across both repos
 
-**Decision.** The 20-bit per-encoding random tag in the chunked string-layer header is named `chunk_set_id` in mk1 from day 1. md1 currently calls the same field "wallet identifier"; that name conflicts with `Policy ID` and `Wallet Instance ID` and is misleading.
+**Decision.** The 20-bit per-encoding random tag in the chunked string-layer header is named `chunk_set_id` in mk1 from day 1. md1 v0.8.x originally called the same field "wallet identifier"; that name conflicted with `Policy ID` and `Wallet Instance ID` and was misleading.
 
 **Reasoning.**
 
@@ -193,7 +193,7 @@ For wallets where the user holds every seed, MD's omission is fine — the seeds
 - "chunk_set_id" accurately captures the role: identifies all chunks belonging to one card-encoding, used for reassembly mismatch detection, nothing more.
 - Wire format is unchanged; this is purely a documentation/code-symbol rename.
 
-**Sequencing requirement.** The rename in md1 (likely as md-codec v0.9.0, docs-and-symbols-only) is a **sequencing prerequisite for mk1's BIP submission** per the closure design. mk1's BIP cites md1 by field name; mk1 cannot publish referencing a name md1 itself does not use. Tracked as `chunk-set-id-rename` in `FOLLOWUPS.md` at tier `cross-repo`.
+**Sequencing requirement (resolved).** The rename was a sequencing prerequisite for mk1's BIP submission — mk1's BIP cites md1 by field name; mk1 could not publish referencing a name md1 itself did not use. **The rename shipped in md-codec v0.9.0 ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0), merge commit `9eeb9ab`); mk1's BIP-submission gate is now cleared.** Originally tracked as `chunk-set-id-rename` in `FOLLOWUPS.md` at tier `cross-repo`; that companion entry is now resolved.
 
 **Surfaced:** 2026-04-29 closure-design pass during cross-format wire-format review.
 
