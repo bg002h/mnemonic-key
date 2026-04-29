@@ -34,6 +34,7 @@
 
 #![cfg_attr(not(test), deny(missing_docs))]
 
+pub mod bytecode;
 pub mod consts;
 pub mod error;
 pub mod key_card;

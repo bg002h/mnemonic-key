@@ -99,6 +99,12 @@ pub enum Error {
     #[error("invalid xpub version: 0x{0:08x}")]
     InvalidXpubVersion(u32),
 
+    /// xpub `public_key` bytes do not parse as a valid compressed
+    /// secp256k1 point. Realistically unreachable for inputs that
+    /// pass BCH verification; surfaces hand-constructed inputs.
+    #[error("invalid xpub public key: {0}")]
+    InvalidXpubPublicKey(String),
+
     /// Decoder hit end-of-stream mid-field.
     #[error("unexpected end of bytecode")]
     UnexpectedEnd,
