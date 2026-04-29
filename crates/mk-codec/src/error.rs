@@ -67,13 +67,6 @@ pub enum Error {
     #[error("reserved bits set in bytecode header")]
     ReservedBitsSet,
 
-    /// Bytecode-header fingerprint flag (bit 2) and `origin_fingerprint`
-    /// payload presence disagree: either bit 2 is set but
-    /// `origin_fingerprint` is absent from the payload, or bit 2 is
-    /// unset but `origin_fingerprint` was emitted.
-    #[error("fingerprint flag does not match payload presence")]
-    FingerprintFlagMismatch,
-
     /// `policy_id_stub_count == 0`. The spec requires ≥ 1.
     #[error("policy_id_stub_count must be >= 1")]
     InvalidPolicyIdStubCount,
@@ -144,6 +137,10 @@ mod tests {
                 "chunked-header malformed: total_chunks = 0",
             ),
             (
+                Error::InvalidXpubPublicKey("malformed compressed point".into()),
+                "invalid xpub public key: malformed compressed point",
+            ),
+            (
                 Error::UnsupportedVersion(1),
                 "unsupported version: 1",
             ),
@@ -175,23 +172,17 @@ mod tests {
     // triggers a new variant. The `#[ignore]` is removed in the phase
     // that lands the code path:
     //
-    // - Phase 4 (bytecode layer):    FingerprintFlagMismatch
     // - Phase 5 (string layer):      CrossChunkHashMismatch,
     //                                MalformedPayloadPadding,
     //                                ChunkSetIdMismatch,
     //                                ChunkedHeaderMalformed
     //
-    // Until then the tests are documentation-only and won't compile
-    // a real decoder call.
-
-    #[test]
-    #[ignore = "Phase 4 — bytecode-layer encode/decode"]
-    fn rejects_bytecode_with_fingerprint_flag_payload_disagreement() {
-        // Phase 4: encode bytes with header bit-2 set but no
-        // origin_fingerprint in the payload (or vice versa) and
-        // assert decode_bytecode(...) returns Err(FingerprintFlagMismatch).
-        todo!("Phase 4 — implement bytecode decoder");
-    }
+    // (Phase 4 retired the proposed FingerprintFlagMismatch variant:
+    // structurally undetectable in the decoder under the closure-locked
+    // wire format, since no length prefix lets the decoder distinguish
+    // "flag set, fp present" from "flag unset, fp omitted." SPEC §4
+    // rule 3 was reframed as an encoder-side invariant; see commit
+    // log for Phase 4 review fixup.)
 
     #[test]
     #[ignore = "Phase 5 — string-layer reassembly"]
@@ -236,10 +227,6 @@ mod tests {
         assert_eq!(
             format!("{}", Error::ReservedBitsSet),
             "reserved bits set in bytecode header",
-        );
-        assert_eq!(
-            format!("{}", Error::FingerprintFlagMismatch),
-            "fingerprint flag does not match payload presence",
         );
         assert_eq!(
             format!("{}", Error::CrossChunkHashMismatch),

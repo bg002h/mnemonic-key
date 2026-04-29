@@ -317,14 +317,16 @@ A conformant MK decoder MUST reject input that:
 
 # Has a bytecode header with version != 0 in v0.1 (<code>Error::UnsupportedVersion</code>).
 # Has any reserved bit set in the bytecode header in v0.1 (<code>Error::ReservedBitsSet</code>).
-# Has the bytecode-header fingerprint flag set inconsistently with <code>origin_fingerprint</code> payload presence (<code>Error::FingerprintFlagMismatch</code>).
 # Has <code>stub_count == 0</code> (<code>Error::InvalidPolicyIdStubCount</code>).
 # Has an origin path indicator outside the defined table or in the reserved ranges (<code>Error::InvalidPathIndicator</code>).
-# Has an explicit path with <code>component_count > 10</code> (<code>Error::PathTooDeep</code>).
-# Has any path component with the BIP 32 child-number high bits set in invalid ways (<code>Error::InvalidPathComponent</code>).
+# Has an explicit path with <code>component_count > 10</code> or <code>== 0</code> (<code>Error::PathTooDeep</code>).
+# Has any path component with the BIP 32 child-number high bits set in invalid ways, or LEB128 overflow (<code>Error::InvalidPathComponent</code>).
 # Has xpub version bytes that don't match a known network's xpub prefix (<code>Error::InvalidXpubVersion</code>).
+# Has xpub <code>public_key</code> bytes that do not parse as a valid compressed secp256k1 point (<code>Error::InvalidXpubPublicKey</code>). Unreachable for inputs that pass BCH verification, but required for hand-constructed inputs fed directly to the bytecode decoder.
 # Truncates anywhere mid-field (<code>Error::UnexpectedEnd</code>).
 # Has trailing bytes after the xpub (<code>Error::TrailingBytes</code>).
+
+Encoder-side invariant (not a decoder rule): encoders MUST set the bytecode-header fingerprint flag (bit 2) if and only if <code>origin_fingerprint</code> is present in the payload. The invariant is structurally undetectable at decode time (no length prefix distinguishes "flag set, fp present" from "flag unset, fp omitted"); decoders follow the flag verbatim. A hand-crafted bytecode that violates the invariant decodes to a wrong-but-internally-consistent <code>KeyCard</code>; detection happens at the §"Recovery flow" Wallet Instance ID check.
 
 Additional decoder rules at the string/chunking layer:
 

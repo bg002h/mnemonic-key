@@ -267,14 +267,16 @@ A decoder MUST reject mk1 bytecode that:
 
 1. Has a bytecode header with version ≠ 0 in v0.1 (`Error::UnsupportedVersion`).
 2. Has any reserved bit set in v0.1 (`Error::ReservedBitsSet`).
-3. Has the bytecode-header fingerprint flag set inconsistently with `origin_fingerprint` payload presence (`Error::FingerprintFlagMismatch`).
-4. Has `stub_count == 0` (`Error::InvalidPolicyIdStubCount`).
-5. Has an origin path indicator outside the defined table (`Error::InvalidPathIndicator`).
-6. Has an explicit path with `component_count > 10` (`Error::PathTooDeep`).
-7. Has any path component with the BIP 32 child-number high bits set in invalid ways (`Error::InvalidPathComponent`).
-8. Has xpub version bytes that don't match a known network's xpub prefix (`Error::InvalidXpubVersion`).
+3. Has `stub_count == 0` (`Error::InvalidPolicyIdStubCount`).
+4. Has an origin path indicator outside the defined table (`Error::InvalidPathIndicator`).
+5. Has an explicit path with `component_count > 10` (or `== 0`) (`Error::PathTooDeep`).
+6. Has any path component with the BIP 32 child-number high bits set in invalid ways, or LEB128 overflow (`Error::InvalidPathComponent`).
+7. Has xpub version bytes that don't match a known network's xpub prefix (`Error::InvalidXpubVersion`).
+8. Has xpub `public_key` bytes that do not parse as a valid compressed secp256k1 point (`Error::InvalidXpubPublicKey`). Realistically unreachable for inputs that pass BCH verification, but required for hand-constructed inputs fed directly to the bytecode decoder.
 9. Truncates anywhere mid-field (`Error::UnexpectedEnd`).
 10. Has trailing bytes after the xpub (`Error::TrailingBytes`).
+
+Encoder-side invariant (not a decoder rule): encoders MUST set the bytecode-header fingerprint flag (bit 2) if and only if `origin_fingerprint` is present in the payload. The invariant is structurally undetectable at decode time (no length prefix distinguishes "flag set, fp present" from "flag unset, fp omitted"); a decoder follows the flag verbatim. A hand-crafted bytecode that violates the invariant decodes to a wrong-but-internally-consistent `KeyCard`; detection happens at the higher Wallet Instance ID check (§5 step 4).
 
 Additional decoder rules at the string/chunking layer:
 

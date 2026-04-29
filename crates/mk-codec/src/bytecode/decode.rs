@@ -217,4 +217,69 @@ mod tests {
             Err(Error::UnexpectedEnd),
         ));
     }
+
+    #[test]
+    fn rejects_path_too_deep_at_top_level() {
+        // Construct a card with a hand-crafted bytecode where the path
+        // is an explicit-path with count = 11 (one over the cap).
+        let card = fixture_card_1stub_with_fp();
+        let wire = encode_bytecode(&card).unwrap();
+        // path indicator at offset 1+1+4+4 = 10. Replace the std-table
+        // indicator + xpub_compact tail with explicit-path +
+        // 11 single-byte LEB128 components + xpub_compact.
+        let header_and_pre_path = &wire[..10]; // header + count + stubs + fp
+        let xpub_compact_tail = &wire[11..]; // skip the 1-byte std-table indicator
+        let mut new_wire: Vec<u8> = header_and_pre_path.to_vec();
+        new_wire.push(0xFE); // explicit-path indicator
+        new_wire.push(11); // count = 11 (one over cap)
+        for i in 0..11 {
+            new_wire.push(i); // single-byte LEB128 component
+        }
+        new_wire.extend_from_slice(xpub_compact_tail);
+        assert!(matches!(
+            decode_bytecode(&new_wire),
+            Err(Error::PathTooDeep(11)),
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_path_component_at_top_level() {
+        // Construct a card with a hand-crafted bytecode where the
+        // explicit-path LEB128 has a 6-byte continuation (overflow).
+        let card = fixture_card_1stub_with_fp();
+        let wire = encode_bytecode(&card).unwrap();
+        let header_and_pre_path = &wire[..10];
+        let xpub_compact_tail = &wire[11..];
+        let mut new_wire: Vec<u8> = header_and_pre_path.to_vec();
+        new_wire.push(0xFE); // explicit-path indicator
+        new_wire.push(1); // count = 1
+        // 6-byte LEB128 with all continuation bits set: triggers overflow check
+        new_wire.extend_from_slice(&[0x80, 0x80, 0x80, 0x80, 0x80, 0x80]);
+        new_wire.extend_from_slice(xpub_compact_tail);
+        assert!(matches!(
+            decode_bytecode(&new_wire),
+            Err(Error::InvalidPathComponent(_)),
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_xpub_public_key() {
+        // Perturb the public_key bytes (offset 40 within xpub_compact)
+        // to a value that doesn't parse as a compressed secp256k1 point.
+        let card = fixture_card_1stub_with_fp();
+        let mut wire = encode_bytecode(&card).unwrap();
+        // xpub_compact starts at offset 1+1+4+4+1 = 11; public_key
+        // within xpub_compact starts at +40 (= 51).
+        let pub_key_offset = 11 + 40;
+        // 0x05 is not a valid compressed-point prefix (must be 0x02 or 0x03).
+        wire[pub_key_offset] = 0x05;
+        // Fill the rest with garbage that's almost certainly not on the curve.
+        for i in 1..33 {
+            wire[pub_key_offset + i] = 0xFF;
+        }
+        assert!(matches!(
+            decode_bytecode(&wire),
+            Err(Error::InvalidXpubPublicKey(_)),
+        ));
+    }
 }
