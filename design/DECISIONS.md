@@ -156,13 +156,11 @@ For wallets where the user holds every seed, MD's omission is fine — the seeds
 
 **Coordination note.** Andrew Poelstra (codex32 author) is the natural reviewer for mk1's BCH-plumbing reuse story and for the NUMS structural-relationship audit. Loop him in before formal BIP submission to avoid "you missed a structural concern" rework.
 
-### D-12. Repo layout: same repo as MD; sibling crate; sibling design folder
+### D-12. Repo layout: sibling repo to `descriptor-mnemonic`
 
-**Decision.** `mnemonic-key` is its own sibling repo to `descriptor-mnemonic`. mk-codec lives at `crates/mk-codec/`. mk's BIP draft lives in `bip/`. mk's design discussion lives in `design/`.
+**Decision.** `mnemonic-key` is its own sibling repo to `descriptor-mnemonic`. mk-codec lives at `crates/mk-codec/`. mk's BIP draft lives in `bip/`. mk's design discussion lives in `design/`. The eventual `mc-codex32` shared crate per D-13 will live in a third sibling repo.
 
-(The original D-12 entertained co-locating mk-codec inside `descriptor-mnemonic`'s workspace as a sibling crate alongside md-codec and md-signer-compat. That option was foreclosed when this repo was set up as its own GitHub project, allowing independent BIP draft development without commit-coupling to descriptor-mnemonic's release cadence. The eventual `mc-codex32` shared crate per D-13 will live in a third sibling repo.)
-
-**Reasoning.** Pre-1.0, design-stage, dense cross-references between md and mk specs, but separate release cadences and reviewer audiences. Sibling-repo with cross-references is the right shape.
+**Reasoning.** Pre-1.0, design-stage, dense cross-references between md and mk specs, but separate release cadences and reviewer audiences. Sibling-repo with cross-references is the right shape; bundling mk-codec inside `descriptor-mnemonic`'s workspace was considered earlier and foreclosed for release-cadence independence.
 
 ### D-13. Plumbing-reuse strategy: fork now, refactor later
 

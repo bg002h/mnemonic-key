@@ -82,7 +82,7 @@ max chunks per card:           32                  (MAX_CHUNKS)
 cross-chunk integrity hash:    SHA-256(canonical_bytecode)[0..4]   (4 bytes)
 ```
 
-mk1's typical payload (73-byte compact xpub + 1–8 bytes origin path + optional 4-byte fingerprint + 4-byte Policy ID stub + headers) overruns the single-string-long capacity for the multi-stub case, so **multi-chunk mk1 is the norm**. Single-string mk1 is reachable for the no-fingerprint single-stub standard-table case but rare in practice.
+mk1's typical payload (73-byte compact xpub + 1 byte for std-table-indicator origin path *or* up to 52 bytes for an explicit-path 10-component case + optional 4-byte fingerprint + 4-byte Policy ID stub + headers) overruns the single-string-long capacity for the multi-stub case, so **multi-chunk mk1 is the norm**. Single-string mk1 is reachable for the no-fingerprint single-stub standard-table case but rare in practice.
 
 With up to 32 long-code chunks, an mk1 card can encode up to `32 × 53 − 4 = 1692` bytes of canonical bytecode — vastly above any plausible mk1 payload.
 
@@ -158,7 +158,7 @@ After the bytecode header, the payload encodes the following fields in order (pe
 [stub_count        : 1 B; MUST be ≥ 1]
 [policy_id_stubs   : 4 × N B]
 [origin_fingerprint: 4 B]   ← present iff bytecode_header bit 2 set
-[origin_path       : 1 B (std-table indicator) OR 1 + 1 + LEB128(c_1..c_N) B (explicit)]
+[origin_path       : 1 B (std-table indicator) OR 3..=52 B (explicit: 0xFE + count + 1..=10 LEB128 components, ≤5 B each; see §3.5)]
 [xpub_compact      : 73 B]
 ```
 
@@ -216,6 +216,8 @@ Mirrors `md1`'s `Tag::SharedPath` precedent (D-3). The path encodes as a 1-byte 
 ```
 
 Each component encodes a u32 BIP 32 child number (hardened bit set in the high bit per BIP 32 convention; the LEB128 carries the full 32 bits including hardened-marker).
+
+**Component-byte sizing.** LEB128 of a u32 takes 1–5 bytes depending on the encoded value: any u32 with bit 28 or higher set (which includes every hardened component, since the hardened-marker is bit 31) requires the full 5 bytes; non-hardened components < 2²⁸ take 1–4 bytes. The closure design's and implementation plan's worst-case bound `1 + 1 + 5N B` is the upper limit for an N-component explicit path; for typical BIP-style paths (which are mostly hardened), this bound is also the typical case. Concretely: `m/48'/0'/0'/2'` (4 components, all hardened) explicit-encodes to `1 + 1 + 4×5 = 22 bytes` — though such a path would normally use the 1-byte standard-table indicator `0x05` instead. The `5N` shorthand in §3.2 below uses this worst-case bound.
 
 **Path-component cap = 10** (closure Q-3). BIP 32 itself allows depth ≤ 255; real wallets use ≤ 6. The 10-component cap bounds chunk-size attacks without rejecting any plausibly real path; tighter caps don't lock out real users while bounding worst-case malicious-path inflation more aggressively. Decoders MUST reject `component_count > 10` with `Error::PathTooDeep`.
 
@@ -374,7 +376,7 @@ Pre-BIP-submission audit items (NUMS structural-relationship audit, HRP `mk` col
 
 ## §10. Reference implementation
 
-`crates/mk-codec/` — reference implementation. v0.1 forks BCH primitives from `md-codec` per D-13. Eventual extraction to a shared `mc-codex32/` workspace member is committed but deferred per closure Q-9 (trigger: both md-codec and mk-codec at v1.0 with cross-validated conformance vectors).
+`crates/mk-codec/` — reference implementation. v0.1 forks BCH primitives from `md-codec` per D-13. Eventual extraction to a shared `mc-codex32` crate (likely a third sibling repo per D-12) is committed but deferred per closure Q-9 (trigger: both md-codec and mk-codec at v1.0 with cross-validated conformance vectors).
 
 ## §11. BIP draft
 
