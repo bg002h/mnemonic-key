@@ -112,7 +112,9 @@ fn encode_bytecode_stream(bytecode: &[u8], chunk_set_id: Option<u32>) -> Result<
 ///   cross-chunk-hash verification, then decode the bytecode.
 ///
 /// Mixing `SingleString` and `Chunked` headers across a multi-string
-/// input is rejected with [`Error::ChunkedHeaderMalformed`].
+/// input is rejected with [`Error::MixedHeaderTypes`]. (An empty input
+/// list is rejected with [`Error::ChunkedHeaderMalformed`] — that's the
+/// "no input at all" case, distinct from "header types disagree.")
 pub fn decode(strings: &[&str]) -> Result<KeyCard> {
     if strings.is_empty() {
         return Err(Error::ChunkedHeaderMalformed(
@@ -273,9 +275,13 @@ mod tests {
         // payload — the decoder must reject or correct the original
         // codeword's checksum against the modified data).
         //
-        // BCH(108,93,8) and BCH(93,80,8) both cover up to 4 substitutions
-        // exactly (`t = 4`); a 5-symbol burst always exceeds the
-        // correction radius. The decoder must surface one of:
+        // BCH(108,93,8) (long) and BCH(93,80,8) (regular) both cover up
+        // to 4 substitutions exactly (`t = 4`); a 5-symbol burst always
+        // exceeds the correction radius. For the typical 84-byte card,
+        // the last chunk is the regular-code chunk (35-byte fragment →
+        // 64-symbol data part + 13-symbol checksum = 77 chars, in
+        // regular-code range), so the BCH-`t = 4` argument applies via
+        // BCH(93,80,8). The decoder must surface one of:
         //
         // - `Err(BchUncorrectable(_))` — BM/Forney can't fit a degree-≤4
         //   error-locator polynomial; rejection is direct.
@@ -299,21 +305,28 @@ mod tests {
         );
 
         // Perturb 5 consecutive characters in the LAST chunk's data part,
-        // starting at position 11 within the chunk's string — i.e., 8
-        // symbols into the data part (past the 8-symbol chunked header).
-        // This places the burst inside the bytecode-fragment region; for
-        // the typical 84-byte card, the last chunk is the regular-code
-        // chunk holding bytecode tail + 4-byte cross-chunk hash, so the
-        // perturbation falls within the cross-chunk-hash region with high
-        // probability and exercises that rejection path. (Even when the
-        // burst lands in the bytecode tail, the recomputed SHA-256 over
-        // the corrupted bytecode mismatches the unperturbed trailing
-        // hash; same rejection, different code path.)
+        // **past the 8-symbol chunked header**. The 8-symbol chunked
+        // header occupies string char-indices 3..11 (after the 3-char
+        // `mk1` HRP+separator); the bytecode-fragment region begins at
+        // char-index 11. We perturb char-indices 11..16 — the first 5
+        // fragment symbols. This places the burst inside the bytecode-
+        // fragment region (5 fragment symbols = 25 bits ≈ 3 bytes of
+        // fragment data, which for the typical 84-byte card maps to
+        // bytecode bytes 53..56), so any wrong-but-valid BCH correction
+        // produces corrupted bytecode whose recomputed SHA-256 mismatches
+        // the unperturbed trailing hash → `CrossChunkHashMismatch`.
+        //
+        // Restricting the burst to the post-header region rules out
+        // header-decode rejection paths
+        // (`UnsupportedVersion`, `UnsupportedCardType`,
+        // `ChunkedHeaderMalformed`, `ChunkSetIdMismatch`) that BCH
+        // could otherwise produce by "correcting" 5 errors in the
+        // header into a malformed-but-parseable header.
         let mut perturbed = strings.last().expect("multi-chunk fixture").clone();
         let mut chars: Vec<char> = perturbed.chars().collect();
-        // Span [3, 8) covers chars at indices 3..=7 (5 chars). The "mk1"
-        // prefix occupies 0..=2; chars 3 onward are the 5-bit data + checksum.
-        for c in chars.iter_mut().take(8).skip(3) {
+        // Char-indices 11..16 (5 chars) — past the 3-char `mk1` prefix
+        // and past the 8-symbol chunked header (string indices 3..11).
+        for c in chars.iter_mut().take(16).skip(11) {
             // Substitute with a different bech32 char to guarantee a
             // non-zero 5-bit XOR at each position. 'q' is the value-0
             // symbol; any other char gives a non-zero perturbation.
