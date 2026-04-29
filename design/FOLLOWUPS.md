@@ -70,14 +70,14 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `resolved at md1's bar` (2026-04-29 cross-update pass). md1 / md-codec ship with the same NUMS construction (truncate top-N bits of `SHA-256(domain_string)`) and chose to document the construction in the BIP itself with a Python reproducer rather than commission a separate structural audit; `md`'s BIP §"Why new target constants?" is the audit trail. mk1 already meets that bar: BIP §"Why new target constants?" carries the equivalent reproducer for `b"shibbolethnumskey"`; SPEC §2.3 carries the same; and `consts.rs::tests::nums_constants_reproduce_from_domain` reproduces the construction at runtime (`cargo test`-enforced). The original FOLLOWUPS entry called for an external Poelstra structural review — a higher bar than md1 chose. Per the project's "don't adopt a higher bar than md1" principle, the entry is closed at the audit-trail-in-BIP level. If a future reviewer (Poelstra or other) volunteers a structural pass, it can land as a strengthening note in the BIP without re-opening this gate.
 - **Tier:** `pre-bip-submission`
 
-### `slip-0173-register-mk-hrp` — file SLIP-0173 PR registering `mk` HRP
+### `slip-0173-register-mk-hrp` — file SLIP-0173 PR registering `mk` HRP (resolved)
 
 - **Surfaced:** 2026-04-29 cross-update pass after closing `hrp-mk-collision-check`. md1 filed a parallel PR (#2011 at satoshilabs/slips) registering `md` as a defensive measure; mk1 follows the same pattern.
 - **Where:** [satoshilabs/slips](https://github.com/satoshilabs/slips) PR adding one row to `slip-0173.md`. Draft PR text + diff at `design/SLIP_0173_PR_DRAFT.md`.
 - **What:** Defensive registration of the `mk` HRP in SLIP-0173 to close off future collision risk from independent Bitcoin-family projects. The registration is a docs-level act in the SatoshiLabs registry; no code change in mk-codec, no wire-format implications, no binding consequence beyond the registry record.
 - **Why deferred:** Single user-action item (file the PR under the maintainer's GitHub account). The `hrp-mk-collision-check` audit at `design/AUDIT_hrp_mk_collision.md` cleared the technical gate; this entry tracks the actual PR filing.
-- **Status:** `open` — PR text drafted at `design/SLIP_0173_PR_DRAFT.md`, ready for the maintainer to fork satoshilabs/slips, apply the diff, and open the PR. Parallel to md1's `slip-0173-register-md-hrp` (resolved 2026-04-28 — PR filed at https://github.com/satoshilabs/slips/pull/2011, merge state tracked externally).
-- **Tier:** `pre-bip-submission`
+- **Status:** `resolved 2026-04-29 — PR filed at https://github.com/satoshilabs/slips/pull/2012`. The requested action (FILE the PR) is complete; merge state is now tracked externally on SatoshiLabs review cadence and is no longer an mk1-side deferral. Parallel to md1's `slip-0173-register-md-hrp` (PR #2011 at the same repo, also still in external-review state). If #2011 merges first, #2012 will need a one-line rebase to insert `mk` after `md` rather than after `Lightning Network`; otherwise the two PRs are mergeable in either order.
+- **Tier:** `pre-bip-submission` (closed; awaiting upstream merge tracked separately)
 
 ### `hrp-mk-collision-check` — formal HRP `mk` collision verification (resolved)
 

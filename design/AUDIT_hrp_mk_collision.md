@@ -82,10 +82,12 @@ Bech32's alphabet exclusion of `b` and `i` (BIP 173 §1) is intended to remove t
 3. **Cross-format target-residue separation:** NUMS-derived constants are independent across `mk` / `md` / codex32, so even an HRP-collision-prone construction would still need a constant collision to silently misvalidate.
 4. **Bech32 visual discipline:** the HRP is well-formed; the Hamming-distance-1 neighbours are not visually confusable.
 
-## Pending: SLIP-0173 registration
+## SLIP-0173 registration (filed)
 
-Before formal BIP submission, the `mk` HRP SHOULD be submitted to the SLIP-0173 registry as a courtesy. The registration prevents a future Bitcoin-family chain from claiming `mk` and creating a real collision after the BIP ships. md-codec may want to register `md` simultaneously (the parallel format also uses an unregistered HRP). This registration is a docs-level act, not a code change; tracked as a sub-step of the formal-BIP-submission workflow rather than a separate FOLLOWUPS item.
+Following md1's defensive-filing pattern (`md` registered via [PR #2011](https://github.com/satoshilabs/slips/pull/2011) on 2026-04-28), the `mk` HRP was filed for SLIP-0173 registration as **[PR #2012](https://github.com/satoshilabs/slips/pull/2012)** on 2026-04-29. The PR adds one row to `slip-0173.md` between `Lightning Network` and `Zcash`. Merge state is tracked externally on SatoshiLabs's review cadence; the mk1-side gate is cleared.
+
+If md1's PR #2011 merges first, mk1's PR #2012 will need a one-line rebase to insert `mk` after `md` rather than after `Lightning Network`. Otherwise the two PRs are mergeable in either order.
 
 ## Audit closure
 
-This document closes FOLLOWUPS item `hrp-mk-collision-check` (pre-bip-submission tier). SLIP-0173 registration is folded into the BIP-submission workflow per the §"Pending" section above and not tracked as a separate gate.
+This document closes FOLLOWUPS item `hrp-mk-collision-check` (pre-bip-submission tier). The SLIP-0173 registration follow-on is closed at FOLLOWUPS item `slip-0173-register-mk-hrp` with the PR URL pinned.
