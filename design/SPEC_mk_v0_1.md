@@ -82,7 +82,7 @@ max chunks per card:           32                  (MAX_CHUNKS)
 cross-chunk integrity hash:    SHA-256(canonical_bytecode)[0..4]   (4 bytes)
 ```
 
-mk1's typical payload (73-byte compact xpub + 1 byte for std-table-indicator origin path *or* up to 52 bytes for an explicit-path 10-component case + optional 4-byte fingerprint + 4-byte Policy ID stub + headers) overruns the single-string-long capacity for the multi-stub case, so **multi-chunk mk1 is the norm**. Single-string mk1 is reachable for the no-fingerprint single-stub standard-table case but rare in practice.
+mk1's smallest valid bytecode (1-byte header + 1-byte stub_count + 4-byte single stub + std-table path indicator + 73-byte compact xpub, fingerprint omitted) is `1 + 1 + 4 + 1 + 73 = 80 bytes` — already above `SINGLE_STRING_LONG_BYTES = 56`. **Every conforming v0.1 mk1 KeyCard therefore encodes as a chunked card** (typical 1-stub-with-fingerprint case is 84 bytes, lands in 2 long-code chunks). The `SingleString` chunk-type variant is reserved for future format extensions whose bytecode could shrink below 56 bytes (e.g., the Compact-65 mode discussed in §3.6); it is wire-defined for forward compatibility but unreachable for v0.1 encoders.
 
 With up to 32 long-code chunks, an mk1 card can encode up to `32 × 53 − 4 = 1692` bytes of canonical bytecode — vastly above any plausible mk1 payload.
 

@@ -1,0 +1,194 @@
+{
+  "family_token": "mk-codec 0.1",
+  "schema": 1,
+  "vectors": [
+    {
+      "description": "1-stub mainnet, BIP 48 segwit-v0 multisig (m/48'/0'/0'/2'), fingerprint present. Typical multisig recovery card.",
+      "expected": {
+        "canonical_bytecode_hex": "040111223344aabbccdd050488b21e10203001abababababababababababababababababababababababababababababababab031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpzg69pqqsq3zg3ngj4thnxaq5zg3vs7zqsrqqdt4w46h2at4w46h2at4w46h2at4w46h2at4w46h2at4w46h2at4vp3kx98j76m4mjlwphf",
+          "mk1qpzg69ppsnz4v7cjv3qfjhf76k4t5pt96u0psdrqfqvll8qh7h5athg837pmkf3dpug2mmjtfel6x"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 74565,
+        "network": "mainnet",
+        "origin_fingerprint": "aabbccdd",
+        "origin_path": "m/48'/0'/0'/2'",
+        "policy_id_stubs": [
+          "11223344"
+        ],
+        "xpub": "xpub6Den8YwXbKQvkwukmx7Uukicw4qDgMEPuuUkhMp3Rn557YSN2uVQnCMQNSfgDtennU9nES3Wbbmz1LAPBydhNpED8NU4mf1SFF41hM7vFrc"
+      },
+      "name": "V1_bip48_mainnet_1_stub_with_fp"
+    },
+    {
+      "description": "1-stub mainnet, BIP 84 native-segwit single-sig (m/84'/0'/0'), fingerprint present. Std-table indicator 0x03.",
+      "expected": {
+        "canonical_bytecode_hex": "0401c0ffee00deadbeef030488b21e10203002a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8024d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpydzkpqqsqupllwqr02m0h0qvzg3vs7zqsrqq4g4z52329g4z52329g4z52329g4z52329g4z52329g4z52329g4qpy6m8lr3sdrxkguwax",
+          "mk1qpydzkppfdkdzdssxt9fh54wh8vsp2jdghv74kq2e9prxaxy2xnj2ng8vm68nf54c0vrdlfrgjzpd"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 144470,
+        "network": "mainnet",
+        "origin_fingerprint": "deadbeef",
+        "origin_path": "m/84'/0'/0'",
+        "policy_id_stubs": [
+          "c0ffee00"
+        ],
+        "xpub": "xpub6BmeGmRo4LosAcU21HDaGcvtaQ7GrqQcY48nBkE22qM6KVwQUjRJ1BGzk84SFVHgLcd61Vcnhr8petHexjjn5WbQ9PriVrRhphw4oCp2z6a"
+      },
+      "name": "V2_bip84_mainnet_1_stub_with_fp"
+    },
+    {
+      "description": "1-stub testnet, BIP 48 testnet multisig (m/48'/1'/0'/2'), fingerprint present. Std-table indicator 0x15.",
+      "expected": {
+        "canonical_bytecode_hex": "0401778899aa1020304015043587cf10203003a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a902531fe6068134503d2723133227c867ac8fa6c83c537e9a44c3c5bdbdcb1fe337",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpx3t8pqqsqh0zye4ggzqvzqz5zrtp70zqsrqqaf4x56n2df4x56n2df4x56n2df4x56n2df4x56n2df4x56n2df4yp9xx3y0h0ccw664dfd",
+          "mk1qpx3t8pprlnqdqf52q7jwgcnxgnuseav37nvs0zn06dyfs79hk7uk8lrxlyw57x7v7rzx74tlflqh"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 214375,
+        "network": "testnet",
+        "origin_fingerprint": "10203040",
+        "origin_path": "m/48'/1'/0'/2'",
+        "policy_id_stubs": [
+          "778899aa"
+        ],
+        "xpub": "tpubDE2QenmnfFWFjr6TXWBdoZken4gKkeo3W3iCQjW64pqrtbVAP9DDmGhMRnnwwtgey511kwptHzGF5JKrrHzJJWB3ZAy4AYubz369CSz2dhS"
+      },
+      "name": "V3_bip48_testnet_1_stub_with_fp"
+    },
+    {
+      "description": "1-stub mainnet, BIP 84 (m/84'/0'/0'), fingerprint omitted (privacy-preserving mode; bytecode-header bit 2 cleared).",
+      "expected": {
+        "canonical_bytecode_hex": "0001abcdef01030488b21e10203004aeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeae03462779ad4aad39514614751a71085f2f10e1c7a593e4e030efb5b8721ce55b0b",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpg4ncpqqqq6hn00qypsfz9jrcgzqvqy46h2at4w46h2at4w46h2at4w46h2at4w46h2at4w46h2at4w46hqx3380xk55vxz9s95rk7jsdyt",
+          "mk1qpg4ncpp45u4z3s5w5d8zzzl9ugwr3a9j0jwqv80kku8y889tv9uttaemyjd5u8sp67lj8p"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 284280,
+        "network": "mainnet",
+        "origin_fingerprint": null,
+        "origin_path": "m/84'/0'/0'",
+        "policy_id_stubs": [
+          "abcdef01"
+        ],
+        "xpub": "xpub6BmeGmSNQzwjso6raQ8ea1aioo7PfaivP5sPryaBZT57AjX3eYRGTyc2T8stCLcQKnA4Pw3a5FA5iChz37gUuJbo5cwqvXdNebE5WBfWeHx"
+      },
+      "name": "V4_bip84_mainnet_1_stub_no_fp"
+    },
+    {
+      "description": "1-stub mainnet, explicit-path m/9999'/1234'/56'/7' (forces the 0xFE explicit-path codec), fingerprint present.",
+      "expected": {
+        "canonical_bytecode_hex": "04015566778801020304fe048fce808008d289808008b88080800887808080080488b21e10203005afafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafaf0362c0a046dacce86ddd0343c6d3c7c79c2208ba0d9c9cf24a6d046d21d21f90f7",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qp2eufzqqsq42enh3qqsyqcylczgln5qsqyd9zvqsqyt3qyqsqyg0qyqsqyqfz9jrcgzqvq947h6lta047h6lta047h67xj4jt7g69atcpze",
+          "mk1qp2eufzp47h6lta047h6lta047h6lta047h6ltcrvtq2q3k6en5xmhgrg0rd8378ns3q3wsdnjw0yjndq3kjr5sljrm3ydu6j4m83w45h234",
+          "mk1qp2eufzzrscsjqdk69lrveg2fm"
+        ],
+        "total_chunks": 3
+      },
+      "input": {
+        "chunk_set_id": 354185,
+        "network": "mainnet",
+        "origin_fingerprint": "01020304",
+        "origin_path": "m/9999'/1234'/56'/7'",
+        "policy_id_stubs": [
+          "55667788"
+        ],
+        "xpub": "xpub6Den8YxgJdggPygKKEv3wiQwQ6PSGUouW98xC4obAJAqvuWcBMHuxeuXHxyZtAJHLqE7U1JdEXrNwbNPNCn1F79n4ZuBTLnzF7mPbLR3ZvB"
+      },
+      "name": "V5_explicit_path_4_components_with_fp"
+    },
+    {
+      "description": "3-stub mainnet, BIP 48 multisig — exercises multi-stub listing that grows the bytecode by 2 × 4 bytes vs V1.",
+      "expected": {
+        "canonical_bytecode_hex": "0403dead0001dead0002dead0003f00dcafe050488b21e10203006acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac03f006a18d5653c4edf5391ff23a61f03ff83d237e880ee61187fa9f379a028e0a",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpv7yspqqspaatgqq8026qqzm6ksqqlsph90upgy3zepuypqxqr2et9v4jk2et9v4jk2et9v4jk2et9v4jk2et9v4jk2cfr7h56h70u9lsha",
+          "mk1qpv7yspp4jk2et9v4splqp4p34t9838d75u3lu36v8crl7paydlgsrhxzxrl48ehngpguzk8j6a47h024849cnxk4n"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 424080,
+        "network": "mainnet",
+        "origin_fingerprint": "f00dcafe",
+        "origin_path": "m/48'/0'/0'/2'",
+        "policy_id_stubs": [
+          "dead0001",
+          "dead0002",
+          "dead0003"
+        ],
+        "xpub": "xpub6Den8YxxyxkcXmP7ygCeb7Bf1Ptqw1aQNa9iaigk6EPeoZHkeHmequH8aYiT3mUALmPo7ThDTZJf5cu5eziSYeW4fsbfdFubwdBgRetAhFa"
+      },
+      "name": "V6_3_stubs_mainnet_with_fp"
+    },
+    {
+      "description": "1-stub mainnet, explicit-path at the 10-component cap (m/0'/1'/2'/3'/4'/5'/6'/7'/8'/9'), fingerprint omitted. Boundary case for path-cap validation (closure Q-3).",
+      "expected": {
+        "canonical_bytecode_hex": "000190919293fe0a80808080088180808008828080800883808080088480808008858080800886808080088780808008888080800889808080080488b21e10203007adadadadadadadadadadadadadadadadadadadadadadadadadadadadadadadad02989c0b76cb563971fdc9bef31ec06c3560f3249d6ee9e5d83c57625596e05f6f",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qp0zgpzqqqqepyvjj0lq4qyqszqq3qvqszqq3q5qszqq3quqszqq3pyqszqq3pvqszqq3p5qszqq3puqszqq3zyqszqqse9ppcgqls67s8nv",
+          "mk1qp0zgpzp3xqgpqqgqjyty8ssyqcq0tdd4kk6mtdd4kk6mtdd4kk6mtdd4kk6mtdd4kk6mtdd4kk6mtddq2vfczmkedtrj2rjl6la2h9ek48q",
+          "mk1qp0zgpzzw87un0hnrmqxcdtq7vjf6mhfuhvrc4mz2ktwqhm0qwv5qvsnckdz0yclv6ky"
+        ],
+        "total_chunks": 3
+      },
+      "input": {
+        "chunk_set_id": 493825,
+        "network": "mainnet",
+        "origin_fingerprint": null,
+        "origin_path": "m/0'/1'/2'/3'/4'/5'/6'/7'/8'/9'",
+        "policy_id_stubs": [
+          "90919293"
+        ],
+        "xpub": "xpub6QwbHG5Nw7rYLo6utUHsXUqaaojc3YDdq84Ho7HV3mHuiJ1NNXB1GzUdBCMVph1HfRMMuRjW2VVVr8k5Fz7YGrKVGwVYPBcXr6dZKQenNqk"
+      },
+      "name": "V7_max_path_components_no_fp"
+    },
+    {
+      "description": "1-stub mainnet, BIP 87 multisig (m/87'/0'/0'), fingerprint present. Std-table indicator 0x07 (the last mainnet entry of the closure-locked path dictionary).",
+      "expected": {
+        "canonical_bytecode_hex": "040187654321baddcafe070488b21e10203008a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a203f991f944d1e1954a7fc8b9bf62e0d78f015f4c07762d505e20e6c45260a3661b",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qp3yqjpqqsqcwe2ryxadmjh7quzg3vs7zqsrqz9z52329g4z52329g4z52329g4z52329g4z52329g4z52329g4z5gplj3ftvt74m5y43cf6",
+          "mk1qp3yqjppj8u5f50pj498lj9eha3wp4u0q905cpmk94g9ug8xc3fxpgmxr0vuewy3yaf8muuvsjpyv"
+        ],
+        "total_chunks": 2
+      },
+      "input": {
+        "chunk_set_id": 561170,
+        "network": "mainnet",
+        "origin_fingerprint": "baddcafe",
+        "origin_path": "m/87'/0'/0'",
+        "policy_id_stubs": [
+          "87654321"
+        ],
+        "xpub": "xpub6BmeGmTX8KDVHvTZuNUmLJ2t82Md7abNfb4DGD8ivFPnQo5gJn3TX5JMCC1GxeQNW7DpRrYaSW3goEADYFykhfic2iPHTjW6BquJqTdCbVu"
+      },
+      "name": "V8_bip87_mainnet_1_stub_with_fp"
+    }
+  ]
+}
