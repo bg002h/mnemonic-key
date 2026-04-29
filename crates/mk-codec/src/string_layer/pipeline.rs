@@ -134,9 +134,7 @@ pub fn decode(strings: &[&str]) -> Result<KeyCard> {
     let first_is_single = matches!(parsed[0].0, StringLayerHeader::SingleString { .. });
     if first_is_single {
         if parsed.len() != 1 {
-            return Err(Error::ChunkedHeaderMalformed(
-                "multiple strings supplied with SingleString header".to_string(),
-            ));
+            return Err(Error::MixedHeaderTypes);
         }
         let (_, bytecode) = parsed.into_iter().next().expect("len == 1");
         return decode_bytecode(&bytecode);
@@ -269,40 +267,119 @@ mod tests {
     }
 
     #[test]
-    fn decode_rejects_perturbed_cross_chunk_hash() {
-        // Bit-flip the last byte of the last chunk's encoded string within
-        // the data part. The BCH layer will correct it to *something* (since
-        // BCH t=4 covers single substitutions), but we want the cross-chunk
-        // hash to mismatch. Easier: produce strings, then re-build chunks
-        // manually with the cross-chunk hash perturbed at the byte level.
-
+    fn decode_rejects_5_symbol_burst_in_last_chunk_data_part() {
+        // Perturb at the 5-bit-symbol layer of an already-encoded chunked
+        // string set (no fresh BCH-checksum computation on the perturbed
+        // payload — the decoder must reject or correct the original
+        // codeword's checksum against the modified data).
+        //
+        // BCH(108,93,8) and BCH(93,80,8) both cover up to 4 substitutions
+        // exactly (`t = 4`); a 5-symbol burst always exceeds the
+        // correction radius. The decoder must surface one of:
+        //
+        // - `Err(BchUncorrectable(_))` — BM/Forney can't fit a degree-≤4
+        //   error-locator polynomial; rejection is direct.
+        // - `Err(CrossChunkHashMismatch)` — BCH finds a wrong-but-valid
+        //   degree-≤4 fit, applies it, and yields a "corrected" payload
+        //   that decodes through structurally but whose recomputed
+        //   SHA-256 disagrees with the recovered trailing hash.
+        //
+        // Both are acceptable — the property under test is "this
+        // perturbation was caught," not "caught via a specific variant."
+        // Earlier (v0.1.0) test perturbed at the byte level and recomputed
+        // the BCH checksum, which sidestepped the BCH-decode path entirely
+        // and only ever exercised the cross-chunk-hash rejection. The
+        // new test exercises both decoder rejection paths and proves the
+        // 5-symbol-burst > BCH-`t = 4` discipline holds.
         let card = fixture_card_typical_chunked();
-        let bytecode = encode_bytecode(&card).unwrap();
-        // Force-chunk and perturb the cross-chunk hash byte (last byte of
-        // the last chunk's fragment in the post-split layout).
-        let mut chunks = split_into_chunks(&bytecode, 0).unwrap();
-        let last = chunks.last_mut().unwrap();
-        let last_idx = last.fragment.len() - 1;
-        last.fragment[last_idx] ^= 0xFF;
+        let strings = encode_with_chunk_set_id(&card, 0).unwrap();
+        assert!(
+            strings.len() >= 2,
+            "fixture must produce a multi-chunk encoding"
+        );
 
-        // Re-encode each (now-perturbed) chunk to a string, then decode.
-        let strings: Vec<String> = chunks
-            .into_iter()
-            .map(|chunk| {
-                let mut data_5bit = chunk.header.to_5bit_symbols();
-                data_5bit.extend(bytes_to_5bit(&chunk.fragment));
-                encode_5bit_to_string(&data_5bit).unwrap()
-            })
-            .collect();
-        let parts: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
-        // Reassembly must reject the cross-chunk hash mismatch (or a
-        // downstream bytecode-decode error if the perturbation also
-        // disturbed the bytecode tail; surface either as a defined
-        // rejection rather than a silent false-positive).
-        match decode(&parts) {
-            Err(Error::CrossChunkHashMismatch) => (),
-            other => panic!("expected CrossChunkHashMismatch, got {other:?}"),
+        // Perturb 5 consecutive characters in the LAST chunk's data part,
+        // starting at position 11 within the chunk's string — i.e., 8
+        // symbols into the data part (past the 8-symbol chunked header).
+        // This places the burst inside the bytecode-fragment region; for
+        // the typical 84-byte card, the last chunk is the regular-code
+        // chunk holding bytecode tail + 4-byte cross-chunk hash, so the
+        // perturbation falls within the cross-chunk-hash region with high
+        // probability and exercises that rejection path. (Even when the
+        // burst lands in the bytecode tail, the recomputed SHA-256 over
+        // the corrupted bytecode mismatches the unperturbed trailing
+        // hash; same rejection, different code path.)
+        let mut perturbed = strings.last().expect("multi-chunk fixture").clone();
+        let mut chars: Vec<char> = perturbed.chars().collect();
+        // Span [3, 8) covers chars at indices 3..=7 (5 chars). The "mk1"
+        // prefix occupies 0..=2; chars 3 onward are the 5-bit data + checksum.
+        for c in chars.iter_mut().take(8).skip(3) {
+            // Substitute with a different bech32 char to guarantee a
+            // non-zero 5-bit XOR at each position. 'q' is the value-0
+            // symbol; any other char gives a non-zero perturbation.
+            *c = if *c == 'q' { 'p' } else { 'q' };
         }
+        perturbed = chars.into_iter().collect();
+
+        let mut perturbed_strings: Vec<String> = strings[..strings.len() - 1].to_vec();
+        perturbed_strings.push(perturbed);
+        let parts: Vec<&str> = perturbed_strings.iter().map(|s| s.as_str()).collect();
+
+        match decode(&parts) {
+            Err(Error::CrossChunkHashMismatch) | Err(Error::BchUncorrectable(_)) => (),
+            other => panic!(
+                "5-symbol burst must produce CrossChunkHashMismatch or BchUncorrectable, \
+                 got {other:?}"
+            ),
+        }
+    }
+
+    /// Build a synthetic `SingleString`-shaped mk1 string from arbitrary
+    /// bytecode bytes. v0.1 encoders never emit `SingleString` (smallest
+    /// valid bytecode = 80 bytes > 56-byte single-string capacity per
+    /// SPEC §2.4), so this helper exists purely for tests that need a
+    /// `SingleString`-headered string to exercise the header-types-
+    /// disagree rejection paths.
+    fn synthetic_singlestring(bytecode: &[u8]) -> String {
+        let header = StringLayerHeader::SingleString {
+            version: VERSION_V0_1,
+        };
+        let mut data_5bit = header.to_5bit_symbols();
+        data_5bit.extend(bytes_to_5bit(bytecode));
+        encode_5bit_to_string(&data_5bit).expect("synthetic singlestring encode")
+    }
+
+    #[test]
+    fn decode_rejects_singlestring_then_chunked() {
+        // Forward direction: first string carries a `SingleString` header,
+        // additional strings follow. `pipeline::decode` catches this in
+        // its early branch (`first_is_single && parsed.len() != 1`) and
+        // returns `MixedHeaderTypes` (was `ChunkedHeaderMalformed` in
+        // v0.1.0; renamed in v0.1.1 for precise discrimination).
+        let single = synthetic_singlestring(&[0x42u8; 8]);
+        let card = fixture_card_typical_chunked();
+        let chunked = encode_with_chunk_set_id(&card, 0).unwrap();
+        let parts: Vec<&str> = vec![single.as_str(), chunked[0].as_str()];
+        assert!(matches!(decode(&parts), Err(Error::MixedHeaderTypes)));
+    }
+
+    #[test]
+    fn decode_rejects_chunked_then_singlestring() {
+        // Reverse direction: first chunk is `Chunked` (so `pipeline::decode`
+        // falls into the chunked branch), but a later chunk is
+        // `SingleString`. `chunk::reassemble_from_chunks` catches this
+        // in its per-chunk loop and returns `MixedHeaderTypes`. Symmetric
+        // to the forward-direction case above.
+        let card = fixture_card_typical_chunked();
+        let mut strings = encode_with_chunk_set_id(&card, 0).unwrap();
+        assert!(strings.len() >= 2, "fixture must produce ≥ 2 chunks");
+        // Replace chunk[1] (a Chunked header) with a synthetic SingleString.
+        // The Chunked chunk[0] declares total_chunks = strings.len(), so
+        // the chunk-count check in reassemble_from_chunks passes and the
+        // loop reaches the SingleString chunk's match arm.
+        strings[1] = synthetic_singlestring(&[0xAAu8; 8]);
+        let parts: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+        assert!(matches!(decode(&parts), Err(Error::MixedHeaderTypes)));
     }
 
     #[test]

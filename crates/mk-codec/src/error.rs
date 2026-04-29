@@ -79,6 +79,18 @@ pub enum Error {
     #[error("chunked-header malformed: {0}")]
     ChunkedHeaderMalformed(String),
 
+    /// Decoder received a multi-string input whose `SingleString` and
+    /// `Chunked` header variants disagree across the supplied list:
+    /// either the first string is `SingleString` but additional strings
+    /// follow (caught early in `pipeline::decode`), or the first chunk
+    /// is `Chunked` but a later chunk in the list is `SingleString`
+    /// (caught in `chunk::reassemble_from_chunks`). Distinct from
+    /// [`Error::ChunkedHeaderMalformed`], which covers issues *within*
+    /// a declared-chunked set (bad `chunk_index`, bad `total_chunks`,
+    /// duplicates, gaps, etc.).
+    #[error("mixed string-layer header types in input list")]
+    MixedHeaderTypes,
+
     /// For chunked input: reassembled bytecode's trailing 4-byte
     /// `cross_chunk_hash` does not match `SHA-256(canonical_bytecode)[0..4]`.
     #[error("cross-chunk integrity hash mismatch")]
@@ -237,6 +249,10 @@ mod tests {
         assert_eq!(
             format!("{}", Error::ChunkSetIdMismatch),
             "chunk_set_id mismatch across chunks",
+        );
+        assert_eq!(
+            format!("{}", Error::MixedHeaderTypes),
+            "mixed string-layer header types in input list",
         );
         assert_eq!(
             format!("{}", Error::MalformedPayloadPadding),

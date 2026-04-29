@@ -168,9 +168,12 @@ pub fn reassemble_from_chunks(chunks: Vec<ChunkFragment>) -> Result<Vec<u8>> {
                 slots[idx] = Some(chunk.fragment);
             }
             StringLayerHeader::SingleString { .. } => {
-                return Err(Error::ChunkedHeaderMalformed(
-                    "single-string header mixed with chunked reassembly".to_string(),
-                ));
+                // A `SingleString` header at any non-leading position in
+                // a chunked set is a header-types-disagree error, not a
+                // chunked-internal malformation. Emitted as
+                // [`Error::MixedHeaderTypes`] for symmetry with the
+                // forward-direction reject in `pipeline::decode`.
+                return Err(Error::MixedHeaderTypes);
             }
         }
     }
