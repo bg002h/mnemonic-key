@@ -57,17 +57,26 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-4).
 - **Where:** `descriptor-mnemonic` repo — md1 bytecode tag table; new tag in unallocated `0x36+` range, or backfill `0x24-0x32`.
 - **What:** mk1 declares the authority-precedence semantics (mk1's `origin_path` is authoritative; md1's per-`@N` path is descriptive). The wire-format question of which tag byte md1 uses is an md-repo decision. mk1 cannot answer it.
-- **Why deferred:** Lives in the descriptor-mnemonic repo's next phase.
-- **Status:** `open`
+- **Why deferred:** Lives in the descriptor-mnemonic repo's next phase. md1's parallel entry (`md-per-N-path-tag-allocation` in `descriptor-mnemonic/design/FOLLOWUPS.md`) is open at tier `v0.9 or v1+`, scheduled whenever per-`@N` paths become a planned md release feature.
+- **Status:** `mk1-side complete; awaiting md1` — mk1's BIP §"Authority precedence" already pins the semantics; mk1 needs no wire-format change when md1 lands its tag allocation. This entry stays open as a coordination record (mk1 watches for the md1 release that lands per-`@N` paths and updates the BIP cross-references at that time).
 - **Tier:** `cross-repo`
 
-### `nums-structural-audit` — structural-relationship audit of `MK_REGULAR_CONST` / `MK_LONG_CONST`
+### `nums-structural-audit` — structural-relationship audit of `MK_REGULAR_CONST` / `MK_LONG_CONST` (resolved at md1's bar)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-1, captured as pre-BIP-submission audit item (1)).
 - **Where:** design / cryptography review.
 - **What:** Verify there are no accidental structural relationships between the locked target constants and the BIP 93 BCH polynomial. Required: weight-distribution analysis under the new target, intersection of mk1 codeword space with md1 and codex32 codeword spaces, confirmation that error-correction guarantees (8-character detection, 4-substitution correction) hold under the new constants.
 - **Why deferred:** Not a v0.1 implementation gate; gates formal BIP submission. Andrew Poelstra is the natural reviewer per D-11.
-- **Status:** `open`
+- **Status:** `resolved at md1's bar` (2026-04-29 cross-update pass). md1 / md-codec ship with the same NUMS construction (truncate top-N bits of `SHA-256(domain_string)`) and chose to document the construction in the BIP itself with a Python reproducer rather than commission a separate structural audit; `md`'s BIP §"Why new target constants?" is the audit trail. mk1 already meets that bar: BIP §"Why new target constants?" carries the equivalent reproducer for `b"shibbolethnumskey"`; SPEC §2.3 carries the same; and `consts.rs::tests::nums_constants_reproduce_from_domain` reproduces the construction at runtime (`cargo test`-enforced). The original FOLLOWUPS entry called for an external Poelstra structural review — a higher bar than md1 chose. Per the project's "don't adopt a higher bar than md1" principle, the entry is closed at the audit-trail-in-BIP level. If a future reviewer (Poelstra or other) volunteers a structural pass, it can land as a strengthening note in the BIP without re-opening this gate.
+- **Tier:** `pre-bip-submission`
+
+### `slip-0173-register-mk-hrp` — file SLIP-0173 PR registering `mk` HRP
+
+- **Surfaced:** 2026-04-29 cross-update pass after closing `hrp-mk-collision-check`. md1 filed a parallel PR (#2011 at satoshilabs/slips) registering `md` as a defensive measure; mk1 follows the same pattern.
+- **Where:** [satoshilabs/slips](https://github.com/satoshilabs/slips) PR adding one row to `slip-0173.md`. Draft PR text + diff at `design/SLIP_0173_PR_DRAFT.md`.
+- **What:** Defensive registration of the `mk` HRP in SLIP-0173 to close off future collision risk from independent Bitcoin-family projects. The registration is a docs-level act in the SatoshiLabs registry; no code change in mk-codec, no wire-format implications, no binding consequence beyond the registry record.
+- **Why deferred:** Single user-action item (file the PR under the maintainer's GitHub account). The `hrp-mk-collision-check` audit at `design/AUDIT_hrp_mk_collision.md` cleared the technical gate; this entry tracks the actual PR filing.
+- **Status:** `open` — PR text drafted at `design/SLIP_0173_PR_DRAFT.md`, ready for the maintainer to fork satoshilabs/slips, apply the diff, and open the PR. Parallel to md1's `slip-0173-register-md-hrp` (resolved 2026-04-28 — PR filed at https://github.com/satoshilabs/slips/pull/2011, merge state tracked externally).
 - **Tier:** `pre-bip-submission`
 
 ### `hrp-mk-collision-check` — formal HRP `mk` collision verification (resolved)
