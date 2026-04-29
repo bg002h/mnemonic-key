@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "f17506e73163bdea9cfebce5e903e8259edc53f1c8bb9c8ff13e082ee0658f26";
+const V0_1_SHA256: &str = "6a2667c21e80060844e69de8114652810d883b3a017b232524fe749af30d1106";
 
 const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
 

@@ -165,6 +165,117 @@ fn fixtures() -> Vec<FixtureSpec> {
             seed_byte: 0x08,
             chunk_set_id: 0x89012,
         },
+        // V9..V17 — added in v0.1.1 Phase 2 to close
+        // `vector-corpus-dictionary-coverage`. Together with V1..V8 the
+        // corpus exercises every closure-locked path-dictionary entry
+        // except 0x16 (BIP 48 testnet nested-segwit), which is blocked
+        // on the cross-repo `md-path-dictionary-0x16-gap` resolution
+        // (mk1 cannot legitimately emit 0x16 until md1 closes the gap).
+        // Fingerprint state alternates per the milestone plan:
+        // V9-V11/V13-V15 with fp; V12/V16/V17 without.
+        FixtureSpec {
+            name: "V9_bip44_mainnet_1_stub_with_fp",
+            description: "1-stub mainnet, BIP 44 single-sig (m/44'/0'/0'), \
+                 fingerprint present. Std-table indicator 0x01.",
+            policy_id_stubs: vec![[0x44, 0x44, 0x44, 0x44]],
+            origin_fingerprint: Some([0xC0, 0x01, 0xCA, 0xFE]),
+            origin_path: "44'/0'/0'",
+            network: NetworkKind::Main,
+            seed_byte: 0x09,
+            chunk_set_id: 0x9A012,
+        },
+        FixtureSpec {
+            name: "V10_bip49_mainnet_1_stub_with_fp",
+            description: "1-stub mainnet, BIP 49 nested-segwit single-sig \
+                 (m/49'/0'/0'), fingerprint present. Std-table indicator 0x02.",
+            policy_id_stubs: vec![[0x49, 0x49, 0x49, 0x49]],
+            origin_fingerprint: Some([0xFE, 0xED, 0xBE, 0xEF]),
+            origin_path: "49'/0'/0'",
+            network: NetworkKind::Main,
+            seed_byte: 0x0A,
+            chunk_set_id: 0xAB123,
+        },
+        FixtureSpec {
+            name: "V11_bip86_mainnet_1_stub_with_fp",
+            description: "1-stub mainnet, BIP 86 taproot single-sig \
+                 (m/86'/0'/0'), fingerprint present. Std-table indicator 0x04.",
+            policy_id_stubs: vec![[0x86, 0x86, 0x86, 0x86]],
+            origin_fingerprint: Some([0x86, 0x40, 0x70, 0x05]),
+            origin_path: "86'/0'/0'",
+            network: NetworkKind::Main,
+            seed_byte: 0x0B,
+            chunk_set_id: 0xBC234,
+        },
+        FixtureSpec {
+            name: "V12_bip48_nested_segwit_mainnet_1_stub_no_fp",
+            description: "1-stub mainnet, BIP 48 nested-segwit multisig \
+                 (m/48'/0'/0'/1'), fingerprint omitted (privacy-preserving \
+                 mode). Std-table indicator 0x06.",
+            policy_id_stubs: vec![[0x48, 0x48, 0x00, 0x01]],
+            origin_fingerprint: None,
+            origin_path: "48'/0'/0'/1'",
+            network: NetworkKind::Main,
+            seed_byte: 0x0C,
+            chunk_set_id: 0xCD345,
+        },
+        FixtureSpec {
+            name: "V13_bip44_testnet_1_stub_with_fp",
+            description: "1-stub testnet, BIP 44 single-sig (m/44'/1'/0'), \
+                 fingerprint present. Std-table indicator 0x11 \
+                 (testnet-bit-15 variant of 0x01).",
+            policy_id_stubs: vec![[0x44, 0x11, 0x00, 0x00]],
+            origin_fingerprint: Some([0x44, 0x11, 0xAA, 0xBB]),
+            origin_path: "44'/1'/0'",
+            network: NetworkKind::Test,
+            seed_byte: 0x0D,
+            chunk_set_id: 0xDE456,
+        },
+        FixtureSpec {
+            name: "V14_bip49_testnet_1_stub_with_fp",
+            description: "1-stub testnet, BIP 49 nested-segwit (m/49'/1'/0'), \
+                 fingerprint present. Std-table indicator 0x12.",
+            policy_id_stubs: vec![[0x49, 0x12, 0x00, 0x00]],
+            origin_fingerprint: Some([0x49, 0x12, 0xCC, 0xDD]),
+            origin_path: "49'/1'/0'",
+            network: NetworkKind::Test,
+            seed_byte: 0x0E,
+            chunk_set_id: 0xEF567,
+        },
+        FixtureSpec {
+            name: "V15_bip84_testnet_1_stub_with_fp",
+            description: "1-stub testnet, BIP 84 native-segwit (m/84'/1'/0'), \
+                 fingerprint present. Std-table indicator 0x13.",
+            policy_id_stubs: vec![[0x84, 0x13, 0x00, 0x00]],
+            origin_fingerprint: Some([0x84, 0x13, 0xEE, 0xFF]),
+            origin_path: "84'/1'/0'",
+            network: NetworkKind::Test,
+            seed_byte: 0x0F,
+            chunk_set_id: 0xF0678,
+        },
+        FixtureSpec {
+            name: "V16_bip86_testnet_1_stub_no_fp",
+            description: "1-stub testnet, BIP 86 taproot (m/86'/1'/0'), \
+                 fingerprint omitted. Std-table indicator 0x14.",
+            policy_id_stubs: vec![[0x86, 0x14, 0x00, 0x00]],
+            origin_fingerprint: None,
+            origin_path: "86'/1'/0'",
+            network: NetworkKind::Test,
+            seed_byte: 0x10,
+            chunk_set_id: 0x01789,
+        },
+        FixtureSpec {
+            name: "V17_bip87_testnet_1_stub_no_fp",
+            description: "1-stub testnet, BIP 87 multisig (m/87'/1'/0'), \
+                 fingerprint omitted. Std-table indicator 0x17 \
+                 (closes the v0.1 std-table testnet coverage modulo the \
+                 0x16 BIP 48 nested-segwit gap deferred to md1).",
+            policy_id_stubs: vec![[0x87, 0x17, 0x00, 0x00]],
+            origin_fingerprint: None,
+            origin_path: "87'/1'/0'",
+            network: NetworkKind::Test,
+            seed_byte: 0x11,
+            chunk_set_id: 0x1289A,
+        },
     ]
 }
 
