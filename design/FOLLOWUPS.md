@@ -109,10 +109,36 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 - **Surfaced:** 2026-04-29 mk1 v0.1 Phase 5 string-layer implementation.
 - **Where:** mk1 SPEC §2.5 ("String-layer header" / chunked variant); mk1 BIP §"String-layer header" / "Chunked".
-- **What:** The chunked-header `total_chunks` field is documented as "5 bits, range 1..=32." But 32 distinct values 1..=32 do not fit in 5 bits — 5 bits hold 0..=31. The mk-codec v0.1 reference implementation resolves the mismatch by encoding `count - 1` on the wire (wire 0..=31 → semantic 1..=32). The spec/BIP wording should explicitly call out the off-by-one wire encoding so cross-implementations don't have to reverse-engineer it. `chunk_index` has no such issue (range 0..=total_chunks-1 fits naturally in 5 bits).
-- **Why deferred:** Wording-only; the wire format is the implementation, and the implementation has the correct off-by-one encoding documented in `crates/mk-codec/src/string_layer/header.rs::to_5bit_symbols`. Pre-BIP-submission audit gate.
-- **Status:** `open`
+- **What:** The chunked-header `total_chunks` field was documented as "5 bits, range 1..=32," but 32 distinct values 1..=32 do not fit in 5 bits (which hold 0..=31). The mk-codec v0.1 reference implementation resolves the mismatch by encoding `count - 1` on the wire (wire 0..=31 → semantic 1..=32). The same gap applied to `chunk_set_id` endian convention — "20 bits" was silent on packing order.
+- **Resolution (2026-04-29, Phase 5 review fixup):** added explicit "Wire encoding for `total_chunks`" (`count − 1`) and "Wire encoding for `chunk_set_id`" (big-endian 5-bit-symbol order) paragraphs to both `design/SPEC_mk_v0_1.md` §2.5 and `bip/bip-mnemonic-key.mediawiki` §"Chunked header". The reference implementation already encoded both correctly; this is purely a documentation tightening.
+- **Status:** `closed`
 - **Tier:** `pre-bip-submission`
+
+### `cross-chunk-hash-test-fixture-stability` — Phase 5 perturbation test fixture brittleness
+
+- **Surfaced:** 2026-04-29 Phase 5 review (M-3, commit 12c54f8).
+- **Where:** `crates/mk-codec/src/string_layer/pipeline.rs` test `decode_rejects_perturbed_cross_chunk_hash`.
+- **What:** The test perturbs the last byte of the last chunk's fragment and re-encodes, asserting `CrossChunkHashMismatch`. Under the current fixture this works, but the test depends on the perturbation not landing somewhere the BCH t=4 correction silently un-perturbs into a CRC-valid bytecode. A future fixture change could mask the test. Cleanest fix: perturb in 5-bit-symbol space *after* re-encoding, or pin a perturbation pattern at BCH-distance > 4 from any valid codeword in the chunk's data part.
+- **Why deferred:** Test is currently green; the brittleness is potential, not actual. v0.1-nice-to-have.
+- **Status:** `open`
+- **Tier:** `v0.1-nice-to-have`
+
+### `pipeline-decode-mixed-header-error-naming` — `ChunkedHeaderMalformed` variant overloaded
+
+- **Surfaced:** 2026-04-29 Phase 5 review (M-5, commit 12c54f8).
+- **Where:** `crates/mk-codec/src/string_layer/pipeline.rs::decode` — the `[SingleString, Chunked, ...]` and `[Chunked, SingleString, ...]` rejection paths surface as `Error::ChunkedHeaderMalformed("…")`. The variant name suggests a chunked-set issue; the actual condition is "header types disagree across the supplied strings." Consider adding a dedicated `MixedHeaderTypes` Error variant (or a more specific `String`-parameterised variant) when the v0.2 wire format admits more chunk types and the discrimination matters.
+- **Why deferred:** Reachable only through user error; current message text is clear. Variant proliferation has its own cost. v0.1-nice-to-have.
+- **Status:** `open`
+- **Tier:** `v0.1-nice-to-have`
+
+### `encode-with-chunk-set-id-singlestring-silent-ignore` — explicit `chunk_set_id` is silently dropped
+
+- **Surfaced:** 2026-04-29 Phase 5 review (M-6, commit 12c54f8).
+- **Where:** `crates/mk-codec/src/string_layer/pipeline.rs::encode_with_chunk_set_id`.
+- **What:** When the bytecode lands in single-string territory, the `chunk_set_id` parameter is silently ignored. This is friendly but masks a Phase-6-vector-regenerator failure mode: if the SingleString-vs-Chunked cutoff drifts, vectors pinned with explicit chunk_set_id may stop testing what they intended. Consider returning `Err(Error::ChunkedHeaderMalformed("chunk_set_id supplied but encoding is SingleString"))` when the override is supplied and the bytecode fits in a single string. Alternative: document that the test harness should assert the `chunked vs single` plan before pinning.
+- **Why deferred:** The Phase-6 vector corpus generator (next phase) will surface this if it happens; better to defer the API decision until the regenerator is concrete.
+- **Status:** `open`
+- **Tier:** `v0.1-nice-to-have`
 
 ### `path-dictionary-mirror-stewardship` — formalize mk1↔md1 path-dictionary inheritance contract
 

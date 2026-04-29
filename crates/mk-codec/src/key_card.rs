@@ -59,6 +59,23 @@ impl KeyCard {
     /// add fields without breaking external callers; the constructor
     /// stays stable across additions because new fields land with
     /// `Default`-compatible values or new constructors.
+    ///
+    /// # Field invariants enforced at encode time
+    ///
+    /// `KeyCard::new` is intentionally permissive — field-level
+    /// validation lives in [`crate::encode`] / [`crate::bytecode::encode_bytecode`].
+    /// In particular:
+    ///
+    /// - `policy_id_stubs` MUST be non-empty; the encoder rejects an
+    ///   empty vector with [`crate::Error::InvalidPolicyIdStubCount`]
+    ///   (per `design/SPEC_mk_v0_1.md` §4 rule 3).
+    /// - `origin_path` MUST have at most [`crate::MAX_PATH_COMPONENTS`]
+    ///   = 10 components when an explicit-path encoding would be used;
+    ///   exceeding that yields [`crate::Error::PathTooDeep`].
+    ///
+    /// Callers that want a fail-fast constructor should validate
+    /// these invariants before calling `new`, or simply rely on the
+    /// encoder's rejection.
     pub fn new(
         policy_id_stubs: Vec<[u8; 4]>,
         origin_fingerprint: Option<Fingerprint>,

@@ -103,9 +103,13 @@ char 1:  type = 0x00   (5 bits)   — SingleString
 char 0:    version          (5 bits)
 char 1:    type = 0x01      (5 bits)   — Chunked
 chars 2-5: chunk_set_id     (20 bits, random per-encoding)
-char 6:    total_chunks     (5 bits, range 1..=32)
+char 6:    total_chunks     (5 bits, semantic range 1..=32, encoded as count − 1)
 char 7:    chunk_index      (5 bits, range 0..total_chunks)
 ```
+
+**Wire encoding for `total_chunks`:** the 5-bit field carries `count − 1` so the semantic range `1..=32` maps onto the wire range `0..=31`. Encoders MUST emit `count − 1`; decoders MUST add 1 after reading the 5-bit field. (A literal "1..=32" wire encoding is impossible because a 5-bit field holds 32 distinct values whose minimum is 0, not 1.)
+
+**Wire encoding for `chunk_set_id`:** the 20-bit value is packed into chars 2–5 in big-endian 5-bit-symbol order — bits 19..15 in char 2, 14..10 in char 3, 9..5 in char 4, 4..0 in char 5. Decoders reconstruct the value via `(char2 << 15) | (char3 << 10) | (char4 << 5) | char5`.
 
 `chunk_set_id` is opaque to the format; its only purpose is mismatch detection during reassembly. Encoders SHOULD generate it from a cryptographically secure random source at first encoding and reuse the same value for all subsequent re-encodings of the same card.
 
