@@ -86,10 +86,13 @@ pub fn reconstruct_xpub(compact: &XpubCompact, origin_path: &DerivationPath) -> 
     let network = version_to_network(compact.version)?;
     let components: Vec<ChildNumber> = origin_path.into_iter().copied().collect();
     let depth = components.len() as u8;
+    // origin_path is non-empty per SPEC §3.5: standard-table indicators
+    // dereference to ≥3 components, and explicit-path encoding rejects
+    // count == 0 with PathTooDeep(0) before reaching reconstruct_xpub.
     let child_number = components
         .last()
         .copied()
-        .unwrap_or(ChildNumber::Normal { index: 0 });
+        .expect("origin_path must be non-empty per SPEC §3.5");
     let public_key = PublicKey::from_slice(&compact.public_key)
         .map_err(|e| Error::InvalidXpubPublicKey(format!("{e}")))?;
     Ok(Xpub {
