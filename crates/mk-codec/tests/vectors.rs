@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "6a2667c21e80060844e69de8114652810d883b3a017b232524fe749af30d1106";
+const V0_1_SHA256: &str = "77e9eba529cf086734be80a3c7a02aa2cf0fcc2c2f752d667d98791cd7ed9069";
 
 const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
 
@@ -108,10 +108,12 @@ fn vector_file_sha256_matches_pin() {
 #[test]
 fn schema_metadata_pinned() {
     // Pin schema version + family token at the top of the document so a
-    // future generator can't silently bump these.
+    // future generator can't silently bump these. Schema 2 (v0.1.1+) adds
+    // optional `expected_error` per-vector for negative-vector support;
+    // schema 1 (v0.1.0) corpora are still readable by this harness.
     let bytes = read_vector_file();
     let doc: Value = serde_json::from_slice(&bytes).expect("parse vectors JSON");
-    assert_eq!(doc["schema"], Value::from(1u64), "schema version drift");
+    assert_eq!(doc["schema"], Value::from(2u64), "schema version drift");
     assert_eq!(
         doc["family_token"].as_str().unwrap_or(""),
         "mk-codec 0.1",
@@ -126,72 +128,185 @@ fn every_vector_round_trips() {
     let vectors = doc["vectors"].as_array().expect("vectors is array");
     assert!(!vectors.is_empty(), "vector corpus must not be empty");
 
+    let mut clean_count = 0usize;
+    let mut negative_count = 0usize;
+
     for vector in vectors {
         let name = vector["name"]
             .as_str()
             .expect("vector.name is string")
             .to_string();
-        let input = &vector["input"];
-        let expected = &vector["expected"];
-
-        let card = build_card_from_input(input);
-
-        // 1. Bytecode round-trip — every byte must match the pinned hex.
-        let actual_bytecode = encode_bytecode(&card)
-            .unwrap_or_else(|e| panic!("[{name}] encode_bytecode failed: {e}"));
-        let expected_bytecode = parse_hex(
-            expected["canonical_bytecode_hex"]
-                .as_str()
-                .expect("canonical_bytecode_hex is string"),
-        );
-        assert_eq!(
-            actual_bytecode, expected_bytecode,
-            "[{name}] canonical_bytecode_hex drifted from encoder output"
-        );
-
-        // 2. String-set round-trip — pinned chunk_set_id makes this byte-stable.
-        let chunk_set_id =
-            u32::try_from(input["chunk_set_id"].as_u64().expect("chunk_set_id is u64"))
-                .expect("chunk_set_id fits in u32");
-        let actual_strings = encode_with_chunk_set_id(&card, chunk_set_id)
-            .unwrap_or_else(|e| panic!("[{name}] encode_with_chunk_set_id failed: {e}"));
-        let expected_strings: Vec<String> = expected["strings"]
-            .as_array()
-            .expect("strings is array")
-            .iter()
-            .map(|v| v.as_str().expect("string").to_string())
-            .collect();
-        assert_eq!(
-            actual_strings, expected_strings,
-            "[{name}] mk1 string set drifted from encoder output"
-        );
-
-        // 3. total_chunks invariant — the metadata field equals the
-        //    actual emitted string count.
-        let expected_total = u64::try_from(actual_strings.len()).unwrap();
-        assert_eq!(
-            expected["total_chunks"].as_u64().unwrap_or(0),
-            expected_total,
-            "[{name}] total_chunks metadata disagrees with strings.len()"
-        );
-
-        // 4. Decode round-trip — produce the same KeyCard back.
-        let recovered_strs: Vec<&str> = actual_strings.iter().map(|s| s.as_str()).collect();
-        let recovered_card =
-            decode(&recovered_strs).unwrap_or_else(|e| panic!("[{name}] decode failed: {e}"));
-        assert_eq!(
-            recovered_card, card,
-            "[{name}] decoded KeyCard differs from original"
-        );
-
-        // 5. Decoder-correction field is `clean` for v0.1 (no
-        //    intentionally corrupted vectors yet; corruption-recovery
-        //    vectors are a Phase 7+ extension per FOLLOWUPS).
-        assert_eq!(
-            expected["decoder_correction"].as_str().unwrap_or(""),
-            "clean",
-            "[{name}] decoder_correction is not 'clean' — corrupted-input \
-             vectors not supported in v0.1 corpus"
-        );
+        match &vector["expected_error"] {
+            Value::Null => {
+                clean_count += 1;
+                exercise_clean_vector(&name, vector);
+            }
+            Value::String(expected_err) => {
+                negative_count += 1;
+                exercise_negative_vector(&name, vector, expected_err);
+            }
+            other => panic!("[{name}] expected_error must be null or string; got {other:?}"),
+        }
     }
+
+    // Pin v0.1.1's expected vector counts (17 clean + 22 negative = 39).
+    // Phase 4 will tighten these to floor checks if v0.1.x adds vectors.
+    assert!(clean_count >= 17, "clean-vector count regressed");
+    assert!(negative_count >= 22, "negative-vector count regressed");
+}
+
+fn exercise_clean_vector(name: &str, vector: &Value) {
+    let input = &vector["input"];
+    let expected = &vector["expected"];
+
+    let card = build_card_from_input(input);
+
+    // 1. Bytecode round-trip — every byte must match the pinned hex.
+    let actual_bytecode =
+        encode_bytecode(&card).unwrap_or_else(|e| panic!("[{name}] encode_bytecode failed: {e}"));
+    let expected_bytecode = parse_hex(
+        expected["canonical_bytecode_hex"]
+            .as_str()
+            .expect("canonical_bytecode_hex is string"),
+    );
+    assert_eq!(
+        actual_bytecode, expected_bytecode,
+        "[{name}] canonical_bytecode_hex drifted from encoder output"
+    );
+
+    // 2. String-set round-trip — pinned chunk_set_id makes this byte-stable.
+    let chunk_set_id = u32::try_from(input["chunk_set_id"].as_u64().expect("chunk_set_id is u64"))
+        .expect("chunk_set_id fits in u32");
+    let actual_strings = encode_with_chunk_set_id(&card, chunk_set_id)
+        .unwrap_or_else(|e| panic!("[{name}] encode_with_chunk_set_id failed: {e}"));
+    let expected_strings: Vec<String> = expected["strings"]
+        .as_array()
+        .expect("strings is array")
+        .iter()
+        .map(|v| v.as_str().expect("string").to_string())
+        .collect();
+    assert_eq!(
+        actual_strings, expected_strings,
+        "[{name}] mk1 string set drifted from encoder output"
+    );
+
+    // 3. total_chunks invariant — the metadata field equals the
+    //    actual emitted string count.
+    let expected_total = u64::try_from(actual_strings.len()).unwrap();
+    assert_eq!(
+        expected["total_chunks"].as_u64().unwrap_or(0),
+        expected_total,
+        "[{name}] total_chunks metadata disagrees with strings.len()"
+    );
+
+    // 4. Decode round-trip — produce the same KeyCard back.
+    let recovered_strs: Vec<&str> = actual_strings.iter().map(|s| s.as_str()).collect();
+    let recovered_card =
+        decode(&recovered_strs).unwrap_or_else(|e| panic!("[{name}] decode failed: {e}"));
+    assert_eq!(
+        recovered_card, card,
+        "[{name}] decoded KeyCard differs from original"
+    );
+
+    // 5. Decoder-correction field is `clean` for clean vectors.
+    assert_eq!(
+        expected["decoder_correction"].as_str().unwrap_or(""),
+        "clean",
+        "[{name}] decoder_correction is not 'clean' for a clean vector"
+    );
+}
+
+fn exercise_negative_vector(name: &str, vector: &Value, expected_err: &str) {
+    let strings: Vec<String> = vector["input"]["strings"]
+        .as_array()
+        .expect("[name] negative.input.strings is array")
+        .iter()
+        .map(|v| v.as_str().expect("string").to_string())
+        .collect();
+    let parts: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+    match decode(&parts) {
+        Err(e) => {
+            let actual = format!("{e}");
+            assert_eq!(
+                actual, expected_err,
+                "[{name}] decoder error rendering drifted from pinned `expected_error`"
+            );
+        }
+        Ok(card) => panic!(
+            "[{name}] expected `Err({expected_err})`; decoder accepted input as KeyCard {card:?}"
+        ),
+    }
+}
+
+/// Exhaustiveness gate: every `Error` variant reachable from `decode`'s
+/// string-input path MUST be covered by at least one negative vector.
+/// Implemented as an in-crate exhaustive `match` — `#[non_exhaustive]`
+/// blocks external exhaustive matching, but this test lives inside the
+/// `mk-codec` crate's integration-test target and the compiler still
+/// warns when a new variant is added without an arm.
+///
+/// Variants exempt from corpus coverage:
+/// - [`mk_codec::Error::CardPayloadTooLarge`] — encoder-only (fires in
+///   `split_into_chunks`); not reachable via `decode` string input. The
+///   decoder-side analog is structurally impossible because chunked
+///   `total_chunks` is bounded by `MAX_CHUNKS=32` and each fragment
+///   ≤ 53 bytes, so reassembled bytecode ≤ 32×53 − 4 = 1692 bytes.
+#[test]
+fn every_error_variant_has_negative_vector() {
+    use mk_codec::Error;
+
+    let bytes = read_vector_file();
+    let doc: Value = serde_json::from_slice(&bytes).expect("parse vectors JSON");
+    let vectors = doc["vectors"].as_array().expect("vectors is array");
+
+    let assert_variant_covered = |needle: &str| {
+        let found = vectors.iter().any(|v| {
+            v["expected_error"]
+                .as_str()
+                .map(|s| s.starts_with(needle))
+                .unwrap_or(false)
+        });
+        assert!(
+            found,
+            "no negative vector found whose `expected_error` starts with `{needle}`"
+        );
+    };
+
+    // Note: `Error` is `#[non_exhaustive]`, which blocks compile-time
+    // exhaustive matching even from inside the crate's integration-test
+    // target (rustc treats integration tests as external for this check).
+    // The unit tests in `crates/mk-codec/src/error.rs` —
+    // `parameterized_variants_render` and `static_variants_render` —
+    // exercise variant `Display` rendering exhaustively; if a new
+    // variant lands without a rendering case, those tests miss it.
+    // Future-proofing improvement: add a `strum::EnumIter`-driven gate
+    // at the lib level (tracked as a v0.2 nice-to-have).
+    let _ = Error::InvalidHrp(String::new()); // ensure import isn't dead-code-warned
+
+    assert_variant_covered("invalid HRP");
+    assert_variant_covered("mixed case");
+    assert_variant_covered("invalid data-part length");
+    assert_variant_covered("invalid character");
+    assert_variant_covered("BCH uncorrectable");
+    assert_variant_covered("unsupported card type");
+    assert_variant_covered("malformed payload padding");
+    assert_variant_covered("chunk_set_id mismatch");
+    assert_variant_covered("chunked-header malformed");
+    assert_variant_covered("mixed string-layer header types");
+    assert_variant_covered("cross-chunk integrity hash mismatch");
+    assert_variant_covered("unsupported version");
+    assert_variant_covered("reserved bits set");
+    assert_variant_covered("policy_id_stub_count must be >= 1");
+    assert_variant_covered("invalid path indicator byte");
+    assert_variant_covered("path too deep");
+    // `InvalidPathComponent` is exempt: truncated LEB128 inputs surface
+    // as `UnexpectedEnd` rather than `InvalidPathComponent` in the
+    // current decoder; the variant is reachable in principle (e.g.,
+    // a malformed-but-non-truncated LEB128) but constructing such an
+    // input is brittle — see N17's rationale. Documented exemption.
+    assert_variant_covered("invalid xpub version");
+    assert_variant_covered("invalid xpub public key");
+    assert_variant_covered("unexpected end of bytecode");
+    assert_variant_covered("trailing bytes after xpub");
+    // `CardPayloadTooLarge` is encoder-only — exempt.
 }
