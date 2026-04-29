@@ -52,20 +52,50 @@ pub struct KeyCard {
     pub xpub: Xpub,
 }
 
+impl KeyCard {
+    /// Construct a `KeyCard` from its four owned fields.
+    ///
+    /// `KeyCard` is `#[non_exhaustive]` so that future versions can
+    /// add fields without breaking external callers; the constructor
+    /// stays stable across additions because new fields land with
+    /// `Default`-compatible values or new constructors.
+    pub fn new(
+        policy_id_stubs: Vec<[u8; 4]>,
+        origin_fingerprint: Option<Fingerprint>,
+        origin_path: DerivationPath,
+        xpub: Xpub,
+    ) -> Self {
+        Self {
+            policy_id_stubs,
+            origin_fingerprint,
+            origin_path,
+            xpub,
+        }
+    }
+}
+
 /// Encode a `KeyCard` into one or more `mk1`-prefixed strings.
 ///
-/// **Not yet implemented.** Calls Phase 5's string-layer pipeline once
-/// it lands. Currently panics with `todo!()`.
-pub fn encode(_card: &KeyCard) -> Result<Vec<String>> {
-    todo!("mk-codec encode: string-layer pipeline lands in Phase 5; see design/IMPLEMENTATION_PLAN_mk_v0_1.md")
+/// Multi-chunk encodings draw a fresh 20-bit `chunk_set_id` from the
+/// system CSPRNG. Use [`encode_with_chunk_set_id`] for byte-deterministic
+/// output (vector regeneration, conformance tests).
+pub fn encode(card: &KeyCard) -> Result<Vec<String>> {
+    crate::string_layer::encode(card)
+}
+
+/// Like [`encode`], with an explicit `chunk_set_id` override.
+///
+/// `chunk_set_id` MUST fit in 20 bits (`0..=0x000F_FFFF`); otherwise
+/// returns [`crate::Error::ChunkedHeaderMalformed`]. The override is
+/// only consulted on the chunked path; single-string encodings have no
+/// `chunk_set_id` field.
+pub fn encode_with_chunk_set_id(card: &KeyCard, chunk_set_id: u32) -> Result<Vec<String>> {
+    crate::string_layer::encode_with_chunk_set_id(card, chunk_set_id)
 }
 
 /// Decode one or more `mk1`-prefixed strings into a `KeyCard`.
-///
-/// **Not yet implemented.** Phase 5 wires this through BCH +
-/// chunked-header reassembly + bytecode-layer decode.
-pub fn decode(_strings: &[&str]) -> Result<KeyCard> {
-    todo!("mk-codec decode: string-layer pipeline lands in Phase 5; see design/IMPLEMENTATION_PLAN_mk_v0_1.md")
+pub fn decode(strings: &[&str]) -> Result<KeyCard> {
+    crate::string_layer::decode(strings)
 }
 
 #[cfg(test)]

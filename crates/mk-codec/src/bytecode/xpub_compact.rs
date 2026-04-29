@@ -14,9 +14,9 @@
 //!                     73 B
 //! ```
 
+use bitcoin::NetworkKind;
 use bitcoin::bip32::{ChainCode, ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::secp256k1::PublicKey;
-use bitcoin::NetworkKind;
 
 use crate::consts::XPUB_COMPACT_BYTES;
 use crate::error::{Error, Result};
@@ -158,7 +158,10 @@ mod tests {
         let reconstructed = reconstruct_xpub(&decoded, &path).unwrap();
         assert_eq!(reconstructed.depth, 4);
         assert_eq!(reconstructed.network, xpub_full.network);
-        assert_eq!(reconstructed.parent_fingerprint, xpub_full.parent_fingerprint);
+        assert_eq!(
+            reconstructed.parent_fingerprint,
+            xpub_full.parent_fingerprint
+        );
         assert_eq!(reconstructed.chain_code, xpub_full.chain_code);
         assert_eq!(reconstructed.public_key, xpub_full.public_key);
         // child_number reconstruction

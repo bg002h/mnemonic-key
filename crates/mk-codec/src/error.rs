@@ -19,10 +19,38 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum Error {
     // ── String-layer errors (codex32 plumbing, HRP, chunk-header) ───────────
-
     /// HRP is not `mk` or input is not a valid bech32-shaped string.
     #[error("invalid HRP: {0}")]
     InvalidHrp(String),
+
+    /// Input string mixes ASCII upper- and lower-case in its data part.
+    /// BIP 173 forbids mixed case to remove an entire class of
+    /// transcription ambiguity; the rule is inherited verbatim by mk1's
+    /// codex32-derived encoding.
+    #[error("mixed case in input string")]
+    MixedCase,
+
+    /// Input string's data-part length is not a valid mk1 length:
+    /// either below the regular-code minimum (14 5-bit symbols), in the
+    /// reserved-invalid 94–95 gap between regular and long codes, or
+    /// above the long-code maximum (108). The carried `usize` is the
+    /// observed length; reported pessimistically to highlight which
+    /// boundary the caller missed.
+    #[error("invalid data-part length: {0}")]
+    InvalidStringLength(usize),
+
+    /// Input string's data part contains a character that is not in the
+    /// 32-character bech32 alphabet (`qpzry9x8gf2tvdw0s3jn54khce6mua7l`).
+    /// The offending character and its 0-indexed position within the
+    /// data part are reported so a higher-level decoder report can
+    /// surface a precise location for transcription-error feedback.
+    #[error("invalid character {ch} at position {position}")]
+    InvalidChar {
+        /// The character that was not in the bech32 alphabet.
+        ch: char,
+        /// 0-indexed position within the data part (chars after `mk1`).
+        position: usize,
+    },
 
     /// BCH checksum could not be corrected within the per-code-variant
     /// substitution capacity (4 for regular, 8 for long).
@@ -57,7 +85,6 @@ pub enum Error {
     CrossChunkHashMismatch,
 
     // ── Bytecode-layer errors (after string-layer reassembly) ────────────────
-
     /// Bytecode-header version != 0 in v0.1.
     #[error("unsupported version: {0}")]
     UnsupportedVersion(u8),
@@ -105,6 +132,21 @@ pub enum Error {
     /// Decoder finished consuming all expected fields but bytes remain.
     #[error("trailing bytes after xpub")]
     TrailingBytes,
+
+    /// Canonical bytecode + cross-chunk hash exceeds the v0.1 capacity
+    /// of `MAX_CHUNKS * CHUNKED_FRAGMENT_LONG_BYTES − CROSS_CHUNK_HASH_BYTES`
+    /// (= 32 × 53 − 4 = 1692 bytes). Reachable only through pathological
+    /// hand-constructed inputs; typical mk1 cards land well below this
+    /// ceiling per `design/SPEC_mk_v0_1.md` §2.4.
+    #[error(
+        "card payload too large: bytecode_len = {bytecode_len} > max_supported = {max_supported}"
+    )]
+    CardPayloadTooLarge {
+        /// Observed canonical-bytecode length in bytes.
+        bytecode_len: usize,
+        /// Maximum bytecode length the v0.1 chunking layer can carry.
+        max_supported: usize,
+    },
 }
 
 /// `Result` alias used throughout `mk-codec`.
@@ -120,12 +162,11 @@ mod tests {
     #[test]
     fn parameterized_variants_render() {
         let cases: Vec<(Error, &str)> = vec![
+            (Error::InvalidHrp("ms".into()), "invalid HRP: ms"),
             (
-                Error::InvalidHrp("ms".into()),
-                "invalid HRP: ms",
-            ),
-            (
-                Error::BchUncorrectable("5 substitutions exceed long-code 4-correction limit".into()),
+                Error::BchUncorrectable(
+                    "5 substitutions exceed long-code 4-correction limit".into(),
+                ),
                 "BCH uncorrectable: 5 substitutions exceed long-code 4-correction limit",
             ),
             (
@@ -140,10 +181,7 @@ mod tests {
                 Error::InvalidXpubPublicKey("malformed compressed point".into()),
                 "invalid xpub public key: malformed compressed point",
             ),
-            (
-                Error::UnsupportedVersion(1),
-                "unsupported version: 1",
-            ),
+            (Error::UnsupportedVersion(1), "unsupported version: 1"),
             (
                 Error::InvalidPathIndicator(0x16),
                 "invalid path indicator byte: 0x16",
@@ -166,60 +204,24 @@ mod tests {
         }
     }
 
-    // ── #[ignore]-marked sad-path scaffolds (per plan §3.2.4) ──────────
+    // ── String-layer rejection coverage (per plan §3.2.4) ──────────────
     //
-    // Each scaffold documents the planned decoder rejection that
-    // triggers a new variant. The `#[ignore]` is removed in the phase
-    // that lands the code path:
+    // Phase 5 landed the string-layer code paths that produce
+    // `CrossChunkHashMismatch`, `MalformedPayloadPadding`,
+    // `ChunkSetIdMismatch`, and `ChunkedHeaderMalformed`. The detailed
+    // reject scenarios live in `crate::string_layer::pipeline::tests`
+    // and `crate::string_layer::chunk::tests`; the smoke checks here
+    // assert that each variant is reachable through the public
+    // `crate::decode` API rather than just the lower-level layer
+    // helpers (the scaffolds documented in the plan §3.2.4 forward-
+    // reference these tests).
     //
-    // - Phase 5 (string layer):      CrossChunkHashMismatch,
-    //                                MalformedPayloadPadding,
-    //                                ChunkSetIdMismatch,
-    //                                ChunkedHeaderMalformed
-    //
-    // (Phase 4 retired the proposed FingerprintFlagMismatch variant:
+    // (Phase 4 retired the proposed `FingerprintFlagMismatch` variant:
     // structurally undetectable in the decoder under the closure-locked
     // wire format, since no length prefix lets the decoder distinguish
     // "flag set, fp present" from "flag unset, fp omitted." SPEC §4
     // rule 3 was reframed as an encoder-side invariant; see commit
     // log for Phase 4 review fixup.)
-
-    #[test]
-    #[ignore = "Phase 5 — string-layer reassembly"]
-    fn rejects_chunked_input_with_perturbed_cross_chunk_hash() {
-        // Phase 5: construct a chunked encoding, flip one byte of the
-        // appended cross_chunk_hash, and assert decode(...) returns
-        // Err(CrossChunkHashMismatch).
-        todo!("Phase 5 — implement string-layer reassembly");
-    }
-
-    #[test]
-    #[ignore = "Phase 5 — string-layer payload padding check"]
-    fn rejects_singlestring_with_non_zero_pad_bits() {
-        // Phase 5: construct a single-string mk1 input whose 5-bit
-        // payload symbols, after BCH verification, leave non-zero pad
-        // bits in the final symbol. Assert decode(...) returns
-        // Err(MalformedPayloadPadding).
-        todo!("Phase 5 — implement byte-align validation");
-    }
-
-    #[test]
-    #[ignore = "Phase 5 — chunk-set assembly"]
-    fn rejects_chunked_input_with_mismatched_chunk_set_id() {
-        // Phase 5: construct two chunks with different chunk_set_id
-        // values and assert decode(...) returns
-        // Err(ChunkSetIdMismatch).
-        todo!("Phase 5 — implement chunk reassembly");
-    }
-
-    #[test]
-    #[ignore = "Phase 5 — chunked-header validation"]
-    fn rejects_chunked_input_with_total_chunks_zero() {
-        // Phase 5: construct a chunked input whose total_chunks field
-        // is 0 (or > 32) and assert decode(...) returns
-        // Err(ChunkedHeaderMalformed(_)).
-        todo!("Phase 5 — implement chunked-header validation");
-    }
 
     /// Unparameterized variants render their static message verbatim.
     #[test]

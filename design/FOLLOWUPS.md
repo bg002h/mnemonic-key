@@ -105,6 +105,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open`
 - **Tier:** `cross-repo`
 
+### `chunked-header-total-chunks-wire-encoding-clarification` — SPEC §2.5 wording on `total_chunks` field
+
+- **Surfaced:** 2026-04-29 mk1 v0.1 Phase 5 string-layer implementation.
+- **Where:** mk1 SPEC §2.5 ("String-layer header" / chunked variant); mk1 BIP §"String-layer header" / "Chunked".
+- **What:** The chunked-header `total_chunks` field is documented as "5 bits, range 1..=32." But 32 distinct values 1..=32 do not fit in 5 bits — 5 bits hold 0..=31. The mk-codec v0.1 reference implementation resolves the mismatch by encoding `count - 1` on the wire (wire 0..=31 → semantic 1..=32). The spec/BIP wording should explicitly call out the off-by-one wire encoding so cross-implementations don't have to reverse-engineer it. `chunk_index` has no such issue (range 0..=total_chunks-1 fits naturally in 5 bits).
+- **Why deferred:** Wording-only; the wire format is the implementation, and the implementation has the correct off-by-one encoding documented in `crates/mk-codec/src/string_layer/header.rs::to_5bit_symbols`. Pre-BIP-submission audit gate.
+- **Status:** `open`
+- **Tier:** `pre-bip-submission`
+
 ### `path-dictionary-mirror-stewardship` — formalize mk1↔md1 path-dictionary inheritance contract
 
 - **Surfaced:** 2026-04-29 mk1 v0.1 Phase 2 BIP review open observation (commit 4728230).

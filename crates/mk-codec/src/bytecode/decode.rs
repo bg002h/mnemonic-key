@@ -201,10 +201,7 @@ mod tests {
         let card = fixture_card_1stub_with_fp();
         let mut wire = encode_bytecode(&card).unwrap();
         wire.push(0xFF); // extra byte after xpub
-        assert!(matches!(
-            decode_bytecode(&wire),
-            Err(Error::TrailingBytes),
-        ));
+        assert!(matches!(decode_bytecode(&wire), Err(Error::TrailingBytes),));
     }
 
     #[test]

@@ -27,5 +27,5 @@ pub(crate) mod test_helpers;
 pub use decode::decode_bytecode;
 pub use encode::encode_bytecode;
 pub use header::BytecodeHeader;
-pub use path::{decode_path, encode_path, lookup_indicator, lookup_path, STANDARD_PATHS};
-pub use xpub_compact::{decode_xpub_compact, encode_xpub_compact, reconstruct_xpub, XpubCompact};
+pub use path::{STANDARD_PATHS, decode_path, encode_path, lookup_indicator, lookup_path};
+pub use xpub_compact::{XpubCompact, decode_xpub_compact, encode_xpub_compact, reconstruct_xpub};

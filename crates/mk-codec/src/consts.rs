@@ -61,7 +61,7 @@ pub const ORIGIN_FINGERPRINT_BYTES: usize = 4;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::hashes::{sha256, Hash};
+    use bitcoin::hashes::{Hash, sha256};
 
     /// Verifies that the locked hex constants reproduce from the
     /// documented derivation rule. Catches accidental drift if either

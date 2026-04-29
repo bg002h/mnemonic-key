@@ -214,8 +214,7 @@ mod tests {
     #[test]
     fn round_trip_explicit_path_at_cap() {
         // 10 components — cap exact
-        let path =
-            DerivationPath::from_str("m/0'/1'/2'/3'/4'/5'/6'/7'/8'/9'").unwrap();
+        let path = DerivationPath::from_str("m/0'/1'/2'/3'/4'/5'/6'/7'/8'/9'").unwrap();
         let encoded = encode_path(&path);
         let mut cursor: &[u8] = &encoded;
         let decoded = decode_path(&mut cursor).unwrap();

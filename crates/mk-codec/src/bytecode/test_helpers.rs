@@ -10,9 +10,9 @@
 
 #![cfg(test)]
 
+use bitcoin::NetworkKind;
 use bitcoin::bip32::{ChainCode, ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-use bitcoin::NetworkKind;
 
 /// Build a synthetic mainnet `Xpub` with `depth` + `child_number`
 /// derived from `path`. Other fields use deterministic test values.

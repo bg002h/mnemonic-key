@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 bitcoin = "0.32"
 bech32 = "0.11"
+getrandom = "0.2"
 thiserror = "2.0"
 
 [dev-dependencies]

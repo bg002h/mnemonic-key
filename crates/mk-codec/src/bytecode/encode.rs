@@ -13,7 +13,7 @@
 
 use crate::bytecode::header::BytecodeHeader;
 use crate::bytecode::path::encode_path;
-use crate::bytecode::xpub_compact::{encode_xpub_compact, XpubCompact};
+use crate::bytecode::xpub_compact::{XpubCompact, encode_xpub_compact};
 use crate::error::{Error, Result};
 use crate::key_card::KeyCard;
 
