@@ -7,7 +7,8 @@ A specification for backing up bitcoin extended public keys (xpubs) on durable m
 > [`docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md`](docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md);
 > [`crates/mk-codec`](crates/mk-codec/) provides a working
 > `KeyCard` ↔ `Vec<String>` round-trip with BCH error correction and
-> a canonical 8-vector conformance corpus. Pre-BIP-submission audit
+> a canonical 39-vector conformance corpus (17 clean + 22 negative,
+> one negative per `Error` variant). Pre-BIP-submission audit
 > items remain — see [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md).
 
 MK is the third format in a triad of codex32-derived bitcoin backup formats:
@@ -46,7 +47,7 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 ## Where to start reading
 
 - **For format users / implementers**: [`bip/bip-mnemonic-key.mediawiki`](bip/bip-mnemonic-key.mediawiki) is the canonical (draft) spec.
-- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, v0.1 working encode/decode round-trip + 8-vector conformance corpus at [`crates/mk-codec/tests/vectors/v0.1.json`](crates/mk-codec/tests/vectors/v0.1.json).
+- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, v0.1.1 working encode/decode round-trip + 39-vector conformance corpus (17 clean + 22 negative) at [`crates/mk-codec/tests/vectors/v0.1.json`](crates/mk-codec/tests/vectors/v0.1.json).
 - **For why the design is the way it is**: [`design/DECISIONS.md`](design/DECISIONS.md) walks through D-1..D-15 (the 2026-04-29 design discussion plus closures of Q-1..Q-10). [`design/SPEC_mk_v0_1.md`](design/SPEC_mk_v0_1.md) is the post-closure wire-format spec.
 - **For deferred work**: [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md) — pre-BIP-submission audit gates and cross-repo coordination items.
 

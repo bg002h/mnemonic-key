@@ -149,8 +149,9 @@ fn every_vector_round_trips() {
         }
     }
 
-    // Pin v0.1.1's expected vector counts (17 clean + 22 negative = 39).
-    // Phase 4 will tighten these to floor checks if v0.1.x adds vectors.
+    // Pin v0.1.1's vector counts as floors (17 clean + 22 negative = 39).
+    // The `>=` form lets v0.1.x patch releases add vectors without
+    // breaking the harness; tightening to `==` is a v0.2-grade decision.
     assert!(clean_count >= 17, "clean-vector count regressed");
     assert!(negative_count >= 22, "negative-vector count regressed");
 }

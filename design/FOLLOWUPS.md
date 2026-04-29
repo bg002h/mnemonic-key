@@ -31,6 +31,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 - **`v0.1-blocker`**: must fix before tagging `mk-codec-v0.1.0`. Failing to fix = ship blocked.
 - **`v0.1-nice-to-have`**: should fix before v0.1 if time permits, but won't block release. Document the deferral in v0.1's CHANGELOG/README.
+- **`v0.2-nice-to-have`**: should land before v0.2 release if time permits but won't block; document deferral in v0.2's CHANGELOG.
 - **`v0.2`**: explicitly deferred to v0.2.
 - **`pre-bip-submission`**: not blocking v0.1 release, but MUST be resolved before formal BIP submission per D-11. Examples: NUMS structural audit, HRP collision check.
 - **`cross-repo`**: depends on action in `descriptor-mnemonic` repo.
@@ -93,7 +94,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-codec/src/error.rs` (variants), `crates/mk-codec/tests/vectors/v0.1.json` (corpus).
 - **What:** Every reject case in SPEC §4 validity rules MUST map to a uniquely-named `Error` variant in the reference crate, and every variant MUST have at least one planned negative test vector. Mirrors md-codec's 30-negative-vectors-one-per-Error-variant conformance contract.
 - **Why deferred:** v0.1 implementation will define the Error variants; the *parity gate* (every variant has a vector, no orphaned variants, no variantless reject paths) is checked just before BIP submission and v1.0 release.
-- **Status:** `resolved 1e42354` (v0.1.1 Phase 3). 22 negative vectors N1..N21, N23 cover every `Error` variant reachable from `decode`'s string-input path; `every_error_variant_has_negative_vector` integration test enforces variant coverage. `Error::CardPayloadTooLarge` is documented exempt (encoder-only — no decoder path can trigger it). Compile-time exhaustiveness via strum is recorded as `error-variant-exhaustiveness-gate-strum` for v0.2.
+- **Status:** `resolved 1e42354 + 59878ca` (v0.1.1 Phase 3 + Phase 3 review fixup). 22 negative vectors N1..N21, N23 cover every `Error` variant reachable from `decode`'s string-input path; `every_error_variant_has_negative_vector` integration test enforces variant coverage. `Error::CardPayloadTooLarge` is documented exempt (encoder-only — no decoder path can trigger it). The Phase 3 fixup commit `59878ca` reshaped N17 to actually trigger `InvalidPathComponent` (LEB128 overflow at 6 × 0x80) — the original 1e42354 form surfaced as `UnexpectedEnd` and left `InvalidPathComponent` exempt. Compile-time exhaustiveness via strum is recorded as `error-variant-exhaustiveness-gate-strum` for v0.2.
 - **Tier:** `pre-bip-submission`
 
 ### `md-path-dictionary-0x16-gap` — md1 path dictionary missing testnet 0x16 entry
@@ -140,7 +141,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-codec/src/string_layer/pipeline.rs` test `decode_rejects_perturbed_cross_chunk_hash`.
 - **What:** The test perturbs the last byte of the last chunk's fragment and re-encodes, asserting `CrossChunkHashMismatch`. Under the current fixture this works, but the test depends on the perturbation not landing somewhere the BCH t=4 correction silently un-perturbs into a CRC-valid bytecode. A future fixture change could mask the test. Cleanest fix: perturb in 5-bit-symbol space *after* re-encoding, or pin a perturbation pattern at BCH-distance > 4 from any valid codeword in the chunk's data part.
 - **Why deferred:** Test is currently green; the brittleness is potential, not actual. v0.1-nice-to-have.
-- **Status:** `resolved 8685608` (v0.1.1 Phase 1 Task 1.1). Replaced with `decode_rejects_5_symbol_burst_in_last_chunk_data_part` which perturbs at the 5-bit-symbol layer past the chunked header; a 5-symbol burst always exceeds BCH `t = 4` correction radius. Accept set widened to `{CrossChunkHashMismatch, BchUncorrectable}`.
+- **Status:** `resolved 8685608 + 8df9910` (v0.1.1 Phase 1 Task 1.1 + Phase 1 review fixup). Replaced with `decode_rejects_5_symbol_burst_in_last_chunk_data_part` which perturbs at the 5-bit-symbol layer **past the chunked header** (chars 11..16); a 5-symbol burst always exceeds BCH `t = 4` correction radius. Accept set widened to `{CrossChunkHashMismatch, BchUncorrectable}`. The Phase 1 fixup commit `8df9910` moved the perturbation from chars 3..8 (inside the chunked header) to chars 11..16 (post-header) so the test's accept set stays tight against actual code paths.
 - **Tier:** `v0.1-nice-to-have`
 
 ### `pipeline-decode-mixed-header-error-naming` — `ChunkedHeaderMalformed` variant overloaded
