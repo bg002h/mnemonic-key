@@ -600,16 +600,16 @@
       "name": "N16_path_too_deep_11_components"
     },
     {
-      "description": "Explicit path's single LEB128 component is truncated (continuation byte 0x80 with no follow-on bytes).",
-      "expected_error": "unexpected end of bytecode",
+      "description": "Explicit path's LEB128 component overflows u32 (6 × 0x80 — every byte sets the continuation bit, exceeding the 5-byte BIP 32 child-number representation).",
+      "expected_error": "invalid path component: LEB128 overflow at shift 35",
       "input": {
         "strings": [
-          "mk1qpzg69pqqqqu4l46hmlqrqqy3zepuypqxrl9g4z52329g4z52329g4z52329g4z52329g4z52329g4z52329g4qzpnj8yzwfdlzzk34jgj86",
-          "mk1qpzg69pp4ewcnyl8vz0wfmenkdz0dwzfngf9jd6tmafglq3ypxzm7qenh26373gjgg2jwpmm72"
+          "mk1qpzg69pqqqqu4l46hmlqrqyqszqgpqqy3zepuypqxrl9g4z52329g4z52329g4z52329g4z52329g4z52329g4z52329g5urj9z0ctp4gfln",
+          "mk1qpzg69pp2spqeerj4ewcnyl8vz0wfmenkdz0dwzfngf9jd6tmafglq3ypxzm7q6cu96x70pe8sn3twnx8e"
         ],
-        "why": "Truncated LEB128 surfaces as `UnexpectedEnd` since the decoder consumes the xpub bytes greedily after the path; a more specific `InvalidPathComponent` would require a path-component-internal shape error (e.g., LEB128 overflow, out-of-range value)."
+        "why": "BIP 32 child numbers are 32-bit unsigned; a 6-byte LEB128 stream exceeds u32 capacity and decoders MUST reject with `InvalidPathComponent` per SPEC §4 rule 6."
       },
-      "name": "N17_invalid_path_component_truncated_leb128"
+      "name": "N17_invalid_path_component_leb128_overflow"
     },
     {
       "description": "xpub_compact's version prefix is 0xDEADBEEF, not a known mainnet/testnet xpub version.",

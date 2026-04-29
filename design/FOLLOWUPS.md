@@ -114,6 +114,17 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `closed`
 - **Tier:** `pre-bip-submission`
 
+### `error-variant-exhaustiveness-gate-strum` — replace runtime substring gate with a compile-time variant-iteration check
+
+- **Surfaced:** 2026-04-29 v0.1.1 Phase 3 review (I-1, commit 1e42354).
+- **Where:** `crates/mk-codec/tests/vectors.rs::every_error_variant_has_negative_vector`.
+- **What:** The milestone v0.1.1 plan §3.3.2 specified an in-crate exhaustive `match` over `Error` variants for compile-time enforcement of negative-vector coverage. The implementation reverted to a runtime substring gate (`assert_variant_covered("...")`) because `#[non_exhaustive]` blocks integration-test exhaustive matching even for in-crate test targets — rustc treats integration tests as separate crates. The runtime gate fails when a vector is missing for a known variant, but it doesn't fire when a *new* variant is added without a corresponding `assert_variant_covered` call. The same gap applies to `error.rs::tests::parameterized_variants_render` and `static_variants_render` — both are hand-curated lists.
+- **Why deferred:** Two viable resolutions, both v0.2-grade:
+  1. Add `strum = { version = "0.26", features = ["derive"] }` as a dev-dep and `#[derive(strum_macros::EnumIter)]` on `Error`. The test iterates `Error::iter()` and asserts coverage for every variant. This is the path md-codec uses for its `error_coverage` test.
+  2. Move the gate into `crates/mk-codec/src/error.rs::tests` (a unit-test module inside the crate), where exhaustive matching IS compile-time-checked even with `#[non_exhaustive]`. Pair with a dynamic JSON-loading helper so the unit test reads the vector corpus.
+- **Status:** `open`
+- **Tier:** `v0.2-nice-to-have`
+
 ### `vector-corpus-dictionary-coverage` — v0.1 corpus exercises only 4 of 13 path-dictionary entries
 
 - **Surfaced:** 2026-04-29 mk1 v0.1 Phase 6 review (M-1, commit 053a54c).

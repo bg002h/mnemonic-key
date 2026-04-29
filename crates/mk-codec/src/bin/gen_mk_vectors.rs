@@ -754,7 +754,8 @@ fn n14_invalid_policy_id_stub_count() -> FixtureSpec {
     // + path + xpub.
     let mut bytecode = vec![0x00u8, 0x00u8]; // header=0x00 (no fp), stub_count=0
     bytecode.push(0x03u8); // path indicator
-    bytecode.extend_from_slice(&baseline_valid_bytecode()[baseline_valid_bytecode().len() - 73..]);
+    let baseline = baseline_valid_bytecode();
+    bytecode.extend_from_slice(&baseline[baseline.len() - 73..]);
     FixtureSpec {
         name: "N14_invalid_policy_id_stub_count_zero",
         description: "Bytecode declares stub_count=0; SPEC §4 rule 3 requires ≥ 1.",
@@ -773,7 +774,8 @@ fn n15_invalid_path_indicator() -> FixtureSpec {
     let mut bytecode = vec![0x00u8, 0x01u8]; // header=0x00, stub_count=1
     bytecode.extend_from_slice(&[0xCAu8, 0xFEu8, 0xBAu8, 0xBEu8]);
     bytecode.push(0x00u8); // INVALID path indicator
-    bytecode.extend_from_slice(&baseline_valid_bytecode()[baseline_valid_bytecode().len() - 73..]);
+    let baseline = baseline_valid_bytecode();
+    bytecode.extend_from_slice(&baseline[baseline.len() - 73..]);
     FixtureSpec {
         name: "N15_invalid_path_indicator_0x00",
         description: "Bytecode declares path indicator 0x00 (reserved); \
@@ -797,7 +799,8 @@ fn n16_path_too_deep() -> FixtureSpec {
     for i in 0..11u8 {
         bytecode.push(i);
     }
-    bytecode.extend_from_slice(&baseline_valid_bytecode()[baseline_valid_bytecode().len() - 73..]);
+    let baseline = baseline_valid_bytecode();
+    bytecode.extend_from_slice(&baseline[baseline.len() - 73..]);
     FixtureSpec {
         name: "N16_path_too_deep_11_components",
         description: "Explicit-path count=11 exceeds the 10-component cap (closure Q-3).",
@@ -811,27 +814,33 @@ fn n16_path_too_deep() -> FixtureSpec {
 }
 
 fn n17_invalid_path_component() -> FixtureSpec {
-    // Truncated LEB128: continuation bit set on the only byte → decoder
-    // expects another byte but hits end-of-stream / invalid encoding.
-    // Per LEB128 rules, a byte with the high bit set indicates more bytes
-    // follow; 0x80 alone is incomplete.
+    // LEB128 overflow: 6 consecutive bytes with the continuation bit set
+    // exceed the u32 range (5 × 7 = 35 bits with each byte contributing 7,
+    // so the 6th byte's shift is at 35 — overflow). The decoder's LEB128
+    // routine surfaces this as `Error::InvalidPathComponent("LEB128 overflow at shift 35")`
+    // (or similar message, matched byte-exact by the harness against the
+    // pinned `expected_error`).
+    let baseline = baseline_valid_bytecode();
+    let xpub_tail = &baseline[baseline.len() - 73..];
     let mut bytecode = vec![0x00u8, 0x01u8];
     bytecode.extend_from_slice(&[0xCAu8, 0xFEu8, 0xBAu8, 0xBEu8]);
     bytecode.push(0xFEu8); // explicit-path indicator
     bytecode.push(0x01u8); // count = 1
-    bytecode.push(0x80u8); // truncated LEB128 (continuation bit, no follow-on)
-    bytecode.extend_from_slice(&baseline_valid_bytecode()[baseline_valid_bytecode().len() - 73..]);
+    // 6 × 0x80 — every byte sets the continuation bit, so the LEB128
+    // decoder consumes all 6 and overflows past u32 capacity at shift=35.
+    bytecode.extend_from_slice(&[0x80u8; 6]);
+    bytecode.extend_from_slice(xpub_tail);
     FixtureSpec {
-        name: "N17_invalid_path_component_truncated_leb128",
-        description: "Explicit path's single LEB128 component is truncated \
-            (continuation byte 0x80 with no follow-on bytes).",
+        name: "N17_invalid_path_component_leb128_overflow",
+        description: "Explicit path's LEB128 component overflows u32 \
+            (6 × 0x80 — every byte sets the continuation bit, exceeding \
+            the 5-byte BIP 32 child-number representation).",
         kind: FixtureKind::Negative(NegativeInput {
             input_strings: wrap_bytecode_in_mk1(&bytecode, 0x12345),
-            expected_error: "unexpected end of bytecode".to_string(),
-            why: "Truncated LEB128 surfaces as `UnexpectedEnd` since the decoder \
-                consumes the xpub bytes greedily after the path; a more specific \
-                `InvalidPathComponent` would require a path-component-internal \
-                shape error (e.g., LEB128 overflow, out-of-range value).",
+            expected_error: "invalid path component: LEB128 overflow at shift 35".to_string(),
+            why: "BIP 32 child numbers are 32-bit unsigned; a 6-byte LEB128 \
+                stream exceeds u32 capacity and decoders MUST reject with \
+                `InvalidPathComponent` per SPEC §4 rule 6.",
         }),
     }
 }

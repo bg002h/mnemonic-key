@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "77e9eba529cf086734be80a3c7a02aa2cf0fcc2c2f752d667d98791cd7ed9069";
+const V0_1_SHA256: &str = "a91828ed2ecf5f0f17daa86f7df6493cb10d1837f474ff8798a48bc63a161023";
 
 const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
 
@@ -299,11 +299,7 @@ fn every_error_variant_has_negative_vector() {
     assert_variant_covered("policy_id_stub_count must be >= 1");
     assert_variant_covered("invalid path indicator byte");
     assert_variant_covered("path too deep");
-    // `InvalidPathComponent` is exempt: truncated LEB128 inputs surface
-    // as `UnexpectedEnd` rather than `InvalidPathComponent` in the
-    // current decoder; the variant is reachable in principle (e.g.,
-    // a malformed-but-non-truncated LEB128) but constructing such an
-    // input is brittle — see N17's rationale. Documented exemption.
+    assert_variant_covered("invalid path component");
     assert_variant_covered("invalid xpub version");
     assert_variant_covered("invalid xpub public key");
     assert_variant_covered("unexpected end of bytecode");
