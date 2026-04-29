@@ -203,9 +203,11 @@ Mirrors `md1`'s `Tag::SharedPath` precedent (D-3). The path encodes as a 1-byte 
 | `0x05` | `m/48'/0'/0'/2'` (BIP 48 segwit-v0 multisig mainnet) |
 | `0x06` | `m/48'/0'/0'/1'` (BIP 48 nested-segwit multisig mainnet) |
 | `0x07` | `m/87'/0'/0'` (BIP 87 multisig mainnet) |
-| `0x11`–`0x17` | Testnet variants of the above |
+| `0x11`–`0x15`, `0x17` | Testnet variants (no `0x16` row — see note below) |
 
 (Exact dictionary mirrors md1's `Tag::SharedPath` table byte-for-byte.)
+
+**Note on `0x16`.** md1's published path dictionary has no testnet pair for the mainnet `0x06` entry (BIP 48 nested-segwit multisig). mk1 inherits the gap; `0x16` is reserved pending an md1 dictionary update (tracked as `md-path-dictionary-0x16-gap` in `FOLLOWUPS.md`). Encoders MUST NOT emit `0x16` in v0.1; decoders MUST reject it via the same `InvalidPathIndicator` path as any other reserved indicator. When md1 adds the row, mk1 inherits the allocation by the mirror clause without a wire-format change.
 
 **Case B — explicit-path escape hatch**, marked by indicator `0xFE`:
 

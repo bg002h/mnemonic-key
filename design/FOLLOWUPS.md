@@ -95,3 +95,21 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Why deferred:** v0.1 implementation will define the Error variants; the *parity gate* (every variant has a vector, no orphaned variants, no variantless reject paths) is checked just before BIP submission and v1.0 release.
 - **Status:** `open`
 - **Tier:** `pre-bip-submission`
+
+### `md-path-dictionary-0x16-gap` — md1 path dictionary missing testnet 0x16 entry
+
+- **Surfaced:** 2026-04-29 mk1 v0.1 Phase 2 BIP review (commit 4728230).
+- **Where:** `descriptor-mnemonic` repo — md1 BIP `bip-mnemonic-descriptor.mediawiki` §"Path dictionary" lines ~339-349. Testnet rows list 0x11, 0x12, 0x13, 0x14, 0x15, 0x17 — **0x16 omitted** (no testnet pair for mainnet 0x06 = `m/48'/1'/0'/1'`, BIP 48 nested-segwit multisig testnet).
+- **What:** Mainnet has 0x06 (`m/48'/0'/0'/1'`, BIP 48 nested-segwit multisig) but the testnet companion 0x16 (`m/48'/1'/0'/1'`) is absent from md1's published BIP table. mk1's spec and BIP both claim "exact dictionary mirrors md1's `Tag::SharedPath` table byte-for-byte"; mk1 inherits the gap. mk1 v0.1 BIP §"Origin path encoding" footnotes this — `0x16` is reserved-pending-md1-update — but the cleanest fix is to add the missing 0x16 row in md1.
+- **Why deferred:** Lives in the descriptor-mnemonic repo. Not blocking mk1 v0.1 wire-level interop because no encoder can legitimately emit 0x16 today (md1 would reject).
+- **Status:** `open`
+- **Tier:** `cross-repo`
+
+### `path-dictionary-mirror-stewardship` — formalize mk1↔md1 path-dictionary inheritance contract
+
+- **Surfaced:** 2026-04-29 mk1 v0.1 Phase 2 BIP review open observation (commit 4728230).
+- **Where:** mk1 SPEC §3.5; mk1 BIP §"Origin path encoding"; md1 BIP §"Path dictionary".
+- **What:** mk1's path dictionary is contractually identical to md1's `Tag::SharedPath` table. If md1 allocates new dictionary entries (e.g., closing the 0x16 gap, or adding new BIP-style accounts in future md1 revisions), mk1 inherits the allocation by the byte-for-byte mirror clause — but the contract is currently a prose statement, not a tracked invariant. A future md1 path-dictionary entry could land without an mk1 spec amendment and produce silent drift.
+- **Why deferred:** Process / stewardship concern, not a v0.1 release blocker.
+- **Status:** `open`
+- **Tier:** `cross-repo`

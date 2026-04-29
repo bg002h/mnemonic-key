@@ -5,7 +5,7 @@
   Author: bg002h <bcg@pm.me>
   Comments-Summary: No comments yet.
   Comments-URI:
-  Status: Pre-Draft, v0.1 wire format locked, awaiting reference implementation milestone and pre-submission audit
+  Status: Pre-Draft
   Type: Standards Track
   Created: 2026-04-29
   License: CC0-1.0
@@ -37,7 +37,7 @@ MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same
 * '''Policy ID''': the 16-byte hash <code>SHA-256(canonical_bytecode)[0..16]</code> of an MD-encoded policy template's canonical bytecode. Renamed from "wallet ID" in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0] to reflect that the value identifies a template (a one-to-many relationship to actual wallets), not a wallet instance.
 * '''Policy ID stub''': the top 4 bytes of a Policy ID. Carried by MK cards as an indexing aid.
 * '''Wallet Instance ID''': the derived 16-byte value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]'s BIP for cross-tool consistency. Recovery tools compute it on demand from policy + assembled xpubs.
-* '''<code>chunk_set_id</code>''': a 20-bit per-encoding random tag carried in the chunked-string header, used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec ≤ v0.8.x calls this field "wallet identifier" — a misleading name slated for rename to <code>chunk_set_id</code> across both repos.)
+* '''<code>chunk_set_id</code>''': a 20-bit per-encoding random tag carried in the chunked-string header, used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec v0.8.x calls this field "wallet identifier" — a misleading name slated for rename to <code>chunk_set_id</code> across both repos.)
 
 ===Naming note (Policy ID vs Wallet Instance ID, and <code>chunk_set_id</code>)===
 
@@ -57,7 +57,7 @@ An MK card is a codex32-derived string of the form:
   mk1 <data> <BCH checksum>
 </pre>
 
-The data section, after chunk-header reassembly, is a payload encoding (per closure-locked field order):
+The data section, after chunk-header reassembly, is a payload encoding (per closure-locked field order; see §"Payload field order" for normative ordering):
 
 <pre>
   [bytecode_header   : 1 byte]
@@ -265,7 +265,9 @@ The optional-fingerprint mode supports cosigners who want maximum privacy at the
 
 Mirrors MD's <code>Tag::SharedPath</code> dual-mode encoding:
 
-'''Case A — standard-table indicator''' (1 byte total). Indicator bytes <code>0x01</code> through <code>0x07</code> name BIP 44 / 49 / 84 / 86 / 48-segwit-v0 / 48-nested / 87 mainnet path families. Indicators <code>0x11</code> through <code>0x17</code> name the testnet variants. The exact dictionary mirrors MD's <code>Tag::SharedPath</code> table byte-for-byte.
+'''Case A — standard-table indicator''' (1 byte total). Indicator bytes <code>0x01</code> through <code>0x07</code> name BIP 44 / 49 / 84 / 86 / 48-segwit-v0 / 48-nested / 87 mainnet path families. Indicators <code>0x11</code> through <code>0x15</code> and <code>0x17</code> name testnet variants of the mainnet entries other than 0x06. The exact dictionary mirrors MD's <code>Tag::SharedPath</code> table byte-for-byte.
+
+Note on indicator <code>0x16</code>: the mainnet entry <code>0x06</code> (BIP 48 nested-segwit multisig, <code>m/48'/0'/0'/1'</code>) currently has no testnet companion in md1's published path dictionary. mk1 inherits this gap by the mirror clause; <code>0x16</code> is reserved pending an md1 dictionary update (tracked as <code>md-path-dictionary-0x16-gap</code> in the cross-repo follow-up tracker). Encoders MUST NOT emit <code>0x16</code> in v0.1; decoders MUST reject it via the same <code>Error::InvalidPathIndicator</code> path as any other reserved indicator. When md1 adds the row, mk1 inherits the allocation by the mirror clause without a wire-format change.
 
 '''Case B — explicit-path escape hatch''' (variable length), marked by indicator <code>0xFE</code>:
 
