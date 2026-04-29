@@ -117,7 +117,7 @@ mod tests {
 
     /// Each variant carries enough information for its rendered Display
     /// to be diagnostic. Sanity-check the format strings render
-    /// non-empty for the parameterized variants.
+    /// correctly for every parameterized variant.
     #[test]
     fn parameterized_variants_render() {
         let cases: Vec<(Error, &str)> = vec![
@@ -126,8 +126,16 @@ mod tests {
                 "invalid HRP: ms",
             ),
             (
+                Error::BchUncorrectable("5 substitutions exceed long-code 4-correction limit".into()),
+                "BCH uncorrectable: 5 substitutions exceed long-code 4-correction limit",
+            ),
+            (
                 Error::UnsupportedCardType(0x05),
                 "unsupported card type: 0x05",
+            ),
+            (
+                Error::ChunkedHeaderMalformed("total_chunks = 0".into()),
+                "chunked-header malformed: total_chunks = 0",
             ),
             (
                 Error::UnsupportedVersion(1),
@@ -142,6 +150,10 @@ mod tests {
                 "path too deep: 11 components (max 10)",
             ),
             (
+                Error::InvalidPathComponent("LEB128 overflow at component 3".into()),
+                "invalid path component: LEB128 overflow at component 3",
+            ),
+            (
                 Error::InvalidXpubVersion(0xDEADBEEF),
                 "invalid xpub version: 0xdeadbeef",
             ),
@@ -149,6 +161,67 @@ mod tests {
         for (err, expected) in cases {
             assert_eq!(format!("{err}"), expected);
         }
+    }
+
+    // ── #[ignore]-marked sad-path scaffolds (per plan §3.2.4) ──────────
+    //
+    // Each scaffold documents the planned decoder rejection that
+    // triggers a new variant. The `#[ignore]` is removed in the phase
+    // that lands the code path:
+    //
+    // - Phase 4 (bytecode layer):    FingerprintFlagMismatch
+    // - Phase 5 (string layer):      CrossChunkHashMismatch,
+    //                                MalformedPayloadPadding,
+    //                                ChunkSetIdMismatch,
+    //                                ChunkedHeaderMalformed
+    //
+    // Until then the tests are documentation-only and won't compile
+    // a real decoder call.
+
+    #[test]
+    #[ignore = "Phase 4 — bytecode-layer encode/decode"]
+    fn rejects_bytecode_with_fingerprint_flag_payload_disagreement() {
+        // Phase 4: encode bytes with header bit-2 set but no
+        // origin_fingerprint in the payload (or vice versa) and
+        // assert decode_bytecode(...) returns Err(FingerprintFlagMismatch).
+        todo!("Phase 4 — implement bytecode decoder");
+    }
+
+    #[test]
+    #[ignore = "Phase 5 — string-layer reassembly"]
+    fn rejects_chunked_input_with_perturbed_cross_chunk_hash() {
+        // Phase 5: construct a chunked encoding, flip one byte of the
+        // appended cross_chunk_hash, and assert decode(...) returns
+        // Err(CrossChunkHashMismatch).
+        todo!("Phase 5 — implement string-layer reassembly");
+    }
+
+    #[test]
+    #[ignore = "Phase 5 — string-layer payload padding check"]
+    fn rejects_singlestring_with_non_zero_pad_bits() {
+        // Phase 5: construct a single-string mk1 input whose 5-bit
+        // payload symbols, after BCH verification, leave non-zero pad
+        // bits in the final symbol. Assert decode(...) returns
+        // Err(MalformedPayloadPadding).
+        todo!("Phase 5 — implement byte-align validation");
+    }
+
+    #[test]
+    #[ignore = "Phase 5 — chunk-set assembly"]
+    fn rejects_chunked_input_with_mismatched_chunk_set_id() {
+        // Phase 5: construct two chunks with different chunk_set_id
+        // values and assert decode(...) returns
+        // Err(ChunkSetIdMismatch).
+        todo!("Phase 5 — implement chunk reassembly");
+    }
+
+    #[test]
+    #[ignore = "Phase 5 — chunked-header validation"]
+    fn rejects_chunked_input_with_total_chunks_zero() {
+        // Phase 5: construct a chunked input whose total_chunks field
+        // is 0 (or > 32) and assert decode(...) returns
+        // Err(ChunkedHeaderMalformed(_)).
+        todo!("Phase 5 — implement chunked-header validation");
     }
 
     /// Unparameterized variants render their static message verbatim.
