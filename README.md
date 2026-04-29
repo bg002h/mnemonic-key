@@ -2,12 +2,13 @@
 
 A specification for backing up bitcoin extended public keys (xpubs) on durable media (paper, steel) in a form that is compact, hand-transcribable, and strongly error-correcting. Designed to engrave alongside a [Mnemonic Descriptor (MD)](https://github.com/bg002h/descriptor-mnemonic) policy card for foreign-xpub multisig recovery.
 
-> **Status: design-stage skeleton, no implementation.**
-> The wire-format spec, BIP draft, and reference-implementation crate
-> scaffold are committed. Encoding/decoding logic is not yet written;
-> all public functions in the reference crate panic with `todo!()`.
-> Expect the API surface and wire format to change up to the first
-> implementation milestone.
+> **Status: v0.1 reference implementation shipped.**
+> The wire format is locked per the closure design at
+> [`docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md`](docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md);
+> [`crates/mk-codec`](crates/mk-codec/) provides a working
+> `KeyCard` ↔ `Vec<String>` round-trip with BCH error correction and
+> a canonical 8-vector conformance corpus. Pre-BIP-submission audit
+> items remain — see [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md).
 
 MK is the third format in a triad of codex32-derived bitcoin backup formats:
 
@@ -30,12 +31,14 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 ```
 .
 ├── bip/
-│   └── bip-mnemonic-key.mediawiki     ← BIP draft skeleton
+│   └── bip-mnemonic-key.mediawiki     ← BIP draft (content-complete; pre-submission audit)
 ├── crates/
-│   └── mk-codec/                       ← Rust reference-implementation skeleton
+│   └── mk-codec/                       ← Rust reference implementation (v0.1)
 ├── design/
-│   ├── DECISIONS.md                    ← rolling design-decisions log
-│   └── SPEC_mk_v0_1.md                 ← wire-format sketch (provisional)
+│   ├── DECISIONS.md                    ← rolling design-decisions log (D-1..D-15, Q-1..Q-10 closed)
+│   ├── FOLLOWUPS.md                    ← deferred items + pre-bip-submission audit gates
+│   └── SPEC_mk_v0_1.md                 ← wire-format spec (post-closure)
+├── CHANGELOG.md
 ├── LICENSE
 └── README.md
 ```
@@ -43,13 +46,14 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 ## Where to start reading
 
 - **For format users / implementers**: [`bip/bip-mnemonic-key.mediawiki`](bip/bip-mnemonic-key.mediawiki) is the canonical (draft) spec.
-- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, currently scaffolded only.
-- **For why the design is the way it is**: [`design/DECISIONS.md`](design/DECISIONS.md) walks through 13 design decisions reached during the 2026-04-29 design discussion. [`design/SPEC_mk_v0_1.md`](design/SPEC_mk_v0_1.md) sketches the wire format with provisional answers to 10 still-open questions.
+- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, v0.1 working encode/decode round-trip + 8-vector conformance corpus at [`crates/mk-codec/tests/vectors/v0.1.json`](crates/mk-codec/tests/vectors/v0.1.json).
+- **For why the design is the way it is**: [`design/DECISIONS.md`](design/DECISIONS.md) walks through D-1..D-15 (the 2026-04-29 design discussion plus closures of Q-1..Q-10). [`design/SPEC_mk_v0_1.md`](design/SPEC_mk_v0_1.md) is the post-closure wire-format spec.
+- **For deferred work**: [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md) — pre-BIP-submission audit gates and cross-repo coordination items.
 
 ## What's covered in v0.1
 
 - **Foreign-xpub multisig recovery**: each cosigner backs up their xpub on its own MK card. Recovery: assemble policy card (MD) + cosigner key cards (MK) → reconstruct full descriptor → verify Wallet Instance ID matches.
-- **Per-card metadata**: BIP 32 origin fingerprint, derivation path (standard-table indicator OR explicit-path escape hatch), full 78-byte xpub, ≥1 Policy ID stubs identifying which MD-encoded wallets the xpub serves.
+- **Per-card metadata**: optional BIP 32 origin fingerprint (closure Q-8 privacy-preserving mode), derivation path (standard-table indicator OR explicit-path escape hatch with a 10-component cap), 73-byte compact xpub (closure Q-7), ≥1 Policy ID stubs identifying which MD-encoded wallets the xpub serves.
 - **Privacy framing**: an MK card alone enables full transaction-history reconstruction; physical security parity with seed backups is recommended (MUST NOT be photographed).
 
 ## What's NOT in scope
