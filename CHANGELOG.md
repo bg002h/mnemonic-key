@@ -5,6 +5,80 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-04-29
+
+Patch release: v0.1-nice-to-have backlog clearance + vector corpus
+expansion. **Wire format byte-identical to v0.1.0**; existing v0.1.0
+strings round-trip unchanged through the v0.1.1 decoder.
+
+### Added
+
+- `Error::MixedHeaderTypes` variant for header-type disagreement across
+  a multi-string input (forward direction: `[SingleString, Chunked]`;
+  reverse direction: `[Chunked, ..., SingleString, ...]`). Previously
+  surfaced as `Error::ChunkedHeaderMalformed` with overloaded message
+  text; precise discrimination introduced in v0.1.1.
+- 9 new clean vectors (V9..V17) covering all path-dictionary entries
+  except 0x16 (BIP 48 testnet nested-segwit) which remains blocked on
+  the cross-repo `md-path-dictionary-0x16-gap` resolution.
+- 22 negative vectors (N1..N21, N23) — one per `Error` variant
+  reachable from `decode`'s string-input path. Schema-2 vectors carry
+  a new `expected_error` field with the byte-exact `Error::Display`
+  rendering. `Error::CardPayloadTooLarge` is encoder-only and exempt
+  from corpus coverage; documented in the exhaustiveness gate.
+- Vector-corpus schema bumped 1 → 2. The `expected_error` field is
+  emitted on every vector (`null` for clean, string for negative); the
+  always-emit rule preserves byte-determinism. Schema-1 corpora remain
+  parseable by the v0.1.1 harness if a future contract relaxes the
+  schema-version pin.
+- `every_error_variant_has_negative_vector` integration test asserts
+  every reachable `Error` variant has at least one negative vector.
+  (Implementation note: runtime substring gate; a strum-driven
+  compile-time variant — recorded as `error-variant-exhaustiveness-gate-strum`
+  in `design/FOLLOWUPS.md` at v0.2-nice-to-have tier.)
+
+### Changed
+
+- `decode_rejects_perturbed_cross_chunk_hash` (now
+  `decode_rejects_5_symbol_burst_in_last_chunk_data_part`) hardened to
+  perturb at the 5-bit-symbol layer past the 8-symbol chunked header,
+  with a 5-symbol burst that exceeds BCH(108,93,8) / BCH(93,80,8)
+  `t = 4` correction radius. Accepting set widened to
+  `{CrossChunkHashMismatch, BchUncorrectable}`. Removes the silent-
+  un-flip risk in the v0.1.0 fixture and ties the test invariant
+  tightly to the BCH-distance argument.
+- `pipeline::decode` rustdoc updated to cite `Error::MixedHeaderTypes`
+  for the mixed-header rejection (was `ChunkedHeaderMalformed`).
+
+### Resolved (FOLLOWUPS)
+
+- `cross-chunk-hash-test-fixture-stability` — hardened test, see Changed.
+- `pipeline-decode-mixed-header-error-naming` — `MixedHeaderTypes` added.
+- `vector-corpus-dictionary-coverage` — 9 new path-dictionary vectors.
+- `decoder-error-variant-parity` — 22 negative vectors per `Error` variant.
+- `encode-with-chunk-set-id-singlestring-silent-ignore` — closed as
+  `wont-fix` per SPEC §2.4 (SingleString unreachable for v0.1
+  conforming KeyCards). Sequencing requirement recorded for any future
+  smaller-bytecode wire-format extension.
+
+### Notes
+
+- Cross-implementations validating against the v0.1.0 corpus need to
+  update their `V0_1_SHA256` pin to match the expanded v0.1.1 corpus
+  and migrate to schema 2 to consume negative vectors. Existing v0.1.0
+  clean-vector encodings remain byte-identical in v0.1.1 (verified).
+- `Error::MixedHeaderTypes` is `#[non_exhaustive]`-safe; downstream
+  exhaustive-match consumers won't break. Text-match consumers of the
+  message strings would observe a behavior change; CHANGELOG calls
+  this out for migration awareness.
+- Pre-BIP-submission audit gates remain — see `design/FOLLOWUPS.md` at
+  tier `pre-bip-submission`. Notable open items: NUMS structural audit,
+  formal HRP collision check, BIP cross-reference completeness, and
+  the cross-repo `chunk-set-id-rename` in md-codec (sequencing
+  prerequisite for mk1's BIP submission).
+- Eventual `mc-codex32` shared-crate extraction (closure Q-9) remains
+  deferred; BCH primitives are still forked-not-shared.
+
 ## [0.1.0] — 2026-04-29
 
 First reference implementation of the **Mnemonic Key (MK)** backup format.

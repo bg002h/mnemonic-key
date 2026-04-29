@@ -90,10 +90,10 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 ### `decoder-error-variant-parity` — Error-variant ↔ negative-vector parity
 
 - **Surfaced:** 2026-04-29 mk1 closure-design opus review pass (pre-BIP-submission audit item (4)).
-- **Where:** `crates/mk-codec/src/error.rs` (variants), test vectors negative-cases corpus (TBD).
+- **Where:** `crates/mk-codec/src/error.rs` (variants), `crates/mk-codec/tests/vectors/v0.1.json` (corpus).
 - **What:** Every reject case in SPEC §4 validity rules MUST map to a uniquely-named `Error` variant in the reference crate, and every variant MUST have at least one planned negative test vector. Mirrors md-codec's 30-negative-vectors-one-per-Error-variant conformance contract.
 - **Why deferred:** v0.1 implementation will define the Error variants; the *parity gate* (every variant has a vector, no orphaned variants, no variantless reject paths) is checked just before BIP submission and v1.0 release.
-- **Status:** `open`
+- **Status:** `resolved 1e42354` (v0.1.1 Phase 3). 22 negative vectors N1..N21, N23 cover every `Error` variant reachable from `decode`'s string-input path; `every_error_variant_has_negative_vector` integration test enforces variant coverage. `Error::CardPayloadTooLarge` is documented exempt (encoder-only — no decoder path can trigger it). Compile-time exhaustiveness via strum is recorded as `error-variant-exhaustiveness-gate-strum` for v0.2.
 - **Tier:** `pre-bip-submission`
 
 ### `md-path-dictionary-0x16-gap` — md1 path dictionary missing testnet 0x16 entry
@@ -131,7 +131,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-codec/tests/vectors/v0.1.json` (V1..V8 fixture set).
 - **What:** The v0.1 vector corpus exercises std-table indicators 0x03 (BIP 84), 0x05 (BIP 48 segwit-v0 mainnet), 0x07 (BIP 87), and 0x15 (BIP 48 testnet) plus the 0xFE explicit-path codec. Missing: 0x01 (BIP 44), 0x02 (BIP 49), 0x04 (BIP 86), 0x06 (BIP 48 nested-segwit mainnet), and the testnet entries 0x11, 0x12, 0x13, 0x14, 0x17. A third-party encoder could pass all 8 v0.1 vectors while still mishandling BIP 44/49/86 mainnet inputs.
 - **Why deferred:** The internal encoder unit test `bytecode/path::round_trip_all_standard_paths` already cycles every dictionary entry; the gap is in the cross-implementation conformance corpus, not in encoder correctness. Closing the gap is straightforward (one fixture per missing indicator) but expands the corpus from 8 to ~14 vectors; defer to the pre-bip-submission corpus expansion.
-- **Status:** `open`
+- **Status:** `resolved 2417401` (v0.1.1 Phase 2). Added V9..V17 covering 9 of the 10 missing indicators; 0x16 (BIP 48 testnet nested-segwit) remains intentionally skipped pending the cross-repo `md-path-dictionary-0x16-gap` resolution.
 - **Tier:** `pre-bip-submission`
 
 ### `cross-chunk-hash-test-fixture-stability` — Phase 5 perturbation test fixture brittleness
@@ -140,7 +140,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-codec/src/string_layer/pipeline.rs` test `decode_rejects_perturbed_cross_chunk_hash`.
 - **What:** The test perturbs the last byte of the last chunk's fragment and re-encodes, asserting `CrossChunkHashMismatch`. Under the current fixture this works, but the test depends on the perturbation not landing somewhere the BCH t=4 correction silently un-perturbs into a CRC-valid bytecode. A future fixture change could mask the test. Cleanest fix: perturb in 5-bit-symbol space *after* re-encoding, or pin a perturbation pattern at BCH-distance > 4 from any valid codeword in the chunk's data part.
 - **Why deferred:** Test is currently green; the brittleness is potential, not actual. v0.1-nice-to-have.
-- **Status:** `open`
+- **Status:** `resolved 8685608` (v0.1.1 Phase 1 Task 1.1). Replaced with `decode_rejects_5_symbol_burst_in_last_chunk_data_part` which perturbs at the 5-bit-symbol layer past the chunked header; a 5-symbol burst always exceeds BCH `t = 4` correction radius. Accept set widened to `{CrossChunkHashMismatch, BchUncorrectable}`.
 - **Tier:** `v0.1-nice-to-have`
 
 ### `pipeline-decode-mixed-header-error-naming` — `ChunkedHeaderMalformed` variant overloaded
@@ -148,7 +148,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Surfaced:** 2026-04-29 Phase 5 review (M-5, commit 12c54f8).
 - **Where:** `crates/mk-codec/src/string_layer/pipeline.rs::decode` — the `[SingleString, Chunked, ...]` and `[Chunked, SingleString, ...]` rejection paths surface as `Error::ChunkedHeaderMalformed("…")`. The variant name suggests a chunked-set issue; the actual condition is "header types disagree across the supplied strings." Consider adding a dedicated `MixedHeaderTypes` Error variant (or a more specific `String`-parameterised variant) when the v0.2 wire format admits more chunk types and the discrimination matters.
 - **Why deferred:** Reachable only through user error; current message text is clear. Variant proliferation has its own cost. v0.1-nice-to-have.
-- **Status:** `open`
+- **Status:** `resolved 8685608` (v0.1.1 Phase 1 Task 1.2). Added `Error::MixedHeaderTypes`; migrated `pipeline.rs:137` (forward direction) and `chunk.rs:171` (reverse direction); preserved `chunk.rs:124` defense-in-depth as `ChunkedHeaderMalformed`. CHANGELOG calls out the message-text change for downstream consumers.
 - **Tier:** `v0.1-nice-to-have`
 
 ### `encode-with-chunk-set-id-singlestring-silent-ignore` — explicit `chunk_set_id` is silently dropped
