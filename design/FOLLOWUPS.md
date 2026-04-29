@@ -1,0 +1,97 @@
+# mk1 follow-up tracker
+
+Single source of truth for items surfaced during a review or implementation pass that were not fixed in the same commit. Mirrors the convention in the `descriptor-mnemonic` (md1) repo.
+
+## How to use this file
+
+**Format for each entry:**
+
+```markdown
+### `<short-id>` — <one-line title>
+
+- **Surfaced:** <Phase X.Y review of commit SHA>, or <inline TODO at file:line>, or <design discussion 2026-MM-DD>
+- **Where:** <file:line> or <design — section name>
+- **What:** 1–3 sentences describing the gap or improvement
+- **Why deferred:** the reason it didn't ship in the original commit
+- **Status:** `open` | `resolved <COMMIT>` | `wont-fix — <one-line reason>`
+- **Tier:** `v0.1-blocker` | `v0.1-nice-to-have` | `v0.2` | `pre-bip-submission` | `cross-repo` | `v1+` | `external`
+```
+
+The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structural-audit`). Reference this id from commit messages when closing: `closes FOLLOWUPS.md chunk-set-id-rename`.
+
+## Conventions for adding items
+
+**During a review subagent run:** the reviewer should append to this file (one entry per minor item) and reference it in their report. Reviewers in parallel batches must not write to this file simultaneously — the controller appends afterwards from the consolidated reports.
+
+**During an implementer subagent run:** if the implementer notices a side concern they explicitly chose not to fix in their commit, they append an entry here in the same commit.
+
+**During controller (main-thread) work:** when wrapping a task, the controller verifies all minor items from that task's reviews are either resolved or recorded here.
+
+## Tiers
+
+- **`v0.1-blocker`**: must fix before tagging `mk-codec-v0.1.0`. Failing to fix = ship blocked.
+- **`v0.1-nice-to-have`**: should fix before v0.1 if time permits, but won't block release. Document the deferral in v0.1's CHANGELOG/README.
+- **`v0.2`**: explicitly deferred to v0.2.
+- **`pre-bip-submission`**: not blocking v0.1 release, but MUST be resolved before formal BIP submission per D-11. Examples: NUMS structural audit, HRP collision check.
+- **`cross-repo`**: depends on action in `descriptor-mnemonic` repo.
+- **`v1+`**: deferred indefinitely.
+- **`external`**: depends on work outside both repos.
+
+---
+
+## Open items
+
+### `chunk-set-id-rename` — rename "wallet identifier" to `chunk_set_id` in md1
+
+- **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-5(d)).
+- **Where:** `descriptor-mnemonic` repo — BIP draft `bip/bip-mnemonic-descriptor.mediawiki` line ~188; `md-codec` reference implementation symbols carrying "wallet identifier" naming; mk1's own SPEC §2.5 already uses `chunk_set_id` per closure lock.
+- **What:** md1 v0.8.0 shipped with the 20-bit chunked-header random tag named "wallet identifier" — a name that conflicts with `Policy ID` and `Wallet Instance ID` and means neither. Closure design Q-5 locks the rename to `chunk_set_id` across both repos. Wire format unchanged; this is purely a documentation and code-symbol rename.
+- **Why deferred:** Lives in the descriptor-mnemonic repo, not this one. mk1's spec already uses the new name.
+- **Sequencing requirement:** the rename MUST land in md-codec (likely a docs-and-symbols-only release, e.g. md-codec v0.9.0) **before** mk1's BIP draft is submitted. mk1's BIP cites md1 by field name; mk1 cannot publish referencing a name md1 itself does not use.
+- **Status:** `open`
+- **Tier:** `cross-repo`
+
+### `md-per-N-path-tag-allocation` — md1's per-`@N` path bytecode tag allocation (Q-4)
+
+- **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-4).
+- **Where:** `descriptor-mnemonic` repo — md1 bytecode tag table; new tag in unallocated `0x36+` range, or backfill `0x24-0x32`.
+- **What:** mk1 declares the authority-precedence semantics (mk1's `origin_path` is authoritative; md1's per-`@N` path is descriptive). The wire-format question of which tag byte md1 uses is an md-repo decision. mk1 cannot answer it.
+- **Why deferred:** Lives in the descriptor-mnemonic repo's next phase.
+- **Status:** `open`
+- **Tier:** `cross-repo`
+
+### `nums-structural-audit` — structural-relationship audit of `MK_REGULAR_CONST` / `MK_LONG_CONST`
+
+- **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-1, captured as pre-BIP-submission audit item (1)).
+- **Where:** design / cryptography review.
+- **What:** Verify there are no accidental structural relationships between the locked target constants and the BIP 93 BCH polynomial. Required: weight-distribution analysis under the new target, intersection of mk1 codeword space with md1 and codex32 codeword spaces, confirmation that error-correction guarantees (8-character detection, 4-substitution correction) hold under the new constants.
+- **Why deferred:** Not a v0.1 implementation gate; gates formal BIP submission. Andrew Poelstra is the natural reviewer per D-11.
+- **Status:** `open`
+- **Tier:** `pre-bip-submission`
+
+### `hrp-mk-collision-check` — formal HRP `mk` collision verification
+
+- **Surfaced:** 2026-04-29 mk1 closure-design pass (D-9 / pre-BIP-submission audit item (2)).
+- **Where:** SLIP-0173 (informal segwit-HRP registry); recent bitcoin-dev mailing-list archives; BIPs PR history.
+- **What:** Search for any soft `mk` claim before formal SLIP-0173 registration. None expected, but confirmation is the registration gate. Alternatives `mx`, `mkc`, `mpk` documented in D-9 if collision is found.
+- **Why deferred:** Not a v0.1 gate; gates formal HRP registration.
+- **Status:** `open`
+- **Tier:** `pre-bip-submission`
+
+### `bip-cross-reference-completeness` — BIP draft cross-reference audit
+
+- **Surfaced:** 2026-04-29 mk1 closure-design pass (pre-BIP-submission audit item (3)).
+- **Where:** `bip/bip-mnemonic-key.mediawiki` — final cross-reference pass before submission.
+- **What:** mk1's BIP draft must cross-reference: BIP 93 (codex32 plumbing reuse), BIP 32 (xpub serialization), BIP 380 (origin notation), BIP 388 (wallet policy / Policy ID semantics), and the published md1 BIP (linkage protocol, shared-parser conventions, `chunk_set_id` field). Any post-rename of "wallet identifier" → `chunk_set_id` in md1 (see `chunk-set-id-rename` above) MUST land before mk1's draft is finalized.
+- **Why deferred:** Final pre-submission audit step; depends on `chunk-set-id-rename` landing first.
+- **Status:** `open`
+- **Tier:** `pre-bip-submission`
+
+### `decoder-error-variant-parity` — Error-variant ↔ negative-vector parity
+
+- **Surfaced:** 2026-04-29 mk1 closure-design opus review pass (pre-BIP-submission audit item (4)).
+- **Where:** `crates/mk-codec/src/error.rs` (variants), test vectors negative-cases corpus (TBD).
+- **What:** Every reject case in SPEC §4 validity rules MUST map to a uniquely-named `Error` variant in the reference crate, and every variant MUST have at least one planned negative test vector. Mirrors md-codec's 30-negative-vectors-one-per-Error-variant conformance contract.
+- **Why deferred:** v0.1 implementation will define the Error variants; the *parity gate* (every variant has a vector, no orphaned variants, no variantless reject paths) is checked just before BIP submission and v1.0 release.
+- **Status:** `open`
+- **Tier:** `pre-bip-submission`
