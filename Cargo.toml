@@ -1,0 +1,15 @@
+[workspace]
+resolver = "3"
+members = ["crates/mk-codec"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "CC0-1.0"
+repository = "https://github.com/bg002h/mnemonic-key"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"

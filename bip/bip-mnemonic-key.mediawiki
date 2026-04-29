@@ -1,0 +1,327 @@
+<pre>
+  BIP: ? (TBD; soft-claimed pending design lock + human review)
+  Layer: Applications
+  Title: Mnemonic Key
+  Author: bg002h <bcg@pm.me>
+  Comments-Summary: No comments yet.
+  Comments-URI:
+  Status: Pre-Draft, design-stage, awaiting reference implementation and human review
+  Type: Standards Track
+  Created: 2026-04-29
+  License: CC0-1.0
+</pre>
+
+==Abstract==
+
+This document specifies '''Mnemonic Key''' (MK), a codex32-derived backup format for individual extended public keys (xpubs). An MK-encoded backup carries one BIP 32 xpub plus its origin metadata (master fingerprint and derivation path), packaged with one or more wallet-policy-template ID stubs for indexing against companion Mnemonic Descriptor (MD) policy cards. MK is designed for the foreign-xpub multisig recovery use case: each cosigner backs up their own xpub on its own card, separate from the policy card and from other cosigners' xpubs. Together with [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD] and [https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki BIP 93] (codex32 seed shares), MK forms a triad of codex32-derived backup formats covering wallet structure, keys, and seed material respectively.
+
+==Motivation==
+
+[https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD] (HRP <code>md1</code>) encodes only the BIP 388 wallet-policy template (the <code>@N</code>-placeholder shape), not the xpubs that map placeholders to keys. For wallets where the user holds every seed referenced by the policy, MD's omission is fine — the seeds reconstruct the xpubs, and the descriptor is reconstructable from policy template plus seeds. For '''foreign-xpub multisig''' (the user is one of N cosigners and does not hold all seeds), MD alone is insufficient: the missing xpubs must come from somewhere at recovery time.
+
+Existing wallet formats (Coldcard <code>.txt</code> multisig configs, Sparrow <code>.json</code>, Liana descriptor files) bundle xpubs and policy together. MK takes a different shape: separate per-cosigner cards, optimized for engraving on durable physical media. Reasons:
+
+* '''Foreign-xpub-only by default.''' Wallets where the user holds all seeds don't need MK at all.
+* '''Atomic per-cosigner cards.''' Lose one card = lose one cosigner's xpub. With a bundle card, lose one card = lose every cosigner's xpub.
+* '''Reusability.''' One cosigner's xpub backed up on one MK card serves every wallet that cosigner participates in. No re-engraving when joining a new multisig.
+* '''Trust boundary alignment.''' A cosigner can hand their MK card to the wallet creator without revealing other cosigners' xpubs.
+
+MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same chunking infrastructure as codex32 and MD), with HRP-mixing and a per-format target residue providing domain separation. The cryptographic guarantees of codex32 — error correction up to 4 character substitutions for the regular code, 8 for the long code — apply to MK without modification.
+
+==Definitions and notation==
+
+* '''Key card''' or '''MK card''': a codex32-derived string with HRP <code>mk</code>, encoding one xpub plus its metadata.
+* '''xpub''': a BIP 32 extended public key, in its 78-byte serialized form (the binary representation of a Base58Check-decoded xpub).
+* '''Origin fingerprint''': the 4-byte master-key fingerprint identifying the seed from which the xpub was derived. Verbatim from BIP 380 origin notation <code>[fp/...]</code>.
+* '''Origin path''': the BIP 32 derivation path from the master seed to the xpub. E.g., <code>m/48'/0'/0'/2'</code>.
+* '''Policy ID''' (informally "wallet ID"; see §"Naming note" below): the 16-byte hash <code>SHA-256(canonical_bytecode)[0..16]</code> of an MD-encoded policy template's canonical bytecode. This document uses '''Policy ID''' as the more accurate name; existing MD code and BIP draft text currently call this value "wallet ID" pending a planned naming alignment in MD v0.8 (see [https://github.com/bg002h/descriptor-mnemonic/blob/main/design/FOLLOWUPS.md FOLLOWUPS] entry <code>wallet-id-is-really-template-id</code> in the descriptor-mnemonic sibling repository).
+* '''Policy ID stub''': the top 4 bytes of a Policy ID. Carried by MK cards as an indexing aid.
+* '''Wallet Instance ID''' (planned for MD v0.8): the derived value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in MD's BIP for cross-tool consistency. Recovery tools compute it on demand.
+
+===Naming note (Policy ID vs Wallet Instance ID)===
+
+The 16-byte hash MD currently calls "wallet ID" hashes the policy template only — the BIP 388 placeholders, not the concrete cosigner xpubs. Two distinct wallets that share an identical policy template (same multisig shape and shared path, different cosigner sets) collide on this value. The "wallet ID" name treats a one-to-many relationship as one-to-one. MK's design exposed the issue; MD v0.8 plans to:
+
+# Rename the existing 16-byte value to '''Policy ID''' (or '''Template ID'''). 16-byte value, 4-byte stub, and 12-word BIP 39 anchor encoding are unchanged — naming-only.
+# Define a new derived '''Wallet Instance ID''' = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)</code> as a recovery-time computation, documented in the MD BIP but not carried by any physical card.
+# This BIP (MK) uses the renamed nomenclature throughout and treats Policy ID stubs as a template-level indexing filter, with Wallet Instance ID as the cryptographic per-instance check at descriptor-reassembly time.
+
+Until MD v0.8 ships, MK implementations may use either name in code identifiers; the canonical name in this BIP is '''Policy ID'''.
+
+==Format overview==
+
+An MK card is a codex32-derived string of the form:
+
+<pre>
+  mk1 <data> <BCH checksum>
+</pre>
+
+The data section, after the chunk-header reassembly, is a payload encoding:
+
+<pre>
+  [bytecode header: 1 byte]
+  [policy_id_stub_count: 1 byte; MUST be ≥ 1]
+  [policy_id_stub_1 ... policy_id_stub_N: 4 × N bytes]
+  [origin_fingerprint: 4 bytes]
+  [origin_path: variable, 1-byte indicator OR explicit-path escape hatch]
+  [xpub_bytes: 78 bytes BIP 32 serialization]
+</pre>
+
+The single-string capacity of long-code codex32 is 56 bytes payload. A typical MK card (78-byte xpub + ~8 bytes origin path + 4-byte fingerprint + 4-byte stub + 1-byte count + 1-byte header) overruns this; multi-chunk MK cards are the norm.
+
+Detailed wire-format specification, validity rules, and the recovery flow are documented in <code>design/mk/SPEC_mk_v0_1.md</code> in the reference repository. This BIP captures the structural design and the reasoning; the SPEC document captures the byte-for-byte details and provisional choices.
+
+==Specification==
+
+===Encoding layer===
+
+====Human-readable part====
+
+The HRP is <code>mk</code> (lowercase, two characters). Per BIP 173, the separator <code>1</code> follows, giving the prefix <code>mk1</code>.
+
+====BCH plumbing====
+
+MK reuses [[https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki|BIP 93]]'s generator polynomials verbatim. Domain separation between MK, [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD], and codex32 is provided by:
+
+# '''HRP-mixing''' (BIP 173-style HRP expansion folded into the polymod's initial state).
+# '''Per-format target residue constants''', NUMS-derived from a per-format domain string.
+
+For MK:
+
+<pre>
+  domain_string = (TBD, provisional: b"shibbolethnumskey"; pinned at BIP-draft submission)
+  h = SHA-256(domain_string)
+  MK_REGULAR_CONST = top_65_bits(h)
+  MK_LONG_CONST    = top_75_bits(h)
+</pre>
+
+The domain string MUST differ from MD's <code>"shibbolethnums"</code> and codex32's domain string. Independent NUMS strings produce essentially uncorrelated 65/75-bit residues, so cross-format false-positive resistance is preserved.
+
+====Alphabet====
+
+Same bech32 alphabet as BIP 93 / BIP 173 / [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD].
+
+====Length envelope====
+
+Same chunk-length conventions as MD: regular code ≤ 93 characters total; long code ≤ 128 characters total. Reserved length ranges (94–95) are rejected.
+
+====Chunk-type taxonomy====
+
+The chunk header's type field distinguishes:
+
+{| class="wikitable"
+! Type byte !! Variant !! Use
+|-
+| <code>0x00</code> || <code>SingleString</code> || Rare; only when payload + headers fit in one long-code string.
+|-
+| <code>0x01</code> || <code>Chunked</code> || Default for typical MK cards.
+|}
+
+===Bytecode layer===
+
+====Bytecode header====
+
+The first byte of the bytecode payload is the MK bytecode header:
+
+<pre>
+  bit 7-4: version (4 bits)   — 0x0 in v0.1
+  bit 3-1: reserved (3 bits)  — MUST be 0 in v0.1
+  bit 0:   reserved flag      — MUST be 0 in v0.1
+</pre>
+
+So the header byte is <code>0x00</code> in v0.1. Reserved bits/flags are gated for future use (e.g., a "compact xpub" bit if compaction proves valuable).
+
+====Payload field order====
+
+After the bytecode header, the payload encodes fields in the following order (recovery-friendly: indexing metadata first, large fixed-size fields last):
+
+<pre>
+  [policy_id_stub_count: 1 byte; MUST be ≥ 1]
+  [policy_id_stub_1 ... policy_id_stub_N: 4 × N bytes]
+  [origin_fingerprint: 4 bytes]
+  [origin_path: variable]
+  [xpub_bytes: 78 bytes]
+</pre>
+
+====Policy ID stubs====
+
+Each stub is the top 4 bytes (32 bits) of an MD-encoded policy card's <code>SHA-256(canonical_bytecode)</code>. The stub is an indexing aid — not a cryptographic primitive — so 4 bytes is sufficient (a user plausibly in 1–50 wallets has effectively zero collision probability across the 2^32 stub space).
+
+<code>policy_id_stub_count</code> is a single byte, supporting 1–255 stubs. Practical limit is set by chunk-payload capacity, not by the count field. Decoders MUST reject <code>policy_id_stub_count == 0</code> with an <code>InvalidPolicyIdStubCount</code> error.
+
+A cosigner participating in multiple wallets MAY stamp multiple Policy ID stubs on a single MK card, OR engrave separate MK cards per wallet. The stubs are interpreted as an inclusive set: "this xpub is intended to serve any of the listed wallets."
+
+====Origin fingerprint====
+
+The 4-byte BIP 32 master fingerprint, identifying the seed from which the xpub was derived. Verbatim from the BIP 380 origin-notation <code>[fp/...]</code> prefix.
+
+====Origin path encoding====
+
+Mirrors MD's <code>Tag::SharedPath</code> dual-mode encoding:
+
+'''Case A — standard-table indicator''' (1 byte total). Indicator bytes <code>0x01</code> through <code>0x07</code> name BIP 44 / 49 / 84 / 86 / 48-segwit-v0 / 48-nested / 87 mainnet path families. Indicators <code>0x11</code> through <code>0x17</code> name the testnet variants. The exact dictionary mirrors MD's <code>Tag::SharedPath</code> table.
+
+'''Case B — explicit-path escape hatch''' (variable length), marked by indicator <code>0xFE</code>:
+
+<pre>
+  [0xFE]
+  [component_count: 1 byte; ≤ 32]
+  [component_1 ... component_N: each LEB128-encoded u32, hardened-bit in MSB per BIP 32 convention]
+</pre>
+
+Indicators <code>0x00</code>, <code>0x08</code> through <code>0x10</code>, <code>0x18</code> through <code>0xFD</code>, and <code>0xFF</code> are reserved and MUST NOT be emitted by encoders. Decoders MUST reject reserved indicator bytes.
+
+====xpub encoding====
+
+Full BIP 32 78-byte serialization, byte-identical to the binary form of a Base58Check-decoded xpub:
+
+<pre>
+  [version: 4 bytes]              — network-specific (mainnet xpub = 0x0488B21E)
+  [depth: 1 byte]
+  [parent_fingerprint: 4 bytes]
+  [child_number: 4 bytes]
+  [chain_code: 32 bytes]
+  [public_key: 33 bytes]          — compressed secp256k1
+</pre>
+
+Compaction (e.g., dropping version + depth + parent_fingerprint to save bytes) was considered and rejected for v0.1. Rationale: BIP 32 round-trip requires the full serialization; recovery tools that hand the xpub back to a wallet need a valid Base58Check-encoded form. Compact representations save 5–13 bytes per card without changing the chunking math (MK is multi-chunk regardless).
+
+A future MK version MAY allocate a compact-xpub bit in the bytecode header's reserved flags if engraving cost proves a binding constraint.
+
+===Decoder validity rules===
+
+A conformant MK decoder MUST reject input that:
+
+# Has a chunk header with type byte not in <code>{0x00, 0x01}</code> (<code>UnsupportedCardType</code>).
+# Has a bytecode header version != 0 in v0.1 (<code>UnsupportedVersion</code>).
+# Has any reserved bit set in the bytecode header in v0.1 (<code>ReservedBitsSet</code>).
+# Has <code>policy_id_stub_count == 0</code> (<code>InvalidPolicyIdStubCount</code>).
+# Has an origin path indicator outside the defined table or in the reserved ranges (<code>InvalidPathIndicator</code>).
+# Has an explicit path with <code>component_count > 32</code> (<code>PathTooDeep</code>).
+# Has any path component with the BIP 32 child-number high bits set in invalid ways (<code>InvalidPathComponent</code>).
+# Has xpub version bytes that don't match a known network's xpub prefix (<code>InvalidXpubVersion</code>).
+# Has xpub <code>depth</code> field inconsistent with the encoded origin path's component count (<code>XpubDepthMismatch</code>) — this catches xpub-vs-path drift, an integrity check absent from BIP 380.
+# Truncates anywhere mid-field (<code>UnexpectedEnd</code>).
+# Has trailing bytes after the xpub (<code>TrailingBytes</code>).
+
+===Linkage to MD and recovery flow===
+
+An MK card with policy-ID stubs <code>[stub_1, ..., stub_N]</code> declares: "this xpub is intended to serve any MD-encoded policy whose canonical-bytecode SHA-256 prefix matches one of these stubs."
+
+Recovery flow (the canonical sequence wallet software SHOULD follow):
+
+# Decode the MD policy card. Compute its full 16-byte Policy ID = <code>SHA-256(canonical_bytecode)[0..16]</code>. Take the top 4 bytes as <code>policy_stub</code>.
+# For each candidate MK card:
+## Decode and extract its Policy ID stubs.
+## Reject the card unless <code>policy_stub</code> matches one of its stubs.
+# For each accepted MK card, plug its xpub into the corresponding <code>@N</code> slot in the policy template (matched by origin path, by user assignment, or by the cosigner-name metadata that future MK versions may carry).
+# Reconstruct the full descriptor with concrete xpubs. Compute the Wallet Instance ID = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)</code> where <code>canonical_xpub_serialization</code> is the concatenation of each <code>@N</code>-placeholder's resolved 78-byte xpub serialization in placeholder-index order. Verify the Wallet Instance ID matches the wallet the user expected to recover (e.g., compared against a separately-anchored Wallet Instance ID phrase, or against a digital backup record).
+# Reject if mismatch. Accept and proceed to address derivation if match.
+
+Step 2 is the indexing aid — fast filter, template-level. Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
+
+==Privacy==
+
+An MK card alone is a strictly larger privacy footprint than the corresponding MD policy card.
+
+A lost or photographed MK card reveals:
+
+* The xpub → full transaction history (every receive/change address) for that account is reconstructable by anyone with the bitcoin chain.
+* The origin fingerprint → identifies the master seed (a 4-byte fingerprint is weak as a unique identifier but sufficient as a hint for an adversary cross-referencing other leaks).
+* The origin path → identifies the BIP-style account family.
+* One or more Policy IDs → identifies which MD-encoded wallets this xpub serves.
+
+By contrast, an MD policy card alone reveals only the policy structure (template) and optionally key fingerprints (with the existing MD privacy warning); it does not enable transaction-history reconstruction.
+
+Implementations SHOULD warn users that MK cards require physical security parity with seed backups, not policy cards. Specifically:
+
+* MK cards SHOULD be stored with the same physical security as a seed backup (safety-deposit box, fire safe).
+* MK cards MUST NOT be photographed. The xpub's full transaction history is one OCR away.
+* Cosigners who participate in multiple wallets have a privacy tradeoff in the Policy ID stub count: stamping multiple stubs on one MK card means recovery for any of those wallets reveals (to the recoverer) that the cosigner is in all of them. Cosigners who care about cross-wallet privacy SHOULD stick to one Policy ID stub per card and engrave additional cards.
+
+==Rationale==
+
+===Why a separate format from MD?===
+
+An xpub backup format is independently useful: watch-only wallet provisioning, master-public-key archival, key-rotation continuity. None of these needs the descriptor layer. Coupling MK to MD's release cadence is artificial. Separate BIPs let each spec target its own readers and evolve on its own timeline.
+
+===Why per-cosigner atomic cards instead of bundled xpubs?===
+
+A bundle card with N xpubs is denser on the wire but creates a single point of failure: lose the bundle = lose every cosigner's xpub. Per-cosigner cards align with the trust boundary (a cosigner can hand their card to the wallet creator without revealing other cosigners) and allow xpub reuse across wallets.
+
+===Why ≥1 Policy ID stubs (not zero)?===
+
+Anonymous MK cards (zero stubs) maximize privacy and reusability but eliminate the recovery indexing flow. The cryptographic check at step 4 of recovery is not affected by the stub count, but the search-for-matching-cards step at step 2 falls back to "try every MK card in every <code>@N</code> slot until the Wallet Instance ID matches" — workable but ergonomically poor. Requiring ≥1 stub gives a default fast-filter; cosigners who care about cross-wallet privacy can still choose to stamp only one.
+
+===Why reuse BIP 93's BCH polynomial?===
+
+BCH generator polynomials are not cryptographic secrets. They are chosen for minimum-distance and weight-distribution properties that bound error-correction guarantees. Reusing BIP 93's polynomial preserves codex32's error-correction guarantees without an independent polynomial search. HRP-mixing and per-format target residues provide sufficient cross-format domain separation. This is the same pattern bech32 uses for <code>bc</code> / <code>tb</code> / <code>bcrt</code> across [[https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki|BIP 173]] and [[https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki|BIP 350]].
+
+===Why the full 78-byte xpub instead of a compact form?===
+
+Compaction saves 5–13 bytes per card. The savings don't change the chunking math — MK is multi-chunk regardless. Full 78 bytes has zero edge cases in implementation: BIP 32 round-trip is byte-identical, no implicit network coupling, no depth-from-path-component-count reconstruction, no parent-fingerprint redundancy worries. Compact forms have several edge cases. The bytecode header reserves a flag bit for a future compact-xpub mode if engraving cost ever becomes binding.
+
+==Frequently Asked Questions==
+
+===Why not just use a Coldcard <code>.txt</code> multisig config?===
+
+Coldcard's multisig config is ASCII text, not BCH-checksummed. Engraving it on steel is feasible but the recovery story is "transcribe by hand and hope you got every character right." MK gives you BCH error-correction guarantees: up to 4 character substitutions per card recoverable in the regular code, 8 in the long code. For durable physical media that may degrade or be partially obscured, that's a meaningful difference.
+
+===Why not embed xpubs in the MD policy card?===
+
+Each xpub is 78 bytes. A 7-cosigner wallet adds ~550 bytes of payload to the policy card, blowing past single-string capacity into multi-chunk encoding for every wallet. MK keeps the policy card compact (template only) and pushes xpub bytes onto separate per-cosigner cards that are independently useful and reusable.
+
+===Why HRP <code>mk</code> specifically?===
+
+Alphabetical extension of the codex32-family namespace already established by BIP 93's <code>ms</code> (mnemonic seed share) and MD's <code>md</code> (mnemonic descriptor). The mnemonic device is "mnemonic key." No known collisions with BIP 173 / BIP 350 segwit address HRPs, BOLT 11 / BOLT 12 Lightning HRPs, or in-flight bitcoin-dev BIP proposals as of the draft date. Verification against SLIP-0173 (informal segwit-HRP registry) is recommended before formal BIP submission.
+
+===What about xprv (extended private key) backup?===
+
+Out of scope. Backing up secret material is BIP 93's job; codex32 was designed for exactly that. MK is for public material only.
+
+===What about MuSig2 aggregate keys?===
+
+Out of scope for v0.1. MuSig2 (BIP 327) aggregates cosigner keys into a single point; the resulting aggregate isn't a BIP 32 xpub and doesn't fit MK's payload shape. A future MK version or sibling format may address this.
+
+===Can MK cards be reused across wallets?===
+
+Yes — that's a primary design goal. A single cosigner's xpub backed up on one MK card can serve every wallet that cosigner participates in. Cosigners can stamp multiple Policy ID stubs on one card to declare which wallets it serves, or use a single stub and engrave additional cards. See §"Privacy" for the cross-wallet-leakage tradeoff.
+
+===Why not just engrave the BIP 32 xpub Base58Check string directly?===
+
+A Base58Check xpub is ~111 ASCII characters, with no error correction. MK's codex32-derived encoding is similar length but adds BCH error correction (4–8 character substitutions recoverable depending on code variant), HRP-mixed domain separation against accidental cross-format validation, and a structured payload that includes origin metadata and Policy ID stubs without a separate label.
+
+==Backwards Compatibility==
+
+This is a new format with no prior versions. There are no backwards-compatibility concerns within MK itself.
+
+MK is designed to coexist with MD: the two formats share the codex32 BCH plumbing (same polynomials, same alphabet), but each has its own HRP, its own NUMS-derived target constants, and its own bytecode-layer payload structure. A decoder receiving a string MUST dispatch by HRP and reject any string whose HRP does not match the format the decoder implements.
+
+==Test Vectors==
+
+TBD. To be written alongside the reference implementation. Vectors will follow the same schema convention used by MD: a JSON file listing positive vectors (canonical encode/decode round-trips) and negative vectors (one per <code>Error</code> variant the decoder can produce), with family-stable SHA-256 anchoring under the token <code>mk-codec X.Y</code>.
+
+==Reference Implementation==
+
+TBD. Planned as a Rust crate <code>mk-codec</code> in the <code>descriptor-mnemonic</code> reference repository, sibling to the existing <code>md-codec</code> and <code>md-signer-compat</code> crates. Initial scaffold will fork the BCH primitives from <code>md-codec</code>; once both formats are implementation-validated, the shared codex32-derived plumbing extracts to a third workspace member. See <code>design/mk/DECISIONS.md</code> §D-13 for the rationale.
+
+==Acknowledgments==
+
+* Andrew Poelstra, for [[https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki|BIP 93 (codex32)]] and the BCH-plumbing pattern that MK reuses.
+* The authors of [[https://github.com/bitcoin/bips/blob/master/bip-0388.mediawiki|BIP 388 (Wallet Policies)]], which gives MK its placeholder-template framing and cosigner-key abstraction.
+* The authors of [[https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki|BIP 380 (Output Descriptors)]], for the origin-notation format MK uses.
+* Reviewers and collaborators on the companion MD BIP, whose feedback informed many of the structural decisions inherited here.
+
+==References==
+
+* [[https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki|BIP 32]] — Hierarchical Deterministic Wallets (xpub serialization)
+* [[https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki|BIP 93]] — codex32 (HRP <code>ms</code>; BCH polynomials reused by MK)
+* [[https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki|BIP 173]] — bech32 (HRP-mixing convention)
+* [[https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki|BIP 350]] — bech32m (domain separation precedent)
+* [[https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki|BIP 380]] — Output Descriptors (origin notation)
+* [[https://github.com/bitcoin/bips/blob/master/bip-0388.mediawiki|BIP 388]] — Wallet Policies (placeholder template form)
+* [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki BIP-MD] — Mnemonic Descriptor (sibling format; MK references its Policy ID linkage scheme)
+
+==Copyright==
+
+This document is licensed under [[https://creativecommons.org/publicdomain/zero/1.0/|CC0-1.0]].
