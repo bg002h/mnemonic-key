@@ -34,19 +34,19 @@ MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same
 * '''xpub''': a BIP 32 extended public key, in its 78-byte serialized form (the binary representation of a Base58Check-decoded xpub).
 * '''Origin fingerprint''': the 4-byte master-key fingerprint identifying the seed from which the xpub was derived. Verbatim from BIP 380 origin notation <code>[fp/...]</code>.
 * '''Origin path''': the BIP 32 derivation path from the master seed to the xpub. E.g., <code>m/48'/0'/0'/2'</code>.
-* '''Policy ID''' (informally "wallet ID"; see §"Naming note" below): the 16-byte hash <code>SHA-256(canonical_bytecode)[0..16]</code> of an MD-encoded policy template's canonical bytecode. This document uses '''Policy ID''' as the more accurate name; existing MD code and BIP draft text currently call this value "wallet ID" pending a planned naming alignment in MD v0.8 (see [https://github.com/bg002h/descriptor-mnemonic/blob/main/design/FOLLOWUPS.md FOLLOWUPS] entry <code>wallet-id-is-really-template-id</code> in the descriptor-mnemonic sibling repository).
+* '''Policy ID''': the 16-byte hash <code>SHA-256(canonical_bytecode)[0..16]</code> of an MD-encoded policy template's canonical bytecode. Renamed from "wallet ID" in [md-codec v0.8.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0) to reflect that the value identifies a template (a one-to-many relationship to actual wallets), not a wallet instance.
 * '''Policy ID stub''': the top 4 bytes of a Policy ID. Carried by MK cards as an indexing aid.
-* '''Wallet Instance ID''' (planned for MD v0.8): the derived value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in MD's BIP for cross-tool consistency. Recovery tools compute it on demand.
+* '''Wallet Instance ID''': the derived 16-byte value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in [md-codec v0.8.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0)'s BIP for cross-tool consistency. Recovery tools compute it on demand from policy + assembled xpubs (see [<code>compute_wallet_instance_id</code>](https://docs.rs/md-codec/0.8.0/md_codec/fn.compute_wallet_instance_id.html) in md-codec).
 
 ===Naming note (Policy ID vs Wallet Instance ID)===
 
-The 16-byte hash MD currently calls "wallet ID" hashes the policy template only — the BIP 388 placeholders, not the concrete cosigner xpubs. Two distinct wallets that share an identical policy template (same multisig shape and shared path, different cosigner sets) collide on this value. The "wallet ID" name treats a one-to-many relationship as one-to-one. MK's design exposed the issue; MD v0.8 plans to:
+The 16-byte hash MD computes as `SHA-256(canonical_bytecode)[0..16]` covers the BIP 388 wallet-policy *template* only — placeholders and shared path, not the concrete cosigner xpubs. Two distinct wallets that share an identical template (same multisig shape, different cosigner sets) collide on this value. md-codec versions ≤ 0.7.x called this value "wallet ID" — a one-to-many name for a one-to-many relationship that confused readers. MK's design exposed the issue, and [md-codec v0.8.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0) ships the resolution:
 
-# Rename the existing 16-byte value to '''Policy ID''' (or '''Template ID'''). 16-byte value, 4-byte stub, and 12-word BIP 39 anchor encoding are unchanged — naming-only.
-# Define a new derived '''Wallet Instance ID''' = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)</code> as a recovery-time computation, documented in the MD BIP but not carried by any physical card.
-# This BIP (MK) uses the renamed nomenclature throughout and treats Policy ID stubs as a template-level indexing filter, with Wallet Instance ID as the cryptographic per-instance check at descriptor-reassembly time.
+# Renamed the existing 16-byte value to '''Policy ID'''. The 16-byte value, the 4-byte stub, and the 12-word BIP 39 anchor encoding are byte-identical to v0.7.x; the rename is naming-only.
+# Defined a new derived '''Wallet Instance ID''' = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> as a recovery-time computation, documented in the MD BIP but not carried by any physical card. The reference helper is [<code>md_codec::compute_wallet_instance_id</code>](https://docs.rs/md-codec/0.8.0/md_codec/fn.compute_wallet_instance_id.html).
+# This BIP uses the renamed nomenclature throughout and treats Policy ID stubs as a template-level indexing filter, with Wallet Instance ID as the cryptographic per-instance check at descriptor-reassembly time.
 
-Until MD v0.8 ships, MK implementations may use either name in code identifiers; the canonical name in this BIP is '''Policy ID'''.
+Implementations that interoperate with md-codec ≥ 0.8.0 SHOULD use the renamed names directly. Implementations targeting both md-codec 0.7.x and 0.8.0+ MAY accept either name in human-readable contexts (CLI output, error messages) but SHOULD prefer the renamed names in code, spec text, and new documentation.
 
 ==Format overview==
 

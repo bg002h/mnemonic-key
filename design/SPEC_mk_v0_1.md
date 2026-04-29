@@ -105,7 +105,7 @@ So the header byte is `0x00` in v0.1. Reserved bits/flags are gated for future u
 
 ### 3.3 Wallet-ID stub format
 
-**Naming note** (see open FOLLOWUPS [`wallet-id-is-really-template-id`](https://github.com/bg002h/descriptor-mnemonic/blob/main/design/FOLLOWUPS.md) (sibling repo `descriptor-mnemonic`)): the value md1 currently calls a "wallet ID" is actually a *template ID* — it hashes the BIP 388 template only, not the assembled descriptor, so two distinct wallets sharing an identical template collide on this value. The mk1 stub inherits this naming and will rename in lockstep with md1 (planned for v0.8). The wire-format and byte-level semantics in this section are unchanged regardless of the rename.
+**Naming note**: as of [md-codec v0.8.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0) the 16-byte template-only hash that md1 originally called a "wallet ID" is renamed to **Policy ID** (it hashes the BIP 388 template only, not the assembled descriptor; two wallets sharing a template share a Policy ID). The mk1 stub adopts the renamed nomenclature throughout this spec; the wire-format and byte-level semantics are unchanged.
 
 **PROVISIONAL** (Q-2 in DECISIONS.md): each stub is **4 bytes** = the top 32 bits of the MD-encoded policy card's `SHA-256(canonical_bytecode)`.
 
@@ -197,21 +197,29 @@ A decoder MUST reject mk1 bytecode that:
 
 ## §5. Linkage to MD
 
-A key card with wallet-ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose canonical-bytecode SHA-256 prefix matches one of these stubs."
+A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose canonical-bytecode SHA-256 prefix matches one of these stubs."
 
 **Recovery flow:**
 
-(See open FOLLOWUPS [`wallet-id-is-really-template-id`](https://github.com/bg002h/descriptor-mnemonic/blob/main/design/FOLLOWUPS.md) (sibling repo `descriptor-mnemonic`) — the value here named "wallet ID" is more accurately a *template ID*. Two wallets sharing an identical policy template share this value. The cryptographic per-instance verification happens at step 4 below, not at the stub match in step 2.)
+(The value formerly named "wallet ID" was renamed to **Policy ID** in [md-codec v0.8.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0). Two wallets sharing an identical policy template share this value; the cryptographic per-instance verification happens at step 4 below via `WalletInstanceId`, not at the stub match in step 2.)
 
-1. Decode the policy card. Compute its full 16-byte template ID = `SHA-256(canonical_bytecode)[0..16]`. Take the top 4 bytes as `policy_stub`.
+1. Decode the policy card. Compute its full 16-byte Policy ID = `SHA-256(canonical_bytecode)[0..16]`. Take the top 4 bytes as `policy_stub`.
 2. For each candidate key card:
-   a. Decode and extract its wallet-ID stubs.
+   a. Decode and extract its Policy ID stubs.
    b. Reject the card unless `policy_stub` matches one of its stubs.
 3. For each accepted key card, plug its xpub into the corresponding `@N` slot in the policy template (matched by origin path or by user assignment).
-4. Reconstruct the full descriptor. Recompute its `SHA-256`. Compare the top 16 bytes to the policy card's full wallet ID.
-5. Reject if mismatch. Accept and proceed to address derivation if match.
+4. Compute the **Wallet Instance ID** for the assembled wallet:
 
-Step 2 is the indexing aid (fast filter). Step 4 is the cryptographic check. Both are required for safe recovery.
+   ```text
+   wallet_instance_id = SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]
+   ```
+
+   where `canonical_xpub_serialization` is the concatenation of each `@N`-resolved xpub's full 78-byte BIP 32 serialization, in placeholder-index order. Compare against the wallet identity the user expected to recover (e.g., a separately-anchored Wallet Instance ID, or against a digital backup record). Reject on mismatch.
+5. Accept and proceed to address derivation.
+
+Step 2 is the indexing aid (fast filter, template-level). Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
+
+**Implementation note:** the `compute_wallet_instance_id(canonical_bytecode, xpubs)` helper is provided by md-codec v0.8.0+. mk1 implementations integrating with md-codec ≥0.8.0 SHOULD use that helper directly rather than reimplementing the SHA-256 construction.
 
 ## §6. Privacy
 
