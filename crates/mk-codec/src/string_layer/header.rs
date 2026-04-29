@@ -281,9 +281,10 @@ mod tests {
     fn wire_total_chunks_zero_decodes_to_one() {
         // The 5-bit `total_chunks` field is encoded as `count - 1` per the
         // off-by-one note in `to_5bit_symbols`, so wire value 0 represents
-        // a single-chunk encoding. (`SingleString` is the canonical
-        // encoding for one-chunk cards, but a `Chunked` with 1 chunk is
-        // still well-formed at the header layer.)
+        // a single-chunk encoding. (`SingleString` is wire-defined for
+        // forward compatibility per SPEC §2.4 but unreachable for v0.1
+        // encoders — a `Chunked(total=1)` is a defined-but-rare shape
+        // produced only by hand-constructed test inputs at the header layer.)
         let h = StringLayerHeader::Chunked {
             version: 0,
             chunk_set_id: 0,
