@@ -1,4 +1,11 @@
-//! Generator for the canonical mk-codec v0.1 vector corpus.
+//! Generator for the canonical mk-codec vector corpus.
+//!
+//! The output corpus carries the family token `crate::consts::GENERATOR_FAMILY`
+//! (`"mk-codec X.Y"` per closure Q-10), which rolls on minor-version
+//! bumps but not patches. The on-disk filename
+//! (`crates/mk-codec/tests/vectors/v0.1.json`) is intentionally stable
+//! across token rolls — see `tests/vectors.rs::VECTOR_FILE` for the
+//! filename-vs-family-token convention.
 //!
 //! Run via:
 //!

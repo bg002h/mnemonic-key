@@ -40,6 +40,18 @@ use sha2::{Digest, Sha256};
 /// reviewed before landing.
 const V0_1_SHA256: &str = "ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff";
 
+/// On-disk path to the canonical mk-codec vector corpus.
+///
+/// **Filename is intentionally stable across minor-bump family-token
+/// rolls.** The corpus's `family_token` field carries the
+/// `mk-codec X.Y` version (per closure Q-10: minor-version bumps roll
+/// the token; patches don't), but the on-disk filename stays
+/// `v0.1.json` to keep cross-repo / cross-implementation tooling
+/// pointing at a single artifact location regardless of which family
+/// the token has rolled to. mk-codec v0.2+ corpora carry
+/// `family_token: "mk-codec 0.2"` while still living at this path;
+/// v0.1.x corpora carried `"mk-codec 0.1"` at the same path. md-codec
+/// follows the same convention for its own vector file.
 const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
 
 fn vector_file_path() -> PathBuf {

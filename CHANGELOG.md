@@ -5,6 +5,49 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-04-30
+
+Doc-only patch. Closes the four deferred suggestions from the v0.2.0
+Phase 2-4 opus review (`design/agent-reports/v0-2-0-phase-2-4-review-fd6a407.md`).
+**Wire format and corpus byte-identical to v0.2.0**; SHA pin
+unchanged (`ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff`).
+No code change; no test change.
+
+### Added
+
+- BIP §"Origin path encoding" Case A — full path-dictionary table
+  inline (14 rows mirroring md1's `Tag::SharedPath`). Replaces the
+  prose-only enumeration with a single source of truth that's harder
+  to drift out of sync as future entries land. (Phase 4 / S-4)
+
+### Changed
+
+- CHANGELOG `[0.2.0]` Notes — backfilled the missing
+  cross-implementation SHA-pin migration pointer that should have
+  been in the original v0.2.0 release notes (parallel to v0.1.1's
+  pattern). v0.2.0 → v0.1.1 cross-impl migrants now have the
+  explicit pointer they need. (Phase 1 / S-1)
+- `crates/mk-codec/tests/vectors.rs::VECTOR_FILE` — added a comment
+  documenting the filename-vs-family-token convention: filename is
+  intentionally stable across minor-bump family-token rolls; the
+  corpus's `family_token` field carries the rolling version per Q-10.
+  (Phase 2 / S-2)
+- `crates/mk-codec/src/bin/gen_mk_vectors.rs` module rustdoc — dropped
+  the misleading "v0.1 vector corpus" version specifier; the binary
+  generates whatever family `GENERATOR_FAMILY` names. (Phase 3 / S-3)
+
+### Notes
+
+- Patch release: no wire-format change, no API change, no test change,
+  no corpus change. Pure doc/comment polish.
+- Cross-implementations need no migration work for v0.2.1; existing
+  v0.2.0 conformance pins (V0_1_SHA256, family_token) remain valid.
+- The CHANGELOG `[0.2.0]` Notes amendment is a retroactive backfill;
+  the underlying v0.2.0 release artifact (tag, GitHub release) is
+  unchanged. Future readers see the migration pointer in the [0.2.0]
+  entry as if it had always been there, with the dated provenance
+  noted in the entry itself.
+
 ## [0.2.0] — 2026-04-30
 
 Wire-additive minor bump: closes the BIP 48 testnet nested-segwit
@@ -75,6 +118,14 @@ byte-identical through v0.2.0.
 - All v0.1.0 / v0.1.1 string encodings round-trip byte-identical through
   the v0.2.0 decoder. Backward compatibility is one-way: v0.2.0 reads
   v0.1.x; v0.1.x doesn't read v0.2.0 if `0x16` is in play.
+- Cross-implementations validating against the v0.1.x corpus need to
+  update their SHA-256 pin to match the regenerated v0.2.0 corpus
+  (`ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff`)
+  and expect 18 clean + 22 negative = 40 vectors (was 17 + 22 = 39).
+  The family token rolls under the Q-10 minor-bump convention; v0.1.x
+  corpora remain valid for v0.1.x consumers. (Backfilled in v0.2.1; see
+  `[0.2.1]` below for details — the original v0.2.0 release notes
+  omitted this migration pointer.)
 - The closure-design's path-dictionary-mirror-stewardship contract
   (mk1 inherits md1's table) auto-extended mk1's coverage when md1
   v0.9.0 added the indicator; v0.2.0 makes that auto-extension
