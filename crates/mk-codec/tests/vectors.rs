@@ -239,71 +239,9 @@ fn exercise_negative_vector(name: &str, vector: &Value, expected_err: &str) {
     }
 }
 
-/// Exhaustiveness gate: every `Error` variant reachable from `decode`'s
-/// string-input path MUST be covered by at least one negative vector.
-/// Implemented as an in-crate exhaustive `match` — `#[non_exhaustive]`
-/// blocks external exhaustive matching, but this test lives inside the
-/// `mk-codec` crate's integration-test target and the compiler still
-/// warns when a new variant is added without an arm.
-///
-/// Variants exempt from corpus coverage:
-/// - [`mk_codec::Error::CardPayloadTooLarge`] — encoder-only (fires in
-///   `split_into_chunks`); not reachable via `decode` string input. The
-///   decoder-side analog is structurally impossible because chunked
-///   `total_chunks` is bounded by `MAX_CHUNKS=32` and each fragment
-///   ≤ 53 bytes, so reassembled bytecode ≤ 32×53 − 4 = 1692 bytes.
-#[test]
-fn every_error_variant_has_negative_vector() {
-    use mk_codec::Error;
-
-    let bytes = read_vector_file();
-    let doc: Value = serde_json::from_slice(&bytes).expect("parse vectors JSON");
-    let vectors = doc["vectors"].as_array().expect("vectors is array");
-
-    let assert_variant_covered = |needle: &str| {
-        let found = vectors.iter().any(|v| {
-            v["expected_error"]
-                .as_str()
-                .map(|s| s.starts_with(needle))
-                .unwrap_or(false)
-        });
-        assert!(
-            found,
-            "no negative vector found whose `expected_error` starts with `{needle}`"
-        );
-    };
-
-    // Note: `Error` is `#[non_exhaustive]`, which blocks compile-time
-    // exhaustive matching even from inside the crate's integration-test
-    // target (rustc treats integration tests as external for this check).
-    // The unit tests in `crates/mk-codec/src/error.rs` —
-    // `parameterized_variants_render` and `static_variants_render` —
-    // exercise variant `Display` rendering exhaustively; if a new
-    // variant lands without a rendering case, those tests miss it.
-    // Future-proofing improvement: add a `strum::EnumIter`-driven gate
-    // at the lib level (tracked as a v0.2 nice-to-have).
-    let _ = Error::InvalidHrp(String::new()); // ensure import isn't dead-code-warned
-
-    assert_variant_covered("invalid HRP");
-    assert_variant_covered("mixed case");
-    assert_variant_covered("invalid data-part length");
-    assert_variant_covered("invalid character");
-    assert_variant_covered("BCH uncorrectable");
-    assert_variant_covered("unsupported card type");
-    assert_variant_covered("malformed payload padding");
-    assert_variant_covered("chunk_set_id mismatch");
-    assert_variant_covered("chunked-header malformed");
-    assert_variant_covered("mixed string-layer header types");
-    assert_variant_covered("cross-chunk integrity hash mismatch");
-    assert_variant_covered("unsupported version");
-    assert_variant_covered("reserved bits set");
-    assert_variant_covered("policy_id_stub_count must be >= 1");
-    assert_variant_covered("invalid path indicator byte");
-    assert_variant_covered("path too deep");
-    assert_variant_covered("invalid path component");
-    assert_variant_covered("invalid xpub version");
-    assert_variant_covered("invalid xpub public key");
-    assert_variant_covered("unexpected end of bytecode");
-    assert_variant_covered("trailing bytes after xpub");
-    // `CardPayloadTooLarge` is encoder-only — exempt.
-}
+// Exhaustiveness gate (every `Error` variant has a negative vector or an
+// explicit exemption) lives in `tests/error_coverage.rs` as of v0.1.2.
+// It uses a strum::EnumIter-driven mirror enum, mirroring md-codec's
+// `crates/md-codec/tests/error_coverage.rs` precedent. The mirror-enum
+// pattern sidesteps the `#[non_exhaustive]` constraint that blocks
+// integration-test compile-time exhaustive matching on the source enum.
