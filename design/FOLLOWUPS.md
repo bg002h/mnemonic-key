@@ -132,7 +132,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Why deferred:** Two viable resolutions, both v0.2-grade:
   1. Add `strum = { version = "0.26", features = ["derive"] }` as a dev-dep and `#[derive(strum_macros::EnumIter)]` on `Error`. The test iterates `Error::iter()` and asserts coverage for every variant. This is the path md-codec uses for its `error_coverage` test.
   2. Move the gate into `crates/mk-codec/src/error.rs::tests` (a unit-test module inside the crate), where exhaustive matching IS compile-time-checked even with `#[non_exhaustive]`. Pair with a dynamic JSON-loading helper so the unit test reads the vector corpus.
-- **Status:** `open`
+- **Status:** `resolved 901596a` (v0.2.0 Phase 1). Took option 1 with a small adaptation: instead of deriving `EnumIter` directly on `mk_codec::Error` (parameterized variants make construction-via-strum awkward), used a hand-written mirror enum `ErrorVariantName` at `crates/mk-codec/tests/error_coverage.rs` matching md-codec's exact precedent. Two tests gate the corpus: `every_error_variant_is_exercised_or_explicitly_exempt` (forward direction) and `every_negative_vector_maps_to_a_known_variant` (reverse direction; catches typos / stale vectors).
 - **Tier:** `v0.2-nice-to-have`
 
 ### `vector-corpus-dictionary-coverage` — v0.1 corpus exercises only 4 of 13 path-dictionary entries

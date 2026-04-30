@@ -240,7 +240,7 @@ fn exercise_negative_vector(name: &str, vector: &Value, expected_err: &str) {
 }
 
 // Exhaustiveness gate (every `Error` variant has a negative vector or an
-// explicit exemption) lives in `tests/error_coverage.rs` as of v0.1.2.
+// explicit exemption) lives in `tests/error_coverage.rs` as of v0.2.0.
 // It uses a strum::EnumIter-driven mirror enum, mirroring md-codec's
 // `crates/md-codec/tests/error_coverage.rs` precedent. The mirror-enum
 // pattern sidesteps the `#[non_exhaustive]` constraint that blocks
