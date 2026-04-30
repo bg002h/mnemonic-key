@@ -214,11 +214,11 @@ Mirrors `md1`'s `Tag::SharedPath` precedent (D-3). The path encodes as a 1-byte 
 | `0x05` | `m/48'/0'/0'/2'` (BIP 48 segwit-v0 multisig mainnet) |
 | `0x06` | `m/48'/0'/0'/1'` (BIP 48 nested-segwit multisig mainnet) |
 | `0x07` | `m/87'/0'/0'` (BIP 87 multisig mainnet) |
-| `0x11`–`0x15`, `0x17` | Testnet variants (no `0x16` row — see note below) |
+| `0x11`–`0x17` | Testnet variants — full 7-entry coverage as of v0.2.0 |
 
 (Exact dictionary mirrors md1's `Tag::SharedPath` table byte-for-byte.)
 
-**Note on `0x16`.** md1's published path dictionary has no testnet pair for the mainnet `0x06` entry (BIP 48 nested-segwit multisig). mk1 inherits the gap; `0x16` is reserved pending an md1 dictionary update (tracked as `md-path-dictionary-0x16-gap` in `FOLLOWUPS.md`). Encoders MUST NOT emit `0x16` in v0.1; decoders MUST reject it via the same `InvalidPathIndicator` path as any other reserved indicator. When md1 adds the row, mk1 inherits the allocation by the mirror clause without a wire-format change.
+**Note on `0x16` (history).** mk1 v0.1.x reserved `0x16` pending the parallel md1 dictionary update — md1's published table at the time omitted the testnet companion to mainnet `0x06`. md-codec v0.9.0 closed the gap on the md1 side; mk-codec v0.2.0 closed the gap on the mk1 side, adding `(0x16, "m/48'/1'/0'/1'")` to `STANDARD_PATHS` per the path-dictionary-mirror-stewardship contract. The change is wire-additive: v0.1.x decoders reject `0x16` with `Error::InvalidPathIndicator(0x16)`; v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path. See `design/FOLLOWUPS.md::md-path-dictionary-0x16-gap`.
 
 **Case B — explicit-path escape hatch**, marked by indicator `0xFE`:
 

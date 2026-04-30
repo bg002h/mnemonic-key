@@ -141,7 +141,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-codec/tests/vectors/v0.1.json` (V1..V8 fixture set).
 - **What:** The v0.1 vector corpus exercises std-table indicators 0x03 (BIP 84), 0x05 (BIP 48 segwit-v0 mainnet), 0x07 (BIP 87), and 0x15 (BIP 48 testnet) plus the 0xFE explicit-path codec. Missing: 0x01 (BIP 44), 0x02 (BIP 49), 0x04 (BIP 86), 0x06 (BIP 48 nested-segwit mainnet), and the testnet entries 0x11, 0x12, 0x13, 0x14, 0x17. A third-party encoder could pass all 8 v0.1 vectors while still mishandling BIP 44/49/86 mainnet inputs.
 - **Why deferred:** The internal encoder unit test `bytecode/path::round_trip_all_standard_paths` already cycles every dictionary entry; the gap is in the cross-implementation conformance corpus, not in encoder correctness. Closing the gap is straightforward (one fixture per missing indicator) but expands the corpus from 8 to ~14 vectors; defer to the pre-bip-submission corpus expansion.
-- **Status:** `resolved 2417401` (v0.1.1 Phase 2). Added V9..V17 covering 9 of the 10 missing indicators; 0x16 (BIP 48 testnet nested-segwit) remains intentionally skipped pending the cross-repo `md-path-dictionary-0x16-gap` resolution.
+- **Status:** `resolved 2417401 + fd6a407` (v0.1.1 Phase 2 + v0.2.0 Phase 2). v0.1.1 added V9..V17 covering 9 of the 10 missing indicators; v0.2.0 added V18 for 0x16 after md-codec v0.9.0 / mk-codec v0.2.0 closed the wire-additive parallel gap. Corpus now exercises every closure-locked path-dictionary entry (14 std-table + 0xFE explicit).
 - **Tier:** `pre-bip-submission`
 
 ### `cross-chunk-hash-test-fixture-stability` — Phase 5 perturbation test fixture brittleness

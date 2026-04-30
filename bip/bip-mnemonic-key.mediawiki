@@ -276,9 +276,9 @@ The optional-fingerprint mode supports cosigners who want maximum privacy at the
 
 Mirrors MD's <code>Tag::SharedPath</code> dual-mode encoding:
 
-'''Case A — standard-table indicator''' (1 byte total). Indicator bytes <code>0x01</code> through <code>0x07</code> name BIP 44 / 49 / 84 / 86 / 48-segwit-v0 / 48-nested / 87 mainnet path families. Indicators <code>0x11</code> through <code>0x15</code> and <code>0x17</code> name testnet variants of the mainnet entries other than 0x06. The exact dictionary mirrors MD's <code>Tag::SharedPath</code> table byte-for-byte.
+'''Case A — standard-table indicator''' (1 byte total). Indicator bytes <code>0x01</code> through <code>0x07</code> name BIP 44 / 49 / 84 / 86 / 48-segwit-v0 / 48-nested / 87 mainnet path families. Indicators <code>0x11</code> through <code>0x17</code> name the corresponding testnet variants. The exact dictionary mirrors MD's <code>Tag::SharedPath</code> table byte-for-byte.
 
-Note on indicator <code>0x16</code>: the mainnet entry <code>0x06</code> (BIP 48 nested-segwit multisig, <code>m/48'/0'/0'/1'</code>) currently has no testnet companion in md1's published path dictionary. mk1 inherits this gap by the mirror clause; <code>0x16</code> is reserved pending an md1 dictionary update (tracked as <code>md-path-dictionary-0x16-gap</code> in the cross-repo follow-up tracker). Encoders MUST NOT emit <code>0x16</code> in v0.1; decoders MUST reject it via the same <code>Error::InvalidPathIndicator</code> path as any other reserved indicator. When md1 adds the row, mk1 inherits the allocation by the mirror clause without a wire-format change.
+Note on indicator <code>0x16</code> (history): mk1 v0.1.x reserved <code>0x16</code> because md1's path dictionary at the time omitted the testnet companion to mainnet <code>0x06</code>. md-codec v0.9.0 closed the parallel gap on the md1 side; mk-codec v0.2.0 closed the gap on the mk1 side under the path-dictionary-mirror-stewardship contract, adding <code>(0x16, m/48'/1'/0'/1')</code> to the standard table. The change is wire-additive: v0.1.x decoders reject <code>0x16</code> with <code>Error::InvalidPathIndicator(0x16)</code>; v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path.
 
 '''Case B — explicit-path escape hatch''' (variable length), marked by indicator <code>0xFE</code>:
 
