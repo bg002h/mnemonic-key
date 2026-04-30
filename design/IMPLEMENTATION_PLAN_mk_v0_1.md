@@ -1116,7 +1116,7 @@ git push origin mk-codec-v0.1.0
 
 ### Task 8.3 — Cross-repo coordination follow-up
 
-- [ ] **Step 8.3.1**: After mk-codec v0.1.0 ships, file an issue / PR / message to the descriptor-mnemonic repo for the `chunk-set-id-rename` and `md-per-N-path-tag-allocation` follow-ups (per `design/FOLLOWUPS.md`). These are sequencing prerequisites for mk1's eventual BIP submission, not for v0.1 release itself.
+- [x] **Step 8.3.1**: ~~After mk-codec v0.1.0 ships, file an issue / PR / message to the descriptor-mnemonic repo for the `chunk-set-id-rename` and `md-per-N-path-tag-allocation` follow-ups (per `design/FOLLOWUPS.md`). These are sequencing prerequisites for mk1's eventual BIP submission, not for v0.1 release itself.~~ Resolved upstream: `chunk-set-id-rename` shipped in [md-codec v0.9.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0); `md-per-N-path-tag-allocation` shipped in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) as `Tag::OriginPaths = 0x36`. Both BIP-submission gates cleared on the md1 side without any explicit issue-filing from mk1.
 
 ---
 

@@ -361,7 +361,7 @@ Step 2 is the indexing aid — fast filter, template-level. Step 4 is the crypto
 
 ====Authority precedence (MK ↔ MD path information)====
 
-MD's wire format is being extended to optionally carry per-<code>@N</code> origin paths (a separate cross-repo follow-up; this BIP does not pin the MD-side wire format). When both an MK card and an MD card with per-<code>@N</code> paths participate in recovery for the same wallet:
+MD's wire format optionally carries per-<code>@N</code> origin paths (allocated to <code>Tag::OriginPaths = 0x36</code> in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0 md-codec v0.10.0]; see MD's BIP §"Per-<code>@N</code> path declaration"). When both an MK card and an MD card with per-<code>@N</code> paths participate in recovery for the same wallet:
 
 * MK's <code>origin_path</code> is '''authoritative''' for the xpub's derivation. (It is the actual provenance of the xpub on the card.)
 * MD's per-<code>@N</code> path is the policy's ''expected'' path. (It is descriptive — the slot's intended derivation shape.)

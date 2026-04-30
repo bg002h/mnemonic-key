@@ -52,13 +52,13 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `resolved by md-codec-v0.9.0` ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0), merge commit `9eeb9ab` in `bg002h/descriptor-mnemonic`). The rename landed across ~85 sites / ~150 references in md-codec docs + symbols. mk1's BIP-submission gate is cleared. Cross-update pass on the mk1 side: BIP §"Naming and identifiers" updated past-tense; DECISIONS D-15 sequencing-requirement updated past-tense.
 - **Tier:** `cross-repo`
 
-### `md-per-N-path-tag-allocation` — md1's per-`@N` path bytecode tag allocation (Q-4)
+### `md-per-N-path-tag-allocation` — md1's per-`@N` path bytecode tag allocation (Q-4) (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-4).
 - **Where:** `descriptor-mnemonic` repo — md1 bytecode tag table; new tag in unallocated `0x36+` range, or backfill `0x24-0x32`.
 - **What:** mk1 declares the authority-precedence semantics (mk1's `origin_path` is authoritative; md1's per-`@N` path is descriptive). The wire-format question of which tag byte md1 uses is an md-repo decision. mk1 cannot answer it.
-- **Why deferred:** Lives in the descriptor-mnemonic repo's next phase. md1's parallel entry (`md-per-N-path-tag-allocation` in `descriptor-mnemonic/design/FOLLOWUPS.md`) is open at tier `v0.9 or v1+`, scheduled whenever per-`@N` paths become a planned md release feature.
-- **Status:** `mk1-side complete; awaiting md1` — mk1's BIP §"Authority precedence" already pins the semantics; mk1 needs no wire-format change when md1 lands its tag allocation. This entry stays open as a coordination record (mk1 watches for the md1 release that lands per-`@N` paths and updates the BIP cross-references at that time).
+- **Why deferred:** Lived in the descriptor-mnemonic repo's next phase. md1's parallel entry (`md-per-at-N-path-tag-allocation` in `descriptor-mnemonic/design/FOLLOWUPS.md`) was scheduled whenever per-`@N` paths became a planned md release feature.
+- **Status:** `resolved by md-codec-v0.10.0` ([release](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0), merge commit `172830a` in `bg002h/descriptor-mnemonic`). md1 allocated `Tag::OriginPaths = 0x36` and reclaimed header bit 3 as the OriginPaths flag; per-`@N` divergent origin paths are now first-class on the policy card. mk1's BIP §"Authority precedence (MK ↔ MD path information)" pins the cross-format precedence semantics; no mk1-side wire-format change was required. mk1 cross-update pass on 2026-04-29 (post md-codec v0.10.0 ship): BIP §"Authority precedence" updated past-tense; SPEC §5.1 updated past-tense; DECISIONS Q-4 / closure-design §Q-4 + §3 item (2) updated past-tense.
 - **Tier:** `cross-repo`
 
 ### `nums-structural-audit` — structural-relationship audit of `MK_REGULAR_CONST` / `MK_LONG_CONST` (resolved at md1's bar)
