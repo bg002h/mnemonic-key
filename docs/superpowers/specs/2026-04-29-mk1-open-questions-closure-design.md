@@ -78,7 +78,7 @@ md1 sanity check: applying the same procedure to `b"shibbolethnums"` reproduces 
 
 > When both an mk1 card and an md1 card with per-`@N` paths participate in recovery for the same wallet, mk1's `origin_path` is **authoritative** for the xpub's derivation. md1's per-`@N` path is the policy's **expected** path. Mismatch MUST cause **the recovery orchestrator** to reject the assembly. Per-format decoders are not required to be aware of cross-format context; the cross-format check belongs to the orchestrator layer that sits above both decoders. Implementations MUST surface a precise error identifying both the policy-side expected path and the key-side actual path.
 
-**Downstream:** SPEC §5 (Linkage to MD) gains an "Authority precedence" subsection. The actual md1 wire-format change (tag-byte allocation) is deferred to the descriptor-mnemonic repo. Captured in §3 below as a cross-repo coordination item.
+**Downstream:** SPEC §5 (Linkage to MD) gains an "Authority precedence" subsection. The md1 wire-format change (tag-byte allocation) shipped in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0): `Tag::OriginPaths = 0x36`; header bit 3 reclaimed as the OriginPaths flag. Captured in §3 below as a (now-resolved) cross-repo coordination item.
 
 ---
 
@@ -361,7 +361,9 @@ These items require action in the `descriptor-mnemonic` repo, not this one. Capt
 
 **Resolution:** the rename shipped in [md-codec v0.9.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0) (merge commit `9eeb9ab`) as a docs-and-symbols-only release. mk1's BIP-submission gate is now cleared. The original sequencing dependency (mk1's BIP cites md1 by field name and could not publish referencing a name md1 itself did not use) is no longer in force.
 
-**(2) Per-`@N` path tag-byte allocation in MD bytecode (Q-4 in DECISIONS.md).** mk1's closure declares the authority-precedence semantics: when both formats supply path information, mk1 is authoritative. The wire-format question — which tag byte md1 allocates for per-`@N` paths, whether to extend the unallocated `0x36+` range or backfill `0x24-0x32` — belongs to descriptor-mnemonic's next phase. mk1's spec only needs to know that md1's per-`@N` paths are *descriptive* (sanity-check role) when mk1 cards are present.
+**(2) Per-`@N` path tag-byte allocation in MD bytecode (Q-4 in DECISIONS.md) (resolved).** mk1's closure declared the authority-precedence semantics: when both formats supply path information, mk1 is authoritative.
+
+**Resolution:** the md1 wire-format change shipped in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) (merge commit `172830a`). md1 allocated `Tag::OriginPaths = 0x36` (extending the unallocated `0x36+` range) and reclaimed header bit 3 as the OriginPaths flag. mk1's spec needed no wire-format change; its only obligation was to know that md1's per-`@N` paths are *descriptive* (sanity-check role) when mk1 cards are present, which §5.1 already pins.
 
 **(3) Header-parsing primitives extraction readiness.** Both formats' bytecode headers now share structure (4-bit version field + format-specific flag bits, with bit 2 commonly meaning "optional fingerprint-related block follows"). When D-13's `mc-codex32` extraction happens (Q-9 trigger), the shared parser can extract version generically and pass format-specific flag interpretation back to each format's higher-level layer. Both repos' implementations should converge to a common header-parsing helper signature in anticipation, even before extraction.
 

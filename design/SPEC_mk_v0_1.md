@@ -323,7 +323,7 @@ Mismatch MUST cause **the recovery orchestrator** to reject the assembly. Per-fo
 
 Implementations MUST surface a precise error identifying both the policy-side expected path and the key-side actual path so the user can diagnose which card's path information is wrong.
 
-(The md1-side wire-format question — which tag byte md1 allocates for per-`@N` paths — is tracked as `md-per-N-path-tag-allocation` in `FOLLOWUPS.md` and is an md-repo decision.)
+(The md1-side wire-format allocation — `Tag::OriginPaths = 0x36`, header bit 3 reclaimed as the OriginPaths flag — shipped in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0); see md1's BIP §"Per-`@N` path declaration".)
 
 ## §6. Privacy
 
@@ -372,7 +372,7 @@ All ten v0.1 open questions Q-1..Q-10 are closed. See [`docs/superpowers/specs/2
 | Q-1 | Domain `b"shibbolethnumskey"`; constants 0x1062435f91072fa5c (regular), 0x41890d7e441cbe97273 (long) | §2.3 |
 | Q-2 | 4-byte Policy ID stub | §3.3 |
 | Q-3 | Path-component cap = 10 | §3.5 |
-| Q-4 | mk1 declares authority precedence; md1 tag-byte allocation deferred to descriptor-mnemonic repo | §5.1 + FOLLOWUPS |
+| Q-4 | mk1 declares authority precedence; md1 tag-byte allocation shipped as `Tag::OriginPaths = 0x36` in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) | §5.1 |
 | Q-5 | Chunk types 0x00=SingleString, 0x01=Chunked; full string-layer header structure pinned | §2.5 |
 | Q-6 | Payload field order: header → stubs → fp → path → xpub_compact | §3.2 |
 | Q-7 | Compact-73 xpub form (drop redundant depth + child_number) | §3.6 |

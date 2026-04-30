@@ -206,7 +206,7 @@ All ten v0.1 open questions are closed. See [`docs/superpowers/specs/2026-04-29-
 | Q-1 | Domain `b"shibbolethnumskey"`; `MK_REGULAR_CONST = 0x1062435f91072fa5c`, `MK_LONG_CONST = 0x41890d7e441cbe97273` | SPEC §2.3 |
 | Q-2 | 4-byte Policy ID stub | SPEC §3.3 |
 | Q-3 | Path-component cap = 10 | SPEC §3.5 |
-| Q-4 | mk1 declares authority precedence; md1 tag-byte allocation deferred to descriptor-mnemonic repo (FOLLOWUPS `md-per-N-path-tag-allocation`) | SPEC §5.1 |
+| Q-4 | mk1 declares authority precedence; md1 tag-byte allocation shipped as `Tag::OriginPaths = 0x36` in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) | SPEC §5.1 |
 | Q-5 | Chunk types `0x00=SingleString`, `0x01=Chunked`; full string-layer header structure pinned | SPEC §2.5 |
 | Q-6 | Payload field order: header → stubs → fp → path → xpub_compact | SPEC §3.2 |
 | Q-7 | Compact-73 xpub (drop redundant depth + child_number) | SPEC §3.6 |
