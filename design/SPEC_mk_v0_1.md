@@ -151,7 +151,14 @@ bit 0:   reserved        (1 bit)    — MUST be 0 in v0.1
 
 Valid v0.1 header values: `0x00` (no fingerprint) and `0x04` (fingerprint present). Other values MUST be rejected.
 
-mk1's bytecode header mirrors md1's bit-allocation shape — 4-bit version field plus 4 flag/reserved bits — and shares bit-2 semantics ("optional fingerprint-related block follows"). Each format's specific block contents differ (md1: 5N-byte fingerprints block, one fp per master; mk1: 4-byte `origin_fingerprint`); the bit-level convention is shared to enable a common header-parsing helper when D-13's `mc-codex32` extraction happens (Q-9 trigger).
+mk1's bytecode header mirrors md1's bit-allocation **shape** — 4-bit version field plus 4 flag/reserved bits — and shares **bit-2 semantics** ("optional fingerprint-related block follows"). Each format's specific block contents differ (md1: 5N-byte fingerprints block, one fp per master; mk1: 4-byte `origin_fingerprint`); the bit-level convention is shared to enable a common header-parsing helper when D-13's `mc-codex32` extraction happens (Q-9 trigger).
+
+The two formats' **specific bit allocations diverge from bit 3 onward**. As of mk-codec v0.2.0 / md-codec v0.10.0:
+
+- **mk1** (this format) reserves bits 0, 1, 3 (encoders MUST emit zero; decoders MUST reject non-zero). Bit 2 is the optional-fingerprint flag.
+- **md1** reserves bits 0, 1 (zero), uses bit 2 as the optional-fingerprint flag (shape-shared with mk1), and reclaimed bit 3 as the OriginPaths flag in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) (1 = per-`@N` origin-path block via `Tag::OriginPaths = 0x36`; 0 = shared-path declaration via `Tag::SharedPath = 0x34`).
+
+The shape-shared property survives the divergence: a future `mc-codex32` shared parser can extract the 4-bit version generically and pass the 4 flag bits back to each format's higher-level layer for format-specific interpretation. The bit-2 fingerprint-flag convention remains shared between mk1 and md1; bits 0, 1, 3 are independent allocations.
 
 ### 3.2 Payload field order
 

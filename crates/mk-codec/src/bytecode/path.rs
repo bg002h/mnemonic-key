@@ -4,10 +4,14 @@
 //! Per `design/SPEC_mk_v0_1.md` §3.5 (closure Q-3: cap = 10).
 //!
 //! The standard-table dictionary mirrors md1's `Tag::SharedPath` table
-//! byte-for-byte. The testnet companion to mainnet `0x06` (BIP 48
-//! nested-segwit multisig) is currently absent from md1's published
-//! table; mk1 inherits the gap and reserves `0x16` pending md1 update
-//! (tracked as `md-path-dictionary-0x16-gap` in `FOLLOWUPS.md`).
+//! byte-for-byte. The testnet companion `0x16` to mainnet `0x06` (BIP 48
+//! nested-segwit multisig) was originally absent from md1's published
+//! table — mk1 v0.1.x inherited the gap and reserved `0x16`. md-codec
+//! v0.9.0 closed the gap on the md1 side; mk1 v0.2.0 closes it on the
+//! mk1 side, completing the 14-entry dictionary mirror. The addition is
+//! wire-additive: v0.1.x decoders reject `0x16` as
+//! `Error::InvalidPathIndicator(0x16)`, while v0.2+ decoders accept and
+//! resolve to `m/48'/1'/0'/1'`.
 //!
 //! Explicit-path encoding: indicator `0xFE`, 1-byte component count
 //! (1..=10), then each component as LEB128-encoded u32 with the BIP 32
@@ -24,8 +28,9 @@ pub const EXPLICIT_PATH_INDICATOR: u8 = 0xFE;
 /// Standard-table dictionary entries — `(indicator_byte, path_string)`.
 ///
 /// Mirrors md1's `Tag::SharedPath` table byte-for-byte. The 14 entries
-/// are: 7 mainnet (`0x01`..=`0x07`), 6 testnet (`0x11`..=`0x15`, `0x17`).
-/// `0x16` is reserved pending md1 dictionary update.
+/// are: 7 mainnet (`0x01`..=`0x07`) and 7 testnet (`0x11`..=`0x17`).
+/// `0x16` (BIP 48 testnet nested-segwit multisig) was added in v0.2.0
+/// after md-codec v0.9.0 closed the parallel gap on the md1 side.
 pub const STANDARD_PATHS: &[(u8, &str)] = &[
     // Mainnet
     (0x01, "m/44'/0'/0'"),    // BIP 44 mainnet
@@ -35,18 +40,19 @@ pub const STANDARD_PATHS: &[(u8, &str)] = &[
     (0x05, "m/48'/0'/0'/2'"), // BIP 48 segwit-v0 multisig mainnet
     (0x06, "m/48'/0'/0'/1'"), // BIP 48 nested-segwit multisig mainnet
     (0x07, "m/87'/0'/0'"),    // BIP 87 multisig mainnet
-    // Testnet (no 0x16 — see crate docs)
+    // Testnet
     (0x11, "m/44'/1'/0'"),
     (0x12, "m/49'/1'/0'"),
     (0x13, "m/84'/1'/0'"),
     (0x14, "m/86'/1'/0'"),
     (0x15, "m/48'/1'/0'/2'"),
+    (0x16, "m/48'/1'/0'/1'"), // v0.2.0+; was reserved-pending in v0.1.x
     (0x17, "m/87'/1'/0'"),
 ];
 
 /// Look up a standard-table indicator → `DerivationPath`. Returns
-/// `None` for indicators outside the dictionary (including reserved
-/// values like `0x00`, `0x16`, `0x18`..=`0xFD`, `0xFF`).
+/// `None` for indicators outside the dictionary (reserved values
+/// `0x00`, `0x08`..=`0x10`, `0x18`..=`0xFD`, `0xFF`).
 pub fn lookup_indicator(indicator: u8) -> Option<DerivationPath> {
     STANDARD_PATHS
         .iter()
@@ -258,14 +264,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_reserved_indicator_0x16() {
-        // 0x16 is reserved pending md1 dictionary update
-        let bytes = vec![0x16];
-        let mut cursor: &[u8] = &bytes;
-        assert!(matches!(
-            decode_path(&mut cursor),
-            Err(Error::InvalidPathIndicator(0x16)),
-        ));
+    fn round_trip_indicator_0x16_added_in_v0_2() {
+        // 0x16 was reserved-pending in v0.1.x; added to STANDARD_PATHS
+        // in v0.2.0 after md-codec v0.9.0 closed the parallel gap on
+        // the md1 side. Resolves to BIP 48 testnet nested-segwit
+        // multisig (`m/48'/1'/0'/1'`).
+        let path = DerivationPath::from_str("m/48'/1'/0'/1'").unwrap();
+        let encoded = encode_path(&path);
+        assert_eq!(encoded, vec![0x16]);
+        let mut cursor: &[u8] = &encoded;
+        let decoded = decode_path(&mut cursor).unwrap();
+        assert_eq!(decoded, path);
+        assert!(cursor.is_empty());
     }
 
     #[test]

@@ -5,6 +5,84 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-04-30
+
+Wire-additive minor bump: closes the BIP 48 testnet nested-segwit
+multisig path-dictionary gap on the mk1 side after md-codec v0.9.0
+closed it on the md1 side. v0.1.x decoders reject v0.2.0-emitted
+strings carrying indicator `0x16`; v0.2.0+ decoders accept and resolve
+to `m/48'/1'/0'/1'`. All other v0.1.x string encodings round-trip
+byte-identical through v0.2.0.
+
+### Added
+
+- Path-dictionary indicator `0x16` for `m/48'/1'/0'/1'` (BIP 48 testnet
+  nested-segwit multisig). Closes `md-path-dictionary-0x16-gap`
+  (FOLLOWUPS) and brings mk1's standard-table dictionary to its full
+  14 entries, matching md-codec v0.9.0+'s table byte-for-byte.
+- `V18_bip48_nested_segwit_testnet_1_stub_with_fp` — corpus vector
+  exercising the new indicator. 18 clean + 22 negative = 40 vectors total.
+- `crates/mk-codec/tests/error_coverage.rs` — strum-driven exhaustiveness
+  gate for negative vectors. Mirrors md-codec's `error_coverage.rs`
+  pattern: a hand-written `ErrorVariantName` mirror enum with
+  `#[derive(strum::EnumIter)]` lets the test iterate every variant
+  without requiring the source `Error` to be `EnumIter`-compatible
+  (parameterized variants make direct iteration awkward). Two checks:
+  every variant has a corpus vector or an explicit exemption (forward),
+  and every negative vector's `expected_error` maps to a known variant
+  (reverse).
+- `strum = { version = "0.26", features = ["derive"] }` as a
+  dev-dependency. md-codec uses the same pin.
+
+### Changed
+
+- `GENERATOR_FAMILY` rolls `"mk-codec 0.1"` → `"mk-codec 0.2"` per
+  closure Q-10 (minor-version bumps roll the family token; patches
+  don't). Test-vector corpora regenerate accordingly; v0.1.x corpora
+  remain valid for v0.1.x consumers but the v0.2.0 corpus is the new
+  conformance reference for v0.2+ implementations.
+- BIP §"Bytecode header" / SPEC §3.1 — added a paragraph clarifying
+  that the bit-allocation **shape** is shared between mk1 and md1
+  (4-bit version + 4 flag/reserved bits) and **bit-2 semantics** are
+  shared (optional-fingerprint flag), while specific allocations of
+  bits 0, 1, 3 diverge from bit 3 onward. md-codec v0.10.0 reclaimed
+  bit 3 as the OriginPaths flag on the md1 side; mk1's bit 3 remains
+  reserved.
+- `tests/vectors/v0.1.json` SHA-256 pin rolls to
+  `ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff`.
+
+### Removed
+
+- `tests/vectors.rs::every_error_variant_has_negative_vector` runtime
+  substring gate. Replaced by the strum-driven gate in
+  `tests/error_coverage.rs`. Pointer comment in `vectors.rs` directs
+  readers to the new location.
+
+### Resolved (FOLLOWUPS)
+
+- `error-variant-exhaustiveness-gate-strum` (v0.2-nice-to-have) —
+  strum-driven gate landed in Phase 1.
+- `md-path-dictionary-0x16-gap` cross-update — entry was already
+  closed on the md-codec side in v0.9.0; mk-codec v0.2.0 adds the
+  encoder/decoder support and corpus vector.
+
+### Notes
+
+- Wire-additive change: v0.1.x decoders reject v0.2.0-emitted strings
+  carrying `0x16` with `Error::InvalidPathIndicator(0x16)`. Cross-
+  implementations consuming v0.2.0 vectors MUST update to a v0.2+
+  decoder.
+- All v0.1.0 / v0.1.1 string encodings round-trip byte-identical through
+  the v0.2.0 decoder. Backward compatibility is one-way: v0.2.0 reads
+  v0.1.x; v0.1.x doesn't read v0.2.0 if `0x16` is in play.
+- The closure-design's path-dictionary-mirror-stewardship contract
+  (mk1 inherits md1's table) auto-extended mk1's coverage when md1
+  v0.9.0 added the indicator; v0.2.0 makes that auto-extension
+  observable in the encoder/decoder + corpus.
+- The BIP §"Bytecode header" bit-3 footnote is doc-only; mk1's bit 3
+  remains reserved-must-be-zero. No mk1 wire-format change beyond
+  the path-indicator addition.
+
 ## [0.1.1] — 2026-04-29
 
 Patch release: v0.1-nice-to-have backlog clearance + vector corpus

@@ -227,7 +227,14 @@ The first byte of the bytecode payload is the MK bytecode header:
 
 Valid v0.1 header values: <code>0x00</code> (no fingerprint) and <code>0x04</code> (fingerprint present).
 
-MK's bytecode header mirrors MD's bit-allocation shape — 4-bit version field plus 4 flag/reserved bits — and shares bit-2 semantics ("optional fingerprint-related block follows"). Each format's specific block contents differ (MD: 5N-byte fingerprints block, one fp per master; MK: 4-byte <code>origin_fingerprint</code>); the bit-level convention is shared to enable a common header-parsing helper when the eventual <code>mc-codex32</code> shared crate extracts.
+MK's bytecode header mirrors MD's bit-allocation '''shape''' — 4-bit version field plus 4 flag/reserved bits — and shares '''bit-2 semantics''' ("optional fingerprint-related block follows"). Each format's specific block contents differ (MD: 5N-byte fingerprints block, one fp per master; MK: 4-byte <code>origin_fingerprint</code>); the bit-level convention is shared to enable a common header-parsing helper when the eventual <code>mc-codex32</code> shared crate extracts.
+
+The two formats' '''specific bit allocations diverge from bit 3 onward''' — MK and MD make independent decisions about which flag bits each format needs. As of mk-codec v0.2.0 / md-codec v0.10.0:
+
+* '''MK''' (this format) reserves bits 0, 1, 3 (encoders MUST emit zero; decoders MUST reject non-zero). Bit 2 is the optional-fingerprint flag.
+* '''MD''' reserves bits 0, 1 (zero), uses bit 2 as the optional-fingerprint flag (shape-shared with MK), and reclaimed bit 3 as the OriginPaths flag in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0 md-codec v0.10.0] (1 = per-<code>@N</code> origin-path block via <code>Tag::OriginPaths = 0x36</code>; 0 = shared-path declaration via <code>Tag::SharedPath = 0x34</code>).
+
+The shape-shared property survives the divergence: a future <code>mc-codex32</code> shared parser can extract the 4-bit version and pass the 4 flag bits back to each format's higher-level layer for format-specific interpretation. The bit-2 fingerprint-flag convention remains shared between MK and MD; bits 0, 1, 3 are independent allocations.
 
 ====Payload field order====
 

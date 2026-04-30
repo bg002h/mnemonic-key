@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "a91828ed2ecf5f0f17daa86f7df6493cb10d1837f474ff8798a48bc63a161023";
+const V0_1_SHA256: &str = "ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff";
 
 const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
 
@@ -116,7 +116,7 @@ fn schema_metadata_pinned() {
     assert_eq!(doc["schema"], Value::from(2u64), "schema version drift");
     assert_eq!(
         doc["family_token"].as_str().unwrap_or(""),
-        "mk-codec 0.1",
+        "mk-codec 0.2",
         "family_token drift — see consts.rs::GENERATOR_FAMILY"
     );
 }
@@ -152,7 +152,7 @@ fn every_vector_round_trips() {
     // Pin v0.1.1's vector counts as floors (17 clean + 22 negative = 39).
     // The `>=` form lets v0.1.x patch releases add vectors without
     // breaking the harness; tightening to `==` is a v0.2-grade decision.
-    assert!(clean_count >= 17, "clean-vector count regressed");
+    assert!(clean_count >= 18, "clean-vector count regressed");
     assert!(negative_count >= 22, "negative-vector count regressed");
 }
 

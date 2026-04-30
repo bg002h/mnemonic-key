@@ -173,11 +173,15 @@ mod tests {
     fn rejects_invalid_path_indicator() {
         let card = fixture_card_1stub_with_fp();
         let mut wire = encode_bytecode(&card).unwrap();
-        // path indicator is at offset 1+1+4+4 = 10
-        wire[10] = 0x16; // reserved-pending-md1
+        // path indicator is at offset 1+1+4+4 = 10. Use 0x18, the
+        // smallest reserved testnet-range indicator (0x18..=0xFD are
+        // all reserved). 0x16 was the obvious choice in v0.1.x but
+        // graduated to a defined indicator in v0.2.0 — see
+        // `bytecode/path::round_trip_indicator_0x16_added_in_v0_2`.
+        wire[10] = 0x18;
         assert!(matches!(
             decode_bytecode(&wire),
-            Err(Error::InvalidPathIndicator(0x16)),
+            Err(Error::InvalidPathIndicator(0x18)),
         ));
     }
 

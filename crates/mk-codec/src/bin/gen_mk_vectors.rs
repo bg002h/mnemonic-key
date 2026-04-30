@@ -230,11 +230,12 @@ fn fixtures() -> Vec<FixtureSpec> {
             chunk_set_id: 0x89012,
         },
         // V9..V17 — added in v0.1.1 Phase 2 to close
-        // `vector-corpus-dictionary-coverage`. Together with V1..V8 the
-        // corpus exercises every closure-locked path-dictionary entry
-        // except 0x16 (BIP 48 testnet nested-segwit), which is blocked
-        // on the cross-repo `md-path-dictionary-0x16-gap` resolution
-        // (mk1 cannot legitimately emit 0x16 until md1 closes the gap).
+        // `vector-corpus-dictionary-coverage`. Together with V1..V8 they
+        // exercised every closure-locked path-dictionary entry except
+        // 0x16 (BIP 48 testnet nested-segwit), which v0.1.x reserved
+        // pending the parallel md-codec gap closure. v0.2.0 adds V18
+        // for 0x16 after both md-codec v0.9.0 and mk-codec v0.2.0
+        // closed their respective gaps.
         // Fingerprint state alternates per the milestone plan:
         // V9-V11/V13-V15 with fp; V12/V16/V17 without.
         clean_fixture! {
@@ -332,13 +333,30 @@ fn fixtures() -> Vec<FixtureSpec> {
             description: "1-stub testnet, BIP 87 multisig (m/87'/1'/0'), \
                  fingerprint omitted. Std-table indicator 0x17 \
                  (closes the v0.1 std-table testnet coverage modulo the \
-                 0x16 BIP 48 nested-segwit gap deferred to md1).",
+                 0x16 BIP 48 nested-segwit gap; gap closed in v0.2.0 \
+                 — see V18).",
             policy_id_stubs: vec![[0x87, 0x17, 0x00, 0x00]],
             origin_fingerprint: None,
             origin_path: "87'/1'/0'",
             network: NetworkKind::Test,
             seed_byte: 0x11,
             chunk_set_id: 0x1289A,
+        },
+        clean_fixture! {
+            name: "V18_bip48_nested_segwit_testnet_1_stub_with_fp",
+            description: "1-stub testnet, BIP 48 nested-segwit multisig \
+                 (m/48'/1'/0'/1'), fingerprint present. Std-table \
+                 indicator 0x16 — added to mk1's path dictionary in \
+                 v0.2.0 after md-codec v0.9.0 closed the parallel gap. \
+                 Wire-additive: v0.1.x decoders reject this vector with \
+                 Error::InvalidPathIndicator(0x16); v0.2+ decoders accept \
+                 and resolve to the BIP 48 testnet nested-segwit path.",
+            policy_id_stubs: vec![[0x48, 0x16, 0xAA, 0xBB]],
+            origin_fingerprint: Some([0x48, 0x16, 0xCC, 0xDD]),
+            origin_path: "48'/1'/0'/1'",
+            network: NetworkKind::Test,
+            seed_byte: 0x12,
+            chunk_set_id: 0x239AB,
         },
         // ── Negative vectors N1..N23 (closing decoder-error-variant-parity) ──
         //

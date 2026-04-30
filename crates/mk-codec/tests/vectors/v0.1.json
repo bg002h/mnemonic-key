@@ -1,5 +1,5 @@
 {
-  "family_token": "mk-codec 0.1",
+  "family_token": "mk-codec 0.2",
   "schema": 2,
   "vectors": [
     {
@@ -391,7 +391,7 @@
       "name": "V16_bip86_testnet_1_stub_no_fp"
     },
     {
-      "description": "1-stub testnet, BIP 87 multisig (m/87'/1'/0'), fingerprint omitted. Std-table indicator 0x17 (closes the v0.1 std-table testnet coverage modulo the 0x16 BIP 48 nested-segwit gap deferred to md1).",
+      "description": "1-stub testnet, BIP 87 multisig (m/87'/1'/0'), fingerprint omitted. Std-table indicator 0x17 (closes the v0.1 std-table testnet coverage modulo the 0x16 BIP 48 nested-segwit gap; gap closed in v0.2.0 — see V18).",
       "expected": {
         "canonical_bytecode_hex": "00018717000017043587cf10203011bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
         "decoder_correction": "clean",
@@ -413,6 +413,30 @@
         "xpub": "tpubDC9Go1KnwYnNm2LwcA8BjbZhZYu93sT94ivuqCKnq4UxmmZPAhMcb52qPi8a1YQHPFGnQULHHRzzFstEAtizRTN7uT5KUosaeAxVpaECN3t"
       },
       "name": "V17_bip87_testnet_1_stub_no_fp"
+    },
+    {
+      "description": "1-stub testnet, BIP 48 nested-segwit multisig (m/48'/1'/0'/1'), fingerprint present. Std-table indicator 0x16 — added to mk1's path dictionary in v0.2.0 after md-codec v0.9.0 closed the parallel gap. Wire-additive: v0.1.x decoders reject this vector with Error::InvalidPathIndicator(0x16); v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path.",
+      "expected": {
+        "canonical_bytecode_hex": "04014816aabb4816ccdd16043587cf10203012b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f7",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpywdtpqqsq5s942hdypdnxazczrtp70zqsrqy4chzut3w9chzut3w9chzut3w9chzut3w9chzut3w9chzut3w9chqpkx3fqlq4wep5x44pg",
+          "mk1qpywdtppvr59vvgvuhfff697x07gqurhm3t2eqxetkwdfhdayye9almn7lrn8z3755mak4fdpy3mj"
+        ],
+        "total_chunks": 2
+      },
+      "expected_error": null,
+      "input": {
+        "chunk_set_id": 145835,
+        "network": "testnet",
+        "origin_fingerprint": "4816ccdd",
+        "origin_path": "m/48'/1'/0'/1'",
+        "policy_id_stubs": [
+          "4816aabb"
+        ],
+        "xpub": "tpubDE2Qenr6qBXK1se4WMS4kLWYdagfrVNReHcQYttb83tubmckiGFfWqFD7HMUQn7BsBzMozYvq32AQaEbUzf9W7V4QcafQszJxt2WHWawg73"
+      },
+      "name": "V18_bip48_nested_segwit_testnet_1_stub_with_fp"
     },
     {
       "description": "HRP `bt` is not the locked `mk` HRP; decoder rejects before any data-part processing.",
