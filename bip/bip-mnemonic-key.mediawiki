@@ -310,7 +310,7 @@ Mirrors MD's <code>Tag::SharedPath</code> dual-mode encoding.
 | <code>0x17</code> || <code>m/87'/1'/0'</code> || BIP 87 multisig testnet
 |}
 
-Mainnet entries occupy <code>0x01</code>..<code>0x07</code>; testnet entries occupy <code>0x11</code>..<code>0x17</code> (the upper-nibble bit identifies testnet). The 14-entry table above is the canonical source of truth; future entries added to MD's <code>Tag::SharedPath</code> table are auto-inherited by mk1 under the mirror-stewardship contract.
+Mainnet entries occupy <code>0x01</code>..<code>0x07</code>; testnet entries occupy <code>0x11</code>..<code>0x17</code> (the upper-nibble bit identifies testnet). The 14-entry table above is the canonical source of truth; future entries added to MD's <code>Tag::SharedPath</code> table are auto-inherited by mk1 under the mirror-stewardship contract. Reference-implementation cross-link: [https://github.com/bg002h/mnemonic-key/blob/main/crates/mk-codec/src/bytecode/path.rs <code>crates/mk-codec/src/bytecode/path.rs::STANDARD_PATHS</code>].
 
 Note on indicator <code>0x16</code> (history): mk1 v0.1.x reserved <code>0x16</code> because md1's path dictionary at the time omitted the testnet companion to mainnet <code>0x06</code>. md-codec v0.9.0 closed the parallel gap on the md1 side; mk-codec v0.2.0 closed the gap on the mk1 side under the mirror-stewardship contract. The change is wire-additive: v0.1.x decoders reject <code>0x16</code> with <code>Error::InvalidPathIndicator(0x16)</code>; v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path.
 
