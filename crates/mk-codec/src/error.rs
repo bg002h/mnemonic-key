@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn parameterized_variants_render() {
         let cases: Vec<(Error, &str)> = vec![
-            (Error::InvalidHrp("ms".into()), "invalid HRP: ms"),
+            (Error::InvalidHrp("mq".into()), "invalid HRP: mq"),
             (
                 Error::BchUncorrectable(
                     "5 substitutions exceed long-code 4-correction limit".into(),

@@ -4,7 +4,7 @@ This file is auto-loaded by Claude Code when starting a session in this reposito
 
 ## Project at a glance
 
-`mk1` is a Bitcoin BIP-style codex32-derived backup format for individual extended public keys (xpubs). HRP `mk`, designed to engrave alongside `md1` (sibling repo `bg002h/descriptor-mnemonic` at `/scratch/code/shibboleth/descriptor-mnemonic`) for foreign-xpub multisig recovery.
+`mk1` is a Bitcoin BIP-style codex32-derived backup format for individual extended public keys (xpubs). HRP `mk`, designed to engrave alongside `md1` (sibling repo `bg002h/descriptor-mnemonic` at `/scratch/code/shibboleth/descriptor-mnemonic`) for foreign-xpub multisig recovery. As of 2026-05-03 a third sibling format `ms1` (HRP `ms`, repo `bg002h/mnemonic-secret`) is in design — secret material (BIP-39 entropy / BIP-32 master seed / xpriv) using BIP-93 codex32 directly via `rust-codex32`. The three formats engrave together as a coherent backup bundle (md1 = template, mk1 = xpubs, ms1 = secret).
 
 **Wire format is locked at v0.1.** Q-1..Q-10 closures landed 2026-04-29 in `docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md` (an opus-reviewed closure-design pass). Implementation work tracked in `design/IMPLEMENTATION_PLAN_mk_v0_1.md` on branch `feature/v0.1.0-implementation`.
 
@@ -35,7 +35,7 @@ The user established this workflow on md1 v0.6 / v0.7 and explicitly asked mk1 t
 
 ## Cross-repo coordination with md1 (`descriptor-mnemonic`)
 
-`md1` is the sibling format. mk1 references md1 at the BIP level (path-dictionary mirror, chunked-header structure, Wallet Instance ID construction) but does NOT depend on md-codec as a Rust crate (D-13 fork-now-refactor-later). The shared `mc-codex32` extraction trigger is "both formats v1.0 with cross-validated conformance vectors" (closure Q-9).
+`md1` is the sibling format. mk1 references md1 at the BIP level (path-dictionary mirror, chunked-header structure, Wallet Instance ID construction) but does NOT depend on md-codec as a Rust crate (D-13 fork-now-refactor-later). The previously-planned `mc-codex32` shared-crate extraction (closure Q-9: "both formats v1.0 with cross-validated conformance vectors") is **RETIRED as of 2026-05-03**: ms1 adopts BIP-93 codex32 directly via `rust-codex32` and md1↔mk1's HRP-mixed BCH with per-format target residues isn't upstreamable to that crate, so there is no shared code worth extracting. The cross-repo *pattern* (HRP-mixed BCH + per-format target residue) will be documented in a future cross-repo `PATTERNS.md`; the BCH primitives stay forked between md1 and mk1 indefinitely. See `design/FOLLOWUPS.md` entry `mc-codex32-extraction-retired-2026-05-03` for the full record.
 
 When mk1 work surfaces an action item that affects md1, follow the established mirror pattern:
 

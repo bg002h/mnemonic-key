@@ -42,6 +42,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `mc-codex32-extraction-retired-2026-05-03` — original shared-crate plan retired in favor of ms1 adopting `rust-codex32` directly
+
+- **Surfaced:** 2026-05-03, ms1 plan-mode brainstorm in the `descriptor-mnemonic` repo (plan file: `/home/bcg/.claude/plans/c-ultimately-what-we-quirky-avalanche.md`). Companion: same-id entry in `descriptor-mnemonic/design/FOLLOWUPS.md`.
+- **Where:** Cross-repo design / process. Affects `mnemonic-key/CLAUDE.md` (line 38 retirement language already updated 2026-05-03), `descriptor-mnemonic/CLAUDE.md` (mirrored), `descriptor-mnemonic/design/DECISIONS.md` D-13 (still records "fork-now-refactor-later" — historically accurate, no change needed), and the future cross-repo `PATTERNS.md` doc that will replace the shared-crate plan.
+- **What:** Closure Q-9 originally specified that md1 and mk1 would extract their shared BIP-93 BCH plumbing into a third sibling crate `mc-codex32` once both formats hit v1.0 with cross-validated conformance vectors. With the addition of a third sibling format ms1 (HRP `ms`, repo `bg002h/mnemonic-secret`) that adopts BIP-93 codex32 *directly* via Andrew Poelstra's `rust-codex32` crate, the calculus changed: md1 and mk1 use HRP-mixed BCH with per-format target residues that are NOT upstreamable to `rust-codex32`'s vanilla BIP-93 implementation, and ms1 doesn't need them either. There is no longer shared code worth extracting — only a shared *pattern* (HRP-mixed BCH with per-format target residue) that is better captured as documentation. md1↔mk1 BCH plumbing stays forked indefinitely; the pattern will be documented in a future cross-repo `PATTERNS.md`.
+- **Why deferred:** Decision was locked during ms1 plan-mode r1..r5 review convergence on 2026-05-03; CLAUDE.md updates landed in lockstep. The `PATTERNS.md` doc itself is non-blocking and can be drafted opportunistically when the next BCH-plumbing concern surfaces in either repo.
+- **Status:** `wont-do — superseded by ms1 adopting rust-codex32 directly (2026-05-03 cross-repo decision)`. CLAUDE.md retirement language landed same day.
+- **Tier:** `cross-repo`
+
 ### `chunk-set-id-rename` — rename "wallet identifier" to `chunk_set_id` in md1 (resolved)
 
 - **Surfaced:** 2026-04-29 mk1 closure-design pass (Q-5(d)).
