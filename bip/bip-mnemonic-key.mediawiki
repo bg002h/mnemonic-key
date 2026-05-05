@@ -173,7 +173,15 @@ Mirrors MD exactly. Two variants:
 
 '''Wire encoding for <code>chunk_set_id</code>:''' the 20-bit value is packed into chars 2–5 in big-endian 5-bit-symbol order — bits 19..15 in char 2, 14..10 in char 3, 9..5 in char 4, 4..0 in char 5. Decoders reconstruct the value via <code>(char2 &lt;&lt; 15) | (char3 &lt;&lt; 10) | (char4 &lt;&lt; 5) | char5</code>.
 
-<code>chunk_set_id</code> is opaque to the format; its only purpose is mismatch detection during reassembly. Encoders SHOULD generate it from a cryptographically secure random source at first encoding and reuse the same value for all subsequent re-encodings of the same card.
+<code>chunk_set_id</code> is opaque to the format; its only purpose is mismatch detection during reassembly within a single chunk set. Decoders MUST accept any 20-bit value; the field is not subject to interop validation beyond the within-set mismatch check.
+
+Encoders generating fresh cards MAY draw <code>chunk_set_id</code> from a cryptographically secure random source. Encoders producing reproducible output across cold runs (engraving toolkits, regression-pinned vector corpora, deterministic test fixtures) SHOULD instead derive <code>chunk_set_id</code> from a stable cross-card binding identifier — for example, the leading 20 bits of the first <code>policy_id_stub</code>:
+
+<pre>
+  chunk_set_id = (stub[0] << 12) | (stub[1] << 4) | (stub[2] >> 4)
+</pre>
+
+Either choice is interop-equivalent — the field is opaque — and the deterministic option lets downstream toolkits SHA-pin their fixture corpora.
 
 Chunk-type byte assignments:
 
