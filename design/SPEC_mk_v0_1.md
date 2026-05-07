@@ -201,7 +201,9 @@ The 4-byte BIP 32 master fingerprint, identifying the seed from which this xpub 
 
 ### 3.5 Origin path encoding
 
-Mirrors `md1`'s `Tag::SharedPath` precedent (D-3). The path encodes as a 1-byte indicator with two cases:
+mk1-internal indicator-byte path dictionary plus a `0xFE` explicit-path escape hatch. The path encodes as a 1-byte indicator with two cases:
+
+> **Path dictionary divergence note (v0.2.2).** Earlier mk-codec releases (≤ v0.2.1) described this dictionary as mirroring md1's `Tag::SharedPath` table byte-for-byte. md-codec v0.10.0 carried a compatible `Tag::OriginPaths` table at the same byte-for-byte tip, then md-codec v0.11 dropped path dictionaries from md1 entirely as part of the v0.11 wire-format cleanup (per [`descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4](https://github.com/bg002h/descriptor-mnemonic/blob/main/design/SPEC_v0_11_wire_format.md)). As of mk-codec v0.2.2, mk1's standard-table dictionary is **standalone** — it is mk1-internal and no longer a sibling mirror of an md1 table. The 14-entry table below is the canonical mk1 source of truth; future entries are an mk1-side decision and have no md1 counterpart.
 
 **Case A — standard-table indicator** (1 byte total):
 
@@ -216,9 +218,9 @@ Mirrors `md1`'s `Tag::SharedPath` precedent (D-3). The path encodes as a 1-byte 
 | `0x07` | `m/87'/0'/0'` (BIP 87 multisig mainnet) |
 | `0x11`–`0x17` | Testnet variants — full 7-entry coverage as of v0.2.0 |
 
-(Exact dictionary mirrors md1's `Tag::SharedPath` table byte-for-byte.)
+(The 14-entry table is mk1-internal as of mk-codec v0.2.2; see the divergence note at the start of §3.5.)
 
-**Note on `0x16` (history).** mk1 v0.1.x reserved `0x16` pending the parallel md1 dictionary update — md1's published table at the time omitted the testnet companion to mainnet `0x06`. md-codec v0.9.0 closed the gap on the md1 side; mk-codec v0.2.0 closed the gap on the mk1 side, adding `(0x16, "m/48'/1'/0'/1'")` to `STANDARD_PATHS` per the path-dictionary-mirror-stewardship contract. The change is wire-additive: v0.1.x decoders reject `0x16` with `Error::InvalidPathIndicator(0x16)`; v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path. See `design/FOLLOWUPS.md::md-path-dictionary-0x16-gap`.
+**Note on `0x16` (history).** mk1 v0.1.x reserved `0x16`, awaiting alignment with md1's then-corresponding dictionary entry. md-codec v0.9.0 (and v0.10.x) carried a compatible table; mk-codec v0.2.0 added `(0x16, "m/48'/1'/0'/1'")` to `STANDARD_PATHS` at that time. The change is wire-additive: v0.1.x decoders reject `0x16` with `Error::InvalidPathIndicator(0x16)`; v0.2+ decoders accept and resolve to the BIP 48 testnet nested-segwit path. md-codec v0.11+ has since dropped path dictionaries entirely; the historical mirror invariant is retired (see the divergence note above and `design/FOLLOWUPS.md::path-dictionary-mirror-stewardship`).
 
 **Case B — explicit-path escape hatch**, marked by indicator `0xFE`:
 

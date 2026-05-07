@@ -3,15 +3,17 @@
 //!
 //! Per `design/SPEC_mk_v0_1.md` §3.5 (closure Q-3: cap = 10).
 //!
-//! The standard-table dictionary mirrors md1's `Tag::SharedPath` table
-//! byte-for-byte. The testnet companion `0x16` to mainnet `0x06` (BIP 48
-//! nested-segwit multisig) was originally absent from md1's published
-//! table — mk1 v0.1.x inherited the gap and reserved `0x16`. md-codec
-//! v0.9.0 closed the gap on the md1 side; mk1 v0.2.0 closes it on the
-//! mk1 side, completing the 14-entry dictionary mirror. The addition is
-//! wire-additive: v0.1.x decoders reject `0x16` as
-//! `Error::InvalidPathIndicator(0x16)`, while v0.2+ decoders accept and
-//! resolve to `m/48'/1'/0'/1'`.
+//! mk1-internal indicator-byte path dictionary. md1 v0.11+ encodes paths
+//! explicitly via `OriginPath` and does not carry a path-dictionary
+//! table; mk1's dictionary is therefore standalone, not a sibling
+//! mirror. Historically (md-codec v0.10.x and earlier), md1 carried a
+//! compatible table via `Tag::SharedPath` / `Tag::OriginPaths`; the
+//! v0.11 architectural cleanup retired that table per
+//! `descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4. The
+//! testnet companion `0x16` to mainnet `0x06` (BIP 48 nested-segwit
+//! multisig) was added in mk-codec v0.2.0; the addition is wire-additive
+//! (v0.1.x decoders reject `0x16` as `Error::InvalidPathIndicator(0x16)`,
+//! v0.2+ decoders accept and resolve to `m/48'/1'/0'/1'`).
 //!
 //! Explicit-path encoding: indicator `0xFE`, 1-byte component count
 //! (1..=10), then each component as LEB128-encoded u32 with the BIP 32
@@ -27,10 +29,12 @@ pub const EXPLICIT_PATH_INDICATOR: u8 = 0xFE;
 
 /// Standard-table dictionary entries — `(indicator_byte, path_string)`.
 ///
-/// Mirrors md1's `Tag::SharedPath` table byte-for-byte. The 14 entries
-/// are: 7 mainnet (`0x01`..=`0x07`) and 7 testnet (`0x11`..=`0x17`).
-/// `0x16` (BIP 48 testnet nested-segwit multisig) was added in v0.2.0
-/// after md-codec v0.9.0 closed the parallel gap on the md1 side.
+/// mk1-internal table — not a sibling mirror. md1 v0.11+ does not carry
+/// a path-dictionary table (per
+/// `descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4). The 14
+/// entries are: 7 mainnet (`0x01`..=`0x07`) and 7 testnet
+/// (`0x11`..=`0x17`). `0x16` (BIP 48 testnet nested-segwit multisig) was
+/// added in v0.2.0.
 pub const STANDARD_PATHS: &[(u8, &str)] = &[
     // Mainnet
     (0x01, "m/44'/0'/0'"),    // BIP 44 mainnet
@@ -266,9 +270,11 @@ mod tests {
     #[test]
     fn round_trip_indicator_0x16_added_in_v0_2() {
         // 0x16 was reserved-pending in v0.1.x; added to STANDARD_PATHS
-        // in v0.2.0 after md-codec v0.9.0 closed the parallel gap on
-        // the md1 side. Resolves to BIP 48 testnet nested-segwit
-        // multisig (`m/48'/1'/0'/1'`).
+        // in v0.2.0. Resolves to BIP 48 testnet nested-segwit multisig
+        // (`m/48'/1'/0'/1'`). Historical context: this entry tracked an
+        // md1-side gap at the time the mk-codec v0.2.0 cycle ran;
+        // md1 v0.11+ has since dropped path dictionaries entirely (the
+        // mirror invariant is retired — see this module's rustdoc).
         let path = DerivationPath::from_str("m/48'/1'/0'/1'").unwrap();
         let encoded = encode_path(&path);
         assert_eq!(encoded, vec![0x16]);

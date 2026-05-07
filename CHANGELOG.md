@@ -5,6 +5,61 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] — 2026-05-07
+
+Documentation-only patch. Closes the v0.7.1 BIP test-vector audit cycle
+for mk-codec. **Wire format and corpus byte-identical to v0.2.1**;
+SHA pin unchanged
+(`ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff`).
+No code change; no test change.
+
+### Changed
+
+- mk1's standard-table path dictionary is reclassified as **mk1-internal**
+  (standalone), not a sibling mirror of an md1 table. md-codec v0.11
+  dropped path dictionaries from md1 entirely (per
+  [`descriptor-mnemonic/design/SPEC_v0_11_wire_format.md`](https://github.com/bg002h/descriptor-mnemonic/blob/main/design/SPEC_v0_11_wire_format.md)
+  §1.4 — "Wire-layer dictionaries (path, use-site-path, shape).
+  Considered and rejected for architectural cleanliness"); md1 now
+  encodes paths explicitly via `OriginPath`. There is no sibling table
+  to mirror.
+- `crates/mk-codec/src/bytecode/path.rs` module rustdoc + `STANDARD_PATHS`
+  rustdoc updated: drop "mirrors md1's `Tag::SharedPath` table
+  byte-for-byte" wording; document the dictionary as mk1-internal with
+  reference to `SPEC_v0_11_wire_format.md` §1.4 as the authority for
+  the md1-side retirement.
+- `design/SPEC_mk_v0_1.md` §3.5 — added "Path dictionary divergence
+  note (v0.2.2)" replacing the mirror-precedent prose with standalone
+  semantics. The 14-entry table is now the canonical mk1 source of
+  truth.
+- `bip/bip-mnemonic-key.mediawiki` §"Origin path encoding" — same
+  treatment: divergence note + reworded mirror-stewardship language.
+
+### Internal
+
+- v0.7.1 BIP-test-vector audit cycle close-out for mk-codec. The
+  Phase 12 originally-planned `tests/path_dict_md_mirror.rs::path_dict_byte_identical_to_md_codec`
+  test is RETIRED — md-codec has no path-dict to mirror against.
+- `design/agent-reports/v0_7_1-bip-test-vector-audit-matrix.md`
+  updated to reflect the retired byte-identity-test deliverable.
+
+### Resolved (FOLLOWUPS)
+
+- `path-dictionary-mirror-stewardship` (cross-repo) — md-codec v0.11
+  dropped the path dictionary entirely (per `SPEC_v0_11_wire_format.md`
+  architectural-cleanliness decision); mk1's dictionary is now
+  standalone. Mirror invariant retired in mk-codec v0.2.2.
+
+### Notes
+
+- Pure docs-only patch: no wire-format change, no API change, no test
+  change, no corpus change.
+- Cross-implementations need no migration work for v0.2.2; existing
+  v0.2.x conformance pins (V0_1_SHA256, family_token) remain valid.
+- Cross-repo coordination: `descriptor-mnemonic/CLAUDE.md` updated in
+  parallel under "Recently retired" to reflect the retired mirror
+  invariant. No md-codec source change ships in this coordination event.
+
 ## [0.2.1] — 2026-04-30
 
 Doc-only patch. Closes the four deferred suggestions from the v0.2.0

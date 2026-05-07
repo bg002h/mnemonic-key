@@ -62,10 +62,18 @@ Path-dictionary coverage matrix (cross-mirror with md-codec):
 | 0x16 | m/48'/1'/0'/1' | V18 |
 | 0x17 | m/48'/1'/0'/2' | V3 |
 
-Phase 12 deliverable: cross-verify byte-identity of path-dict entries
-against md-codec's mirror (`md-codec/src/origin_path.rs` table). The
-lockstep invariant per `descriptor-mnemonic/CLAUDE.md` cross-repo
-coordination block must hold byte-for-byte.
+Phase 12 deliverable: ~~cross-verify byte-identity of path-dict entries
+against md-codec's mirror~~ **RETIRED in mk-codec v0.2.2.** md-codec v0.11
+dropped path dictionaries from md1 entirely (per
+`descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4 — "Wire-layer
+dictionaries (path, use-site-path, shape). Considered and rejected for
+architectural cleanliness"); md1 now encodes paths explicitly via
+`OriginPath` and there is no sibling table to mirror. mk-codec v0.2.2
+documents mk1's path dictionary as standalone (mk1-internal). The
+lockstep invariant per the older `descriptor-mnemonic/CLAUDE.md` cross-
+repo coordination block is retired; the v0.2.2 patch updates the SPEC,
+BIP, doc-comments, and FOLLOWUPS in lockstep, plus the descriptor-
+mnemonic CLAUDE.md cross-repo coordination block.
 
 ### Negative vectors (N1..N23)
 
@@ -163,36 +171,42 @@ mk-codec has zero BIP-39 surface. xpub is the input; mnemonics live in
 
 ## BIP-44 / 48 / 49 / 84 / 86 / 87 — derivation path conventions
 
-mk-codec's path-dictionary table is the canonical mk1 ↔ md1 lockstep
-artifact. Per-indicator coverage is in the V1..V18 table above.
+mk-codec's path-dictionary table is now mk1-internal (per the v0.2.2
+divergence note in SPEC §3.5). Per-indicator coverage is in the V1..V18
+table above.
 
-**Cross-repo invariant:** the path-dict table at
-`crates/mk-codec/src/string_layer/path_dict.rs` (or equivalent) must
-byte-equal `descriptor-mnemonic/crates/md-codec/src/origin_path.rs`'s
-table. Phase 12 audits this invariant and pins it as a CI check
-if not already pinned.
+**Cross-repo invariant (RETIRED in mk-codec v0.2.2):** mk-codec's
+path-dict table was previously contractually mirrored byte-for-byte
+against md-codec's `Tag::SharedPath` / `Tag::OriginPaths`. md-codec v0.11
+dropped path dictionaries entirely (per
+`descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4); the mirror
+invariant is therefore retired. The 14-entry table at
+`crates/mk-codec/src/bytecode/path.rs::STANDARD_PATHS` is now the sole
+source of truth; future entries are an mk1-side decision.
 
-| # | BIP / path | Indicator | mk1 vector | md1 mirror status |
+| # | BIP / path | Indicator | mk1 vector | Status (post-v0.2.2: mirror RETIRED — md1 has no path dict) |
 |---|---|---|---|---|
-| 0x01 | BIP-44 mainnet | 0x01 | V9 | mirrored in md-codec; COVERED-LOCKSTEP |
-| 0x02 | BIP-49 mainnet | 0x02 | V10 | COVERED-LOCKSTEP |
-| 0x03 | BIP-84 mainnet | 0x03 | V2, V4 | COVERED-LOCKSTEP |
-| 0x04 | BIP-86 mainnet | 0x04 | V11 | COVERED-LOCKSTEP |
-| 0x05 | BIP-87 mainnet | 0x05 | V8 | COVERED-LOCKSTEP |
-| 0x06 | BIP-48 nested mainnet | 0x06 | V12 | COVERED-LOCKSTEP |
-| 0x07 | BIP-48 segwit mainnet | 0x07 | V1, V6 | COVERED-LOCKSTEP |
-| 0x11 | BIP-44 testnet | 0x11 | V13 | COVERED-LOCKSTEP |
-| 0x12 | BIP-49 testnet | 0x12 | V14 | COVERED-LOCKSTEP |
-| 0x13 | BIP-84 testnet | 0x13 | V15 | COVERED-LOCKSTEP |
-| 0x14 | BIP-86 testnet | 0x14 | V16 | COVERED-LOCKSTEP |
-| 0x15 | BIP-87 testnet | 0x15 | V17 | COVERED-LOCKSTEP |
-| 0x16 | BIP-48 nested testnet | 0x16 | V18 | COVERED-LOCKSTEP |
-| 0x17 | BIP-48 segwit testnet | 0x17 | V3 | COVERED-LOCKSTEP |
+| 0x01 | BIP-44 mainnet | 0x01 | V9 | mirrored in md-codec; COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x02 | BIP-49 mainnet | 0x02 | V10 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x03 | BIP-84 mainnet | 0x03 | V2, V4 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x04 | BIP-86 mainnet | 0x04 | V11 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x05 | BIP-87 mainnet | 0x05 | V8 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x06 | BIP-48 nested mainnet | 0x06 | V12 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x07 | BIP-48 segwit mainnet | 0x07 | V1, V6 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x11 | BIP-44 testnet | 0x11 | V13 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x12 | BIP-49 testnet | 0x12 | V14 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x13 | BIP-84 testnet | 0x13 | V15 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x14 | BIP-86 testnet | 0x14 | V16 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x15 | BIP-87 testnet | 0x15 | V17 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x16 | BIP-48 nested testnet | 0x16 | V18 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
+| 0x17 | BIP-48 segwit testnet | 0x17 | V3 | COVERED (mk1-internal, mirror RETIRED v0.2.2) |
 
-Phase 12 deliverable: 1 new test
-`tests/path_dict_md_mirror.rs::path_dict_byte_identical_to_md_codec`
-that programmatically asserts byte-identity of the two tables. Either
-import via path-dependency or pin the SHA-256 hash on the data table.
+Phase 12 deliverable: ~~1 new test~~
+~~`tests/path_dict_md_mirror.rs::path_dict_byte_identical_to_md_codec`~~
+**RETIRED.** md-codec v0.11 dropped path dictionaries entirely; there
+is no md-codec table to mirror against. Phase 12 closed as docs-only
+(SPEC + BIP + FOLLOWUPS + cross-repo CLAUDE.md mirror clause removal);
+no new test landed.
 
 ---
 
@@ -252,14 +266,14 @@ BIP-173's case discipline.
 | BIP-93 invalid (42) | 42 | structural subset | 0 | 0 | ~38 (delegated) |
 | BIP-32 | 18 | 4 layer-only | 0 | 0 | 18 (delegated to bitcoin v0.32) |
 | BIP-39 | n/a | — | 0 | 0 | n/a (no surface) |
-| Path-dict (14 entries × md1 mirror) | 14 | 14 | 1 (byte-identity test, Phase 12) | 0 | 0 |
+| Path-dict (14 entries; mk1-internal as of v0.2.2) | 14 | 14 | 0 (byte-identity test RETIRED; mirror invariant retired) | 0 | 0 |
 | BIP-380 | n/a | — | 0 | 0 | n/a |
 | BIP-388 | n/a | — | 0 | 0 | n/a |
 | SLIP-0132 | n/a | — | 0 | 0 | n/a (toolkit-normalized) |
 | BIP-173 | 4 | 4 | 0 | 0 | 0 |
 | **TOTAL** | **>140** | **~62** | **~1** | **0** | **~61** |
 
-Phase 12 target: 1 net-new test (path-dict byte-identity vs md-codec).
+Phase 12 target: ~~1 net-new test (path-dict byte-identity vs md-codec)~~ **0 net-new tests; docs-only patch.** md-codec v0.11 dropped path dictionaries entirely (per `descriptor-mnemonic/design/SPEC_v0_11_wire_format.md` §1.4); the mirror invariant has no md1-side anchor and is retired. v0.2.2 reclassifies mk1's dictionary as standalone (mk1-internal) across SPEC, BIP, doc-comments, FOLLOWUPS, and the descriptor-mnemonic CLAUDE.md cross-repo coordination block.
 
 ---
 
@@ -273,14 +287,20 @@ Phase 12 target: 1 net-new test (path-dict byte-identity vs md-codec).
    surface; the only audit-cycle add is the cross-mirror byte-identity
    pin.
 
-2. **AMBIGUOUS — path-dict mirror is human-mirrored, not
-   programmatically-mirrored.** `descriptor-mnemonic/CLAUDE.md` calls
-   out the lockstep invariant prose-wise; v0.9.0 + v0.10.0 cycles
-   resolved specific drift items. But there's no automated test that
-   *asserts* "mk-codec's path-dict bytes ==
-   md-codec's path-dict bytes" within a CI run today. Phase 12 adds
-   it. **This is the one substantive deliverable from this audit
-   matrix; everything else is documentation.**
+2. **RESOLVED — mirror invariant retired in mk-codec v0.2.2 (docs-only).**
+   The Phase 0 audit flagged the path-dict mirror as human-mirrored
+   rather than programmatically-mirrored, with Phase 12 originally
+   planned to add a byte-identity test. During Phase 12 implementation,
+   re-reading `descriptor-mnemonic/design/SPEC_v0_11_wire_format.md`
+   §1.4 surfaced that md-codec v0.11+ has **dropped path dictionaries
+   entirely** (architectural-cleanliness decision; md1 now encodes
+   paths explicitly via `OriginPath`). There is no md-codec table to
+   mirror against. mk-codec v0.2.2 reclassifies mk1's dictionary as
+   standalone (mk1-internal) across SPEC §3.5, the BIP draft, source
+   doc-comments, FOLLOWUPS, and the descriptor-mnemonic CLAUDE.md
+   cross-repo coordination block. The audit-cycle deliverable is
+   purely documentation; no code or test change. Mirror invariant
+   RETIRED.
 
 3. **OUT-OF-SCOPE-PER-SPEC dominance is by design.** mk-codec is a
    minimal-surface xpub container; ~80% of BIPs in the broader
