@@ -7,9 +7,7 @@
 //! format (both reuse BIP 93's `BCH(93,80,8)` regular code and
 //! `BCH(108,93,8)` long code); the only mk1-specific knobs are the HRP
 //! (`"mk"`) and the NUMS-derived target residues ([`crate::consts::MK_REGULAR_CONST`]
-//! / [`crate::consts::MK_LONG_CONST`]). The fork copy is expected to be
-//! retired once the `mc-codex32` shared-crate extraction lands (closure
-//! Q-9 trigger: both formats v1.0 with cross-validated conformance vectors).
+//! / [`crate::consts::MK_LONG_CONST`]).
 //!
 //! Unlike md-codec's encoding module, this file does **not** expose a
 //! top-level `encode_string` / `decode_string`: mk1's string-layer header
