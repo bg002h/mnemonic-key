@@ -25,4 +25,4 @@ Per [`design/DECISIONS.md`](../../design/DECISIONS.md) §D-13, this crate will f
 
 ## License
 
-CC0-1.0.
+MIT License.

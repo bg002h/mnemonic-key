@@ -65,7 +65,7 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 
 ## License
 
-The specification text in this repository is dedicated to the public domain under [CC0-1.0](LICENSE). The reference implementation in `crates/mk-codec/` is released under the same CC0-1.0 license.
+The specification text in this repository and the reference implementation in `crates/mk-codec/` are released under the [MIT License](LICENSE).
 
 ## Contact
 
