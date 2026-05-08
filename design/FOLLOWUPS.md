@@ -42,6 +42,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `manual-cli-surface-mirror` — `mk-codec` public-API changes must mirror to the toolkit-side user manual
+
+- **Surfaced:** 2026-05-07, m-format-star user manual v0.1 release in `bg002h/mnemonic-toolkit` (`manual-v0.1.0` tag; toolkit PR #1).
+- **Where:** Cross-repo coordination only; no `mk-codec` source change required at filing time. Future public-API additions (new `pub` items, removed re-exports, signature changes, `#[non_exhaustive]` field additions to `KeyCard`) must touch `mnemonic-toolkit/docs/manual/src/40-cli-reference/44-mk-codec-rust.md` in lockstep.
+- **What:** v0.1 of the m-format-star user manual lives in the `mnemonic-toolkit` repo. Because `mk-codec` is library-only in v0.1 (no standalone `mk` CLI), the manual chapter mirrors the *Rust API* surface — `KeyCard`, `encode`, `decode`, `encode_with_chunk_set_id`, the `consts::*` re-exports, `Error`/`Result`. Pinned to `mk-codec-v0.2.2`. The manual's `tests/lint.sh` does not currently grep the Rust API like it does the CLI flag-coverage step (Rust API parity is a manual-side review-time check), so this invariant is doc-only — but is filed here so a future mk-codec public-surface change cannot silently drift the manual chapter. **Companion:** primary entry `manual-cli-surface-mirror` in `mnemonic-toolkit/design/FOLLOWUPS.md`; sibling companions in `descriptor-mnemonic/design/FOLLOWUPS.md` and `mnemonic-secret/design/FOLLOWUPS.md`.
+- **Why filed:** the manual is a separate artifact (its own `manual-v*` versioning); without an explicit mirror invariant, sibling-side API changes would silently drift the manual.
+- **Status:** `open` (mirror invariant active for the lifetime of `mnemonic-toolkit/docs/manual/`)
+- **Tier:** `cross-repo`
+
 ### `ms1-v01-payload-bracket-overflow-prefix-byte-incompatibility` — ms1 v0.1 wire-format plan needs revision (BIP-93 codex32 length-bracket conflict with locked `0x00` prefix byte)
 
 - **Surfaced:** 2026-05-03 pre-SPEC spike in `mnemonic-secret` repo (in conversation; before ms1's SPEC drafted). Companion: primary entry of same id in `mnemonic-secret/design/FOLLOWUPS.md`; mirror in `descriptor-mnemonic/design/FOLLOWUPS.md`.

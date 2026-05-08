@@ -46,6 +46,10 @@ When mk1 work surfaces an action item that affects md1, follow the established m
 
 Currently open mk1-surfaced items affecting md1: see `design/FOLLOWUPS.md` (tier `cross-repo`).
 
+## Manual coverage
+
+The end-user manual for the m-format star lives in the sibling `bg002h/mnemonic-toolkit` repo at `docs/manual/`. mk1 has no standalone CLI in v0.1; library consumers integrate via `mk-codec` directly (or indirectly via `mnemonic convert --from mk1=…`). v0.1 of the manual mirrors the `mk-codec` Rust API verbatim under `docs/manual/src/40-cli-reference/44-mk-codec-rust.md`, including the `KeyCard` struct and the `encode`/`decode`/`encode_with_chunk_set_id` public functions. **Any change to the public surface of `mk-codec` — new `pub` items, removed re-exports, signature changes, `#[non_exhaustive]` field additions — must update that chapter in lockstep with the implementing PR.** See `design/FOLLOWUPS.md` entry `manual-cli-surface-mirror` for the canonical record; primary entry lives in the toolkit repo.
+
 ## Practical tips
 
 - `cargo test -p mk-codec` runs all tests. As of `32f273e`, 46 unit tests pass + 4 ignored scaffolds for Phase 5 work.
