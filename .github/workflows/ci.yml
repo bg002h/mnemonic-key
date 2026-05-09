@@ -19,8 +19,9 @@ on:
       - 'mk-codec-v*'
   pull_request:
 
-permissions:
-  contents: write
+# Workflow-level permissions are not granted; each job declares its own.
+# Only the release-on-tag job needs `contents: write` (release upload);
+# build + vectors-roundtrip run with the default read-only token.
 
 env:
   CARGO_TERM_COLOR: always
