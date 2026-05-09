@@ -1,0 +1,9 @@
+# Force LF line endings on text fixtures whose SHA-256 is pinned in
+# tests. Without this, Windows checkouts (default `core.autocrlf =
+# true`) convert LF→CRLF on text files, breaking the byte-level hash
+# `tests/vectors.rs:vector_file_sha256_matches_pin` asserts.
+crates/mk-codec/tests/vectors/v0.1.json text eol=lf
+
+# Default everything else to native eol so Windows users still get
+# their preferred line endings on Rust source.
+* text=auto
