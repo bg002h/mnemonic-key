@@ -1,0 +1,123 @@
+# CI workflow for the `mnemonic-key` workspace.
+#
+# Triggers: push to main, push to mk-cli-v* / mk-codec-v* tags, PRs.
+# Jobs: build matrix (3 toolchains × 3 OS = 9), vectors-roundtrip on stable,
+# release-on-tag.
+#
+# Note on apt-get hangs: this workflow doesn't install texlive (no PDF
+# build here, unlike the toolkit's manual workflow), so the recurring
+# apt-get-hang recovery pattern (cancel + rerun) doesn't apply. One-line
+# note retained for consistency with the toolkit / sibling workflows.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'mk-cli-v*'
+      - 'mk-codec-v*'
+  pull_request:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.toolchain }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, beta, '1.85']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.toolchain }}-${{ matrix.os }}
+
+      - name: Build
+        run: cargo build --workspace
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rustfmt
+        run: cargo fmt --check --all
+
+  vectors-roundtrip:
+    name: vectors-roundtrip
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: vectors-roundtrip-stable
+
+      - name: Build mk-cli
+        run: cargo build -p mk-cli --release
+
+      - name: Run mk vectors --out
+        run: |
+          mkdir -p /tmp/vectors-out
+          ./target/release/mk vectors --out /tmp/vectors-out
+
+      - name: Diff against pinned corpus
+        run: |
+          set -eu
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          # Reconstruct the union from per-fixture files and diff against
+          # the pinned corpus (sort by name to make the comparison
+          # deterministic regardless of iteration order).
+          pinned=$(jq -S '.vectors | sort_by(.name)' \
+            crates/mk-codec/tests/vectors/v0.1.json)
+          rebuilt=$(jq -s -S 'sort_by(.name)' /tmp/vectors-out/*.json)
+          if [ "$pinned" != "$rebuilt" ]; then
+            echo "::error::vectors-roundtrip mismatch between mk vectors --out and pinned corpus"
+            diff <(echo "$pinned") <(echo "$rebuilt") || true
+            exit 1
+          fi
+          echo "vectors-roundtrip OK"
+
+  release-on-tag:
+    name: release-on-tag
+    if: startsWith(github.ref, 'refs/tags/mk-cli-v') || startsWith(github.ref, 'refs/tags/mk-codec-v')
+    runs-on: ubuntu-latest
+    needs: [build, vectors-roundtrip]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          set -eu
+          TAG="${GH_REF#refs/tags/}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; nothing to do"
+          else
+            gh release create "$TAG" --generate-notes
+          fi
