@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/mk-codec"]
+members = ["crates/mk-codec", "crates/mk-cli"]
 
 [workspace.package]
 edition = "2024"

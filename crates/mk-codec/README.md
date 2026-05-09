@@ -23,6 +23,10 @@ public keys (xpubs) for engraving alongside MD-encoded policy cards.
 
 Per [`design/DECISIONS.md`](../../design/DECISIONS.md) §D-13, this crate will fork BCH primitives from the sibling [`md-codec`](https://github.com/bg002h/descriptor-mnemonic/tree/main/crates/md-codec) once implementation work begins, and the shared codex32-derived plumbing extracts to a third crate (likely a new sibling repo `mc-codex32`) once both formats are implementation-validated.
 
+## See also
+
+For the Rust API reference, see [docs/MK_CODEC_RUST_API.md](https://github.com/bg002h/mnemonic-key/blob/main/docs/MK_CODEC_RUST_API.md).
+
 ## License
 
 MIT License.

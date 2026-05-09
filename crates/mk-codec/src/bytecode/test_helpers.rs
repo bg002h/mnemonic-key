@@ -7,8 +7,11 @@
 //! and whose other fields are deterministic test bytes — sufficient
 //! for round-trip tests where the bytes don't need to encode a real
 //! BIP 32 derivation.
-
-#![cfg(test)]
+//!
+//! Note: the parent module (`bytecode/mod.rs`) already gates this
+//! file with `#[cfg(test)]`; no `#![cfg(test)]` inner attribute is
+//! needed. Newer clippy fires `clippy::duplicated_attributes` if
+//! both are present.
 
 use bitcoin::NetworkKind;
 use bitcoin::bip32::{ChainCode, ChildNumber, DerivationPath, Fingerprint, Xpub};
