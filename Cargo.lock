@@ -467,8 +467,8 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "md-codec"
-version = "0.16.1"
-source = "git+https://github.com/bg002h/descriptor-mnemonic?tag=md-codec-v0.16.1#19667018c8e462f70c02e6eeac34fc912d8b19c1"
+version = "0.16.2"
+source = "git+https://github.com/bg002h/descriptor-mnemonic?tag=md-codec-v0.16.2#fe1531b921a976de131a676cdecbe492e3f32565"
 dependencies = [
  "bip39",
  "bitcoin",
