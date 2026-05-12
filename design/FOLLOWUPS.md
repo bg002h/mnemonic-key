@@ -216,3 +216,11 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Why deferred:** Originally process / stewardship concern, not a v0.1 release blocker.
 - **Status:** `resolved 6509f8e` (mk-codec v0.2.2 docs-only patch). md-codec v0.11 (per [`descriptor-mnemonic/design/SPEC_v0_11_wire_format.md`](https://github.com/bg002h/descriptor-mnemonic/blob/main/design/SPEC_v0_11_wire_format.md) §1.4 — "Wire-layer dictionaries (path, use-site-path, shape). Considered and rejected for architectural cleanliness") dropped the md1 path dictionary entirely; md1 now encodes paths explicitly via `OriginPath`. The mirror invariant therefore has no md1-side anchor: there is nothing left to mirror. mk-codec v0.2.2 retired the mirror clause across the mk-codec source doc-comments (`crates/mk-codec/src/bytecode/path.rs::STANDARD_PATHS` rustdoc + module docs), `design/SPEC_mk_v0_1.md` §3.5 (added "Path dictionary divergence note (v0.2.2)"), and `bip/bip-mnemonic-key.mediawiki` §"Origin path encoding". mk1's standard-table dictionary is now documented as **mk1-internal** (standalone). md-codec v0.11+ does not carry a sibling table; the `descriptor-mnemonic/CLAUDE.md` cross-repo coordination block notes the retirement under "Recently retired".
 - **Tier:** `cross-repo`
+
+### `mnemonic-gui-schema-mirror` — companion to `bg002h/mnemonic-gui` schema gate
+
+- **Companion:** `bg002h/mnemonic-gui` `FOLLOWUPS.md` entry `mnemonic-gui-schema-mirror`; CI gate at `.github/workflows/schema-mirror.yml`.
+- **Where:** This CLI's clap-derive `Args` blocks for every subcommand the GUI surfaces (v0.1: `mk inspect`; v0.2+: encode/decode/verify/test-vectors).
+- **What:** The `mnemonic-gui` GUI mirrors this CLI's clap-derive flag surface at pinned tag `mk-cli-v0.2.0`. Any flag add / remove / rename / `conflicts_with` / `required_unless_present_any` change in this repo's CLI surface must land in lockstep with a companion `mnemonic-gui` PR that bumps the schema + the `pinned-upstream.toml` tag for this CLI. The `mnemonic-gui` CI gate runs `cargo install --locked --git <this-repo> --tag <pin>` + `cargo test --test schema_mirror`, so drift surfaces as a CI failure.
+- **Status:** `open` (mirror-invariant; tracking only — every flag-surface PR carries this lockstep work).
+- **Tier:** `v1 / mirror-invariant`
