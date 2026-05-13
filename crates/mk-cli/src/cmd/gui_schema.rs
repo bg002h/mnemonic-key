@@ -119,10 +119,8 @@ fn flag_from_arg(arg: &Arg) -> Flag {
 fn positional_from_arg(arg: &Arg) -> Positional {
     let name = arg.get_id().as_str().to_string();
     let required = arg.is_required_set();
-    let repeating = matches!(
-        arg.get_action(),
-        ArgAction::Append | ArgAction::Count
-    ) || arg.get_num_args().is_some_and(|n| n.max_values() > 1);
+    let repeating = matches!(arg.get_action(), ArgAction::Append | ArgAction::Count)
+        || arg.get_num_args().is_some_and(|n| n.max_values() > 1);
     Positional {
         name,
         required,
