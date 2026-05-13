@@ -23,7 +23,7 @@ use error::{CliError, Result};
     version,
     about = "mk — engrave-friendly Bitcoin xpub backups (mk1 format)"
 )]
-struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
     command: Command,
 }
@@ -40,6 +40,8 @@ enum Command {
     Verify(cmd::verify::VerifyArgs),
     /// Print the SHA-pinned v0.1 test-vector corpus as JSON.
     Vectors(cmd::vectors::VectorsArgs),
+    /// Emit machine-readable JSON describing the CLI surface (for mnemonic-gui).
+    GuiSchema(cmd::gui_schema::GuiSchemaArgs),
 }
 
 fn main() -> ExitCode {
@@ -60,6 +62,7 @@ fn main() -> ExitCode {
         Command::Inspect(a) => cmd::inspect::run(a),
         Command::Verify(a) => cmd::verify::run(a),
         Command::Vectors(a) => cmd::vectors::run(a),
+        Command::GuiSchema(a) => cmd::gui_schema::run(a),
     };
 
     match result {
@@ -78,6 +81,7 @@ fn is_json_mode(cmd: &Command) -> bool {
         Command::Inspect(a) => a.json,
         Command::Verify(a) => a.json,
         Command::Vectors(_) => false,
+        Command::GuiSchema(_) => false,
     }
 }
 
