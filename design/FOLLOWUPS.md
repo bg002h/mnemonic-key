@@ -42,6 +42,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `bip-vector-adoption-v0_8` — cross-repo cycle: BIP-vector adoption v0.8.0 (no-scope companion)
+
+- **Surfaced:** 2026-05-13. Cycle SPEC at `mnemonic-toolkit/design/SPEC_test_vector_audit_v0_8_0.md`. Plan at `/home/bcg/.claude/plans/v0_8_0-bip-vector-adoption.md`. R1 review at `mnemonic-toolkit/design/agent-reports/v0_8_0-phase-0-spec-plan-r1.md`.
+- **Where:** No `mk-codec` / `mk-cli` source change. mk-codec's v0.7.1 audit matrix at `design/agent-reports/v0_7_1-bip-test-vector-audit-matrix.md` covered the BIP coverage relevant to this crate (BIP-32 xpub derivation delegated to `bitcoin v0.32`); no new gap was surfaced for this cycle by the cross-repo BIP-vector survey at `mnemonic-toolkit/design/agent-reports/v0_8_0-cross-repo-bip-vector-survey.md`.
+- **What:** This entry exists for cross-repo audit symmetry per SPEC §5 ("`mnemonic-key` is OUT-OF-SCOPE for v0.8.0 — no new gap; mk-codec's v0.7.1 matrix carries the only relevant coverage and continues to delegate xpub-format / BIP-32 derivation to `bitcoin v0.32`. The `bip-vector-adoption-v0_8` entry in mnemonic-key reads: *'no scope for this cycle; included for cross-repo audit symmetry.'*"). Closes when the cycle's audit-matrix successor doc lands at `design/agent-reports/v0_8_0-bip-test-vector-audit-matrix.md` (Phase 4; even with no coverage delta, the no-op v0.8.0 matrix file replicates the v0.7.1 content with a SUPERSEDED header).
+- **Status:** `open` (Phase E pending — Phase 4 complete in this PR at `9605513`).
+- **Tier:** `cross-repo`
+- **Companion:** `mnemonic-toolkit/design/FOLLOWUPS.md`, `descriptor-mnemonic/design/FOLLOWUPS.md`, `mnemonic-secret/design/FOLLOWUPS.md` — same `bip-vector-adoption-v0_8` short-id in each.
+
 ### `manual-cli-surface-mirror` — `mk-codec` public-API changes must mirror to the toolkit-side user manual
 
 - **Surfaced:** 2026-05-07, m-format-star user manual v0.1 release in `bg002h/mnemonic-toolkit` (`manual-v0.1.0` tag; toolkit PR #1).

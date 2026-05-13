@@ -1,5 +1,11 @@
 # v0.2.2 BIP test vector audit matrix — mnemonic-key (mk-codec)
 
+**SUPERSEDED at v0.8.0** — see
+[`v0_8_0-bip-test-vector-audit-matrix.md`](v0_8_0-bip-test-vector-audit-matrix.md).
+Coverage in this file is still authoritative for mk-codec at v0.8.0
+(no-scope cycle disposition); the v0.8.0 successor exists for
+cross-repo audit symmetry.
+
 Built 2026-05-07 per the v0.7.1 audit cycle plan
 (`/home/bcg/.claude/plans/let-s-work-on-the-soft-waterfall.md`).
 
