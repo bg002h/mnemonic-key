@@ -43,20 +43,20 @@ fn gui_schema_encode_xpub_and_origin_path_required() {
     let subs = v["subcommands"].as_array().expect("subcommands array");
     let encode = subs
         .iter()
-        .find(|s| s["name"] == Value::from("encode"))
+        .find(|s| s["name"] == "encode")
         .expect("encode subcommand present");
 
     let flags = encode["flags"].as_array().expect("encode flags");
     let xpub = flags
         .iter()
-        .find(|f| f["name"] == Value::from("--xpub"))
+        .find(|f| f["name"] == "--xpub")
         .expect("--xpub flag present");
     assert_eq!(xpub["required"], Value::from(true), "--xpub must be required");
     assert_eq!(xpub["kind"], Value::from("text"), "--xpub kind=text");
 
     let origin_path = flags
         .iter()
-        .find(|f| f["name"] == Value::from("--origin-path"))
+        .find(|f| f["name"] == "--origin-path")
         .expect("--origin-path flag present");
     assert_eq!(
         origin_path["required"],
@@ -124,25 +124,25 @@ fn gui_schema_classifies_boolean_and_path_kinds() {
 
     let decode = subs
         .iter()
-        .find(|s| s["name"] == Value::from("decode"))
+        .find(|s| s["name"] == "decode")
         .expect("decode present");
     let decode_json = decode["flags"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|f| f["name"] == Value::from("--json"))
+        .find(|f| f["name"] == "--json")
         .expect("decode --json present");
     assert_eq!(decode_json["kind"], Value::from("boolean"));
 
     let vectors = subs
         .iter()
-        .find(|s| s["name"] == Value::from("vectors"))
+        .find(|s| s["name"] == "vectors")
         .expect("vectors present");
     let vectors_out = vectors["flags"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|f| f["name"] == Value::from("--out"))
+        .find(|f| f["name"] == "--out")
         .expect("vectors --out present");
     assert_eq!(vectors_out["kind"], Value::from("path"));
 }
@@ -157,7 +157,7 @@ fn gui_schema_detects_repeating_positional() {
     let subs = v["subcommands"].as_array().expect("subcommands array");
     let decode = subs
         .iter()
-        .find(|s| s["name"] == Value::from("decode"))
+        .find(|s| s["name"] == "decode")
         .expect("decode present");
     let positionals = decode["positionals"].as_array().expect("positionals array");
     assert_eq!(positionals.len(), 1, "decode has one positional");
