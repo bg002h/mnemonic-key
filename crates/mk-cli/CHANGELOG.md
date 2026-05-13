@@ -35,6 +35,11 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   suggestion) and unrelated to the exit-code surface, but is
   folded into this patch to make the v0.3.1 tag CI run actually
   green.
+- `cargo fmt` applied to `src/main.rs`, `src/cmd/gui_schema.rs`,
+  and `tests/gui_schema.rs` — additional pre-existing formatting
+  drift that v0.3.0's tag CI flagged via the `Rustfmt` step. The
+  formatter's own output; same release-hygiene rationale as the
+  clippy fold above.
 
 ## [0.3.0] — 2026-05-12
 
