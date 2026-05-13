@@ -51,6 +51,16 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Tier:** `cross-repo`
 - **Companion:** `mnemonic-toolkit/design/FOLLOWUPS.md`, `descriptor-mnemonic/design/FOLLOWUPS.md`, `mnemonic-secret/design/FOLLOWUPS.md` — same `bip-vector-adoption-v0_8` short-id in each.
 
+### `md-mk-private-key-surface-watch` — reopen md/mk Cycle A participation if this repo grows a private-key surface
+
+- **Surfaced:** 2026-05-13, v0.9.0 Cycle A Phase 0 R3 architect-review I-R3-4 fold (drop md/mk symmetry-stubs); opened as a standalone tracker entry per Phase 3 hygiene-matrix R1 (Opus, finding C-1). SPEC §3 `OOS-md-mk` class. Primary tracker entry in `mnemonic-toolkit/design/FOLLOWUPS.md`.
+- **Where:** This repo (`mk-codec` + `mk-cli`). Currently holds xpub / wallet-key material only — no private-key buffer.
+- **What:** v0.9.0 Cycle A's secret-memory hygiene work (toolkit + ms repos; tags `mnemonic-toolkit-v0.9.2`, `ms-codec-v0.1.3`, `ms-cli-v0.2.2`, shipped 2026-05-13) dropped the no-scope-symmetry matrix stubs originally planned for md/mk repos because they have no secret material to audit. If this repo later gains a private-key surface (e.g., a future mk-codec xprv passthrough), this FOLLOWUP fires and Cycle A's hygiene discipline (Zeroizing + SAFETY anchors + matrix delta) reopens for mk.
+- **Why deferred:** No secret material to audit today.
+- **Status:** `open` (monitoring)
+- **Tier:** `cross-repo`
+- **Companion:** `mnemonic-toolkit/design/FOLLOWUPS.md` (primary tracker), `descriptor-mnemonic/design/FOLLOWUPS.md`, `mnemonic-secret/design/FOLLOWUPS.md` — same `md-mk-private-key-surface-watch` short-id.
+
 ### `manual-cli-surface-mirror` — `mk-codec` public-API changes must mirror to the toolkit-side user manual
 
 - **Surfaced:** 2026-05-07, m-format-star user manual v0.1 release in `bg002h/mnemonic-toolkit` (`manual-v0.1.0` tag; toolkit PR #1).
