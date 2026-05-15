@@ -1,6 +1,6 @@
 [package]
 name = "mk-codec"
-version = "0.2.2"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ workspace = true
 
 [features]
 # Gates the optional `gen_mk_vectors` binary that emits the canonical
-# vector corpus to `crates/mk-codec/tests/vectors/v0.1.json`. Off by
+# vector corpus to `crates/mk-codec/src/test_vectors/v0.1.json`. Off by
 # default so library consumers don't pull in serde / serde_json /
 # sha2 transitively. Enable with `cargo run --bin gen_mk_vectors --features gen-vectors`.
 gen-vectors = ["dep:serde_json"]

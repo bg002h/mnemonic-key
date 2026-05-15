@@ -1013,7 +1013,7 @@ mod tests {
 
     // (mk1-specific pinned-checksum vectors are deferred to Phase 6 vector
     // corpus generation, which writes both regular- and long-code conformance
-    // points to disk under `crates/mk-codec/tests/vectors/v0.1.json`.
+    // points to disk under `crates/mk-codec/src/test_vectors/v0.1.json`.
     // Forking md-codec's pinned vectors verbatim would record the wrong
     // values: mk1's HRP and target constants both differ.)
 

@@ -3,7 +3,7 @@
 //! The output corpus carries the family token `crate::consts::GENERATOR_FAMILY`
 //! (`"mk-codec X.Y"` per closure Q-10), which rolls on minor-version
 //! bumps but not patches. The on-disk filename
-//! (`crates/mk-codec/tests/vectors/v0.1.json`) is intentionally stable
+//! (`crates/mk-codec/src/test_vectors/v0.1.json`) is intentionally stable
 //! across token rolls — see `tests/vectors.rs::VECTOR_FILE` for the
 //! filename-vs-family-token convention.
 //!
@@ -11,7 +11,7 @@
 //!
 //! ```text
 //! cargo run --bin gen_mk_vectors --features gen-vectors -- \
-//!   --output crates/mk-codec/tests/vectors/v0.1.json
+//!   --output crates/mk-codec/src/test_vectors/v0.1.json
 //! ```
 //!
 //! Cross-implementations validate against the JSON file's pinned
@@ -1072,7 +1072,7 @@ fn negative_fixture_to_value(name: &str, description: &str, input: &NegativeInpu
 }
 
 fn main() {
-    // Resolve --output (default: crates/mk-codec/tests/vectors/v0.1.json
+    // Resolve --output (default: crates/mk-codec/src/test_vectors/v0.1.json
     // relative to the workspace root, which is the cwd when run via cargo).
     let mut args = env::args().skip(1);
     let mut output_path: Option<PathBuf> = None;
@@ -1087,7 +1087,7 @@ fn main() {
         }
     }
     let output_path =
-        output_path.unwrap_or_else(|| PathBuf::from("crates/mk-codec/tests/vectors/v0.1.json"));
+        output_path.unwrap_or_else(|| PathBuf::from("crates/mk-codec/src/test_vectors/v0.1.json"));
 
     let vectors_json: Vec<Value> = fixtures().iter().map(fixture_to_value).collect();
     let document = json!({

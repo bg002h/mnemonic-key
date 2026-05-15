@@ -10,7 +10,7 @@ use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use bitcoin::hashes::{Hash, sha256};
 use mk_codec::KeyCard;
 
-/// Canonical V1 fixture from `crates/mk-codec/tests/vectors/v0.1.json`.
+/// Canonical V1 fixture from `crates/mk-codec/src/test_vectors/v0.1.json`.
 const V1_XPUB: &str = "xpub6Den8YwXbKQvkwukmx7Uukicw4qDgMEPuuUkhMp3Rn557YSN2uVQnCMQNSfgDtennU9nES3Wbbmz1LAPBydhNpED8NU4mf1SFF41hM7vFrc";
 const V1_FP_HEX: &str = "aabbccdd";
 const V1_PATH: &str = "m/48'/0'/0'/2'";

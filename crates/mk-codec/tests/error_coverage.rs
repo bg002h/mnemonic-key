@@ -1,5 +1,5 @@
 //! Exhaustiveness gate: every `mk_codec::Error` variant must have at least
-//! one negative vector in `tests/vectors/v0.1.json` whose `expected_error`
+//! one negative vector in `src/test_vectors/v0.1.json` whose `expected_error`
 //! field's rendered `Display` rendering starts with the variant's
 //! documented prefix.
 //!
@@ -18,7 +18,7 @@
 //!
 //! When a new `Error` variant is added to `crates/mk-codec/src/error.rs`:
 //!  1. Add a matching entry to [`ErrorVariantName`] below.
-//!  2. Either add a negative vector to `tests/vectors/v0.1.json` exercising
+//!  2. Either add a negative vector to `src/test_vectors/v0.1.json` exercising
 //!     the variant, or extend [`is_exempt`] with the variant's name plus
 //!     a one-line rationale (encoder-only, structurally unreachable, …).
 //!
@@ -123,11 +123,11 @@ fn is_exempt(variant: &ErrorVariantName) -> Option<&'static str> {
     }
 }
 
-const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
+const VECTOR_FILE: &str = "src/test_vectors/v0.1.json";
 
 fn read_corpus() -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(VECTOR_FILE);
-    let bytes = fs::read(&path).expect("read tests/vectors/v0.1.json");
+    let bytes = fs::read(&path).expect("read src/test_vectors/v0.1.json");
     serde_json::from_slice(&bytes).expect("parse vectors JSON")
 }
 
@@ -175,7 +175,7 @@ fn every_error_variant_is_exercised_or_explicitly_exempt() {
         missing.is_empty(),
         "negative-vector parity gap — the following Error variants have no \
          corpus vector pinning a matching `expected_error` prefix:\n  {}\n\n\
-         To resolve: either add a negative vector to tests/vectors/v0.1.json \
+         To resolve: either add a negative vector to src/test_vectors/v0.1.json \
          (regenerate via gen_mk_vectors), or add the variant to is_exempt() \
          in this file with a one-line rationale.",
         missing.join("\n  ")

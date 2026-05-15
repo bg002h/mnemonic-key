@@ -39,6 +39,7 @@ pub mod consts;
 pub mod error;
 pub mod key_card;
 pub mod string_layer;
+pub mod test_vectors;
 
 pub use consts::{
     CHUNKED_FRAGMENT_LONG_BYTES, CHUNKED_FRAGMENT_REGULAR_BYTES, CROSS_CHUNK_HASH_BYTES,

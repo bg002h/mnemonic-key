@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "mk-cli"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_cmd",
  "bitcoin",
@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "mk-codec"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "bech32",
  "bitcoin",

@@ -1,6 +1,6 @@
 //! Vector-corpus integration tests.
 //!
-//! Walks `crates/mk-codec/tests/vectors/v0.1.json` (the canonical
+//! Walks `crates/mk-codec/src/test_vectors/v0.1.json` (the canonical
 //! conformance corpus emitted by `cargo run --bin gen_mk_vectors --features gen-vectors`)
 //! and asserts byte-equal round-trip equality for every vector:
 //!
@@ -24,13 +24,13 @@ use mk_codec::{KeyCard, bytecode::encode_bytecode, decode, encode_with_chunk_set
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-/// Pinned SHA-256 of `crates/mk-codec/tests/vectors/v0.1.json`.
+/// Pinned SHA-256 of `crates/mk-codec/src/test_vectors/v0.1.json`.
 ///
 /// Update via:
 ///
 /// ```text
 /// cargo run --bin gen_mk_vectors --features gen-vectors
-/// sha256sum crates/mk-codec/tests/vectors/v0.1.json
+/// sha256sum crates/mk-codec/src/test_vectors/v0.1.json
 /// # paste the hex into V0_1_SHA256
 /// ```
 ///
@@ -52,14 +52,14 @@ const V0_1_SHA256: &str = "ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e
 /// `family_token: "mk-codec 0.2"` while still living at this path;
 /// v0.1.x corpora carried `"mk-codec 0.1"` at the same path. md-codec
 /// follows the same convention for its own vector file.
-const VECTOR_FILE: &str = "tests/vectors/v0.1.json";
+const VECTOR_FILE: &str = "src/test_vectors/v0.1.json";
 
 fn vector_file_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(VECTOR_FILE)
 }
 
 fn read_vector_file() -> Vec<u8> {
-    fs::read(vector_file_path()).expect("read tests/vectors/v0.1.json")
+    fs::read(vector_file_path()).expect("read src/test_vectors/v0.1.json")
 }
 
 fn parse_hex(s: &str) -> Vec<u8> {
@@ -111,7 +111,7 @@ fn vector_file_sha256_matches_pin() {
     let actual = hex::encode(digest);
     assert_eq!(
         actual, V0_1_SHA256,
-        "tests/vectors/v0.1.json SHA-256 drifted; if intended, regenerate via \
+        "src/test_vectors/v0.1.json SHA-256 drifted; if intended, regenerate via \
          `cargo run --bin gen_mk_vectors --features gen-vectors` and update \
          `V0_1_SHA256` in tests/vectors.rs"
     );
