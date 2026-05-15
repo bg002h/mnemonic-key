@@ -48,9 +48,9 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Where:** `crates/mk-cli/src/cmd/vectors.rs:15` (`include_str!("v0.1.json")`) + `crates/mk-cli/src/cmd/v0.1.json` (34KB; working copy of the canonical mk-codec test fixture).
 - **What:** The SHA-pinned v0.1 `mk-codec` test-vector corpus (SPEC §3.5.5) is duplicated in two locations: the canonical at `crates/mk-codec/tests/vectors/v0.1.json` (mk-codec's own tests consume this) and the working copy at `crates/mk-cli/src/cmd/v0.1.json` (mk-cli's `mk vectors` subcommand `include_str!`s this at compile time). When the corpus changes, both copies must sync manually; no compile-time or CI gate verifies byte-equality today.
 - **Why deferred:** Quick crates.io publishability fix at commit `135651f`. Proper fixes require coordinated re-publish: (a) factor into `mk-codec` public API as a feature-gated `pub const VECTORS_V0_1_JSON: &str = ...`, then bump mk-codec + mk-cli; OR (b) feature-gate the `mk vectors` subcommand off by default in published `mk-cli` builds (matching the existing `gen-vectors` feature precedent in `mk-codec/Cargo.toml` for `gen_mk_vectors`).
-- **Status:** `open`
+- **Status:** `resolved 33f2ca2` — mk-codec 0.3.0 promotes the corpus to `pub mod test_vectors::V0_1_JSON` (canonical file moved to `crates/mk-codec/src/test_vectors/v0.1.json`); mk-cli 0.3.2 re-imports the const, dropping the 34KB working copy. Both crates published to crates.io 2026-05-15.
 - **Tier:** `v1+`
-- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` entry `md-cli-vectors-manifest-inlined` — same pattern in the md-cli side.
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` entry `md-cli-vectors-manifest-inlined` — same pattern in the md-cli side; resolved at descriptor-mnemonic commit `8a52bed` (md-codec 0.33.0 + md-cli 0.5.1).
 
 ### `bip-vector-adoption-v0_8` — cross-repo cycle: BIP-vector adoption v0.8.0 (no-scope companion)
 
