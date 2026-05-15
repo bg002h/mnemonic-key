@@ -42,6 +42,16 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `mk-cli-vector-corpus-inlined` — `crates/mk-cli/src/cmd/v0.1.json` is a working copy of `crates/mk-codec/tests/vectors/v0.1.json`
+
+- **Surfaced:** v0.3 `mnemonic-gui` cycle crates.io publish round 2026-05-15. `mk-cli` `cargo publish --dry-run` rejected `include_str!("../../../mk-codec/tests/vectors/v0.1.json")` per cargo's "published package is self-contained" rule (the .crate tarball cannot reach outside the package dir).
+- **Where:** `crates/mk-cli/src/cmd/vectors.rs:15` (`include_str!("v0.1.json")`) + `crates/mk-cli/src/cmd/v0.1.json` (34KB; working copy of the canonical mk-codec test fixture).
+- **What:** The SHA-pinned v0.1 `mk-codec` test-vector corpus (SPEC §3.5.5) is duplicated in two locations: the canonical at `crates/mk-codec/tests/vectors/v0.1.json` (mk-codec's own tests consume this) and the working copy at `crates/mk-cli/src/cmd/v0.1.json` (mk-cli's `mk vectors` subcommand `include_str!`s this at compile time). When the corpus changes, both copies must sync manually; no compile-time or CI gate verifies byte-equality today.
+- **Why deferred:** Quick crates.io publishability fix at commit `135651f`. Proper fixes require coordinated re-publish: (a) factor into `mk-codec` public API as a feature-gated `pub const VECTORS_V0_1_JSON: &str = ...`, then bump mk-codec + mk-cli; OR (b) feature-gate the `mk vectors` subcommand off by default in published `mk-cli` builds (matching the existing `gen-vectors` feature precedent in `mk-codec/Cargo.toml` for `gen_mk_vectors`).
+- **Status:** `open`
+- **Tier:** `v1+`
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` entry `md-cli-vectors-manifest-inlined` — same pattern in the md-cli side.
+
 ### `bip-vector-adoption-v0_8` — cross-repo cycle: BIP-vector adoption v0.8.0 (no-scope companion)
 
 - **Surfaced:** 2026-05-13. Cycle SPEC at `mnemonic-toolkit/design/SPEC_test_vector_audit_v0_8_0.md`. Plan at `/home/bcg/.claude/plans/v0_8_0-bip-vector-adoption.md`. R1 review at `mnemonic-toolkit/design/agent-reports/v0_8_0-phase-0-spec-plan-r1.md`.
