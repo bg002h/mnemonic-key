@@ -1,9 +1,13 @@
 //! `mk vectors` — emit the SHA-pinned v0.1 mk-codec test-vector corpus.
 //!
 //! Realizes SPEC §3.5.5. The corpus JSON is `include_str!`-baked at compile
-//! time from `crates/mk-codec/tests/vectors/v0.1.json` (a sibling-crate path
-//! resolved at build time). Runtime requires no fixture-path access — `cargo
-//! install --path crates/mk-cli` produces a fully self-contained binary.
+//! time from `src/cmd/v0.1.json`, a working copy of
+//! `crates/mk-codec/tests/vectors/v0.1.json` maintained in this crate for
+//! crates.io-publishability (cargo publish refuses out-of-package
+//! `include_str!` paths). Sync the two copies when the canonical corpus
+//! changes; FOLLOWUP candidate: factor into a shared module on mk-codec's
+//! public API. Runtime requires no fixture-path access — `cargo install
+//! mk-cli` produces a fully self-contained binary.
 
 use std::path::PathBuf;
 
@@ -12,7 +16,7 @@ use serde_json::Value;
 
 use crate::error::{CliError, Result};
 
-const VECTORS_V0_1_JSON: &str = include_str!("../../../mk-codec/tests/vectors/v0.1.json");
+const VECTORS_V0_1_JSON: &str = include_str!("v0.1.json");
 
 /// `mk vectors` arguments.
 #[derive(Args, Debug)]
