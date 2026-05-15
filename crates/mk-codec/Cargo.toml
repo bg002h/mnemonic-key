@@ -6,6 +6,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Reference implementation of the Mnemonic Key (MK) backup format for engravable BIP 32 xpub backups"
+homepage = "https://github.com/bg002h/mnemonic-key"
+documentation = "https://docs.rs/mk-codec"
+readme = "README.md"
+keywords = ["bitcoin", "bip32", "xpub", "backup", "engraving"]
+categories = ["cryptography::cryptocurrencies", "encoding"]
 
 [lints]
 workspace = true

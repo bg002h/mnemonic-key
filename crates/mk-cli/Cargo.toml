@@ -6,13 +6,21 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Standalone CLI for mk1 (mnemonic-key) plate handling — encode, decode, inspect, verify, vectors, gui-schema."
+homepage = "https://github.com/bg002h/mnemonic-key"
+documentation = "https://docs.rs/mk-cli"
+readme = "README.md"
+keywords = ["bitcoin", "bip32", "xpub", "cli", "engraving"]
+categories = ["cryptography::cryptocurrencies", "command-line-utilities"]
 
 [[bin]]
 name = "mk"
 path = "src/main.rs"
 
 [dependencies]
-mk-codec = { path = "../mk-codec" }
+mk-codec = { path = "../mk-codec", version = "0.2.2" }
+# v0.3 pre-publish: still git+tag until md-codec ships to crates.io.
+# Post-md-codec-publish, this becomes `md-codec = "X.Y.Z"` (verify API
+# compat — skew from 0.16 to current 0.32 is meaningful).
 md-codec = { git = "https://github.com/bg002h/descriptor-mnemonic", tag = "md-codec-v0.16.2" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
