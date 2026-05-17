@@ -514,7 +514,10 @@ fn forney(
 /// `magnitudes[k]` is a `GF(32)` symbol that must be XORed into
 /// `data_with_checksum[positions[k]]` to repair the codeword. Returns
 /// `None` if the pattern is uncorrectable.
-pub(super) fn decode_regular_errors(
+// v0.3.1: promoted from `pub(super)` so downstream consumers (toolkit
+// `repair` feature) can compute corrections for ms / md HRPs using their
+// own target-residue constants (all 3 share the BIP-93 BCH(93,80,8) code).
+pub fn decode_regular_errors(
     residue_xor_const: u128,
     data_with_checksum_len: usize,
 ) -> Option<(Vec<usize>, Vec<Gf32>)> {
@@ -528,7 +531,10 @@ pub(super) fn decode_regular_errors(
 }
 
 /// Long-code analog of [`decode_regular_errors`].
-pub(super) fn decode_long_errors(
+///
+/// v0.3.1: promoted from `pub(super)` for downstream-consumer access (see
+/// `decode_regular_errors` docs).
+pub fn decode_long_errors(
     residue_xor_const: u128,
     data_with_checksum_len: usize,
 ) -> Option<(Vec<usize>, Vec<Gf32>)> {

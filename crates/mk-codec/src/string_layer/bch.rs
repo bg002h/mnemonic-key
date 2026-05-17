@@ -265,11 +265,13 @@ pub fn hrp_expand(hrp: &str) -> Vec<u8> {
 /// Run polymod over a sequence of 5-bit values using the parameters for
 /// either the regular or long BCH code, starting from POLYMOD_INIT.
 ///
-/// `pub(in crate::string_layer)` so the sibling `bch_decode` module's test
-/// suite can validate field arithmetic against the production primitive
-/// without duplicating it (test-helper drift would otherwise mask real
-/// regressions when both copies agree on a bug).
-pub(in crate::string_layer) fn polymod_run(
+/// v0.3.1: promoted from `pub(in crate::string_layer)` to `pub` so
+/// downstream consumers (toolkit `repair` feature) can compute polymod
+/// residues against ms / md / mk target constants (all 3 share the
+/// BIP-93 BCH(93,80,8) generator). Test-helper-drift concern remains
+/// resolved by the sibling `bch_decode` module using THIS function
+/// directly rather than re-implementing.
+pub fn polymod_run(
     values: &[u8],
     r#gen: &[u128; 5],
     shift: u32,

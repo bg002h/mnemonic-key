@@ -20,7 +20,10 @@
 //! / [`decode`]) are the layer-3 boundary; `crate::key_card` re-exports them.
 
 pub mod bch;
-pub(crate) mod bch_decode;
+// v0.3.1: promoted from `pub(crate)` so downstream consumers (toolkit
+// `repair` feature) can call `decode_regular_errors` / `decode_long_errors`
+// for non-mk HRPs (ms, md — all 3 share the BIP-93 BCH(93,80,8) generator).
+pub mod bch_decode;
 pub mod chunk;
 pub mod header;
 
