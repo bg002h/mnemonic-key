@@ -42,6 +42,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `mk-cli-repair-flag` — `mk repair` subcommand mirroring toolkit's `mnemonic repair`
+
+- **Surfaced:** 2026-05-17, mnemonic-toolkit v0.22.0 brainstorm.
+- **Where:** `crates/mk-cli/src/cmd/` (NEW subcommand).
+- **What:** Add `mk repair <mk1>...` for mk1 BCH error-correction (regular + long codes via the already-public `mk_codec::string_layer::bch_decode::{decode_regular_errors, decode_long_errors}` per v0.3.1). Mirrors toolkit's `mnemonic repair --mk1`. Note: `mk_codec::decode` already does internal BCH correction within the same t=4 capacity, so this is primarily a UX-parity feature (explicit-fix-with-report vs silent-fix-during-decode) rather than a new capability.
+- **Status:** open (unblocked — primitives already public per `mk-codec-v0.3.1` lockstep release `88bdb29`)
+- **Tier:** `cross-repo`
+- **Companion:** `bg002h/mnemonic-toolkit` FOLLOWUPS.md `mk-cli-repair-flag`
+
 ### `mk-cli-vector-corpus-inlined` — `crates/mk-cli/src/cmd/v0.1.json` is a working copy of `crates/mk-codec/tests/vectors/v0.1.json`
 
 - **Surfaced:** v0.3 `mnemonic-gui` cycle crates.io publish round 2026-05-15. `mk-cli` `cargo publish --dry-run` rejected `include_str!("../../../mk-codec/tests/vectors/v0.1.json")` per cargo's "published package is self-contained" rule (the .crate tarball cannot reach outside the package dir).
