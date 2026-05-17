@@ -47,9 +47,18 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Surfaced:** 2026-05-17, mnemonic-toolkit v0.22.0 brainstorm.
 - **Where:** `crates/mk-cli/src/cmd/` (NEW subcommand).
 - **What:** Add `mk repair <mk1>...` for mk1 BCH error-correction (regular + long codes via the already-public `mk_codec::string_layer::bch_decode::{decode_regular_errors, decode_long_errors}` per v0.3.1). Mirrors toolkit's `mnemonic repair --mk1`. Note: `mk_codec::decode` already does internal BCH correction within the same t=4 capacity, so this is primarily a UX-parity feature (explicit-fix-with-report vs silent-fix-during-decode) rather than a new capability.
-- **Status:** open (unblocked — primitives already public per `mk-codec-v0.3.1` lockstep release `88bdb29`)
+- **Status:** `resolved 0ecbf1a` — `mk-cli-v0.4.0` (mnemonic-toolkit v0.22.x follow-ups cycle Phase A.3'; plan `/home/bcg/.claude/plans/nifty-wiggling-gosling.md` §2.A.2). New `cmd/repair.rs` consumes `mk_codec::string_layer::decode_string` (already-public BCH primitive) and surfaces `DecodedString` (`code`/`corrections_applied`/`corrected_positions`/`corrected_char_at`); exit 5 = REPAIR_APPLIED per D26; JSON envelope byte-matches toolkit's `RepairJson` schema per D27. 7 new integration cells in `tests/cli_repair.rs`. D25 handler-signature cascade (6 handlers `Result<()> → Result<u8>`) ships in the same release commit.
+- **Resolution:** `0ecbf1a` (this repo) + cross-repo lockstep on `bg002h/mnemonic-toolkit` master (install.sh pin bump + manual chapter `## mk repair` section + companion FOLLOWUP closure) shipping concurrently.
 - **Tier:** `cross-repo`
-- **Companion:** `bg002h/mnemonic-toolkit` FOLLOWUPS.md `mk-cli-repair-flag`
+- **Companion:** `bg002h/mnemonic-toolkit` FOLLOWUPS.md `mk-cli-repair-flag` — closed lockstep at the cross-repo `docs(release)` commit on toolkit master.
+
+### `from-md1-derivation-wire-version-skew` — `mk-cli/tests/round_trip.rs:45` `from_md1_derivation` fails `WireVersionMismatch { got: 0 }`
+
+- **Filed:** 2026-05-17 (during v0.22.x follow-ups cycle Phase A.1' execution)
+- **Status:** unresolved
+- **Severity:** low (pre-existing failure on pristine main; predates this cycle)
+- **Body:** the `from_md1_derivation` integration cell at `crates/mk-cli/tests/round_trip.rs:45` decodes an md1 fixture and fails with `WireVersionMismatch { got: 0 }` — the md1 fixture appears to have been authored against a pre-`mk-codec`/`md-codec` wire-version bump and was not refreshed. Cell has been failing silently for at least 3 release cycles. Fix: regenerate the md1 fixture against current md-codec, OR `#[ignore]`-gate the cell until a fresh fixture is available, OR delete the cell if md1-derivation is not in mk-cli's scope.
+- **Surfaced by:** mnemonic-toolkit v0.22.x follow-ups cycle Phase A.1' (D25 handler-signature cascade). The cell was untouched by D25 but its failure became visible against the freshly-bumped Cargo.toml.
 
 ### `mk-cli-vector-corpus-inlined` — `crates/mk-cli/src/cmd/v0.1.json` is a working copy of `crates/mk-codec/tests/vectors/v0.1.json`
 
