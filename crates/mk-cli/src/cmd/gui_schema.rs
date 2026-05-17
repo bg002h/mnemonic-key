@@ -35,13 +35,13 @@ use crate::error::{CliError, Result};
 pub struct GuiSchemaArgs {}
 
 /// Run `mk gui-schema`.
-pub fn run(_args: GuiSchemaArgs) -> Result<()> {
+pub fn run(_args: GuiSchemaArgs) -> Result<u8> {
     let cmd = crate::Cli::command();
     let schema = build_schema(&cmd);
     let s = serde_json::to_string(&schema)
         .map_err(|e| CliError::UsageError(format!("gui-schema serialize: {e}")))?;
     println!("{s}");
-    Ok(())
+    Ok(0)
 }
 
 #[derive(Serialize)]

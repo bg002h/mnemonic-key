@@ -21,7 +21,7 @@ pub struct DecodeArgs {
 }
 
 /// Run `mk decode`.
-pub fn run(args: DecodeArgs) -> Result<()> {
+pub fn run(args: DecodeArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings)?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
@@ -35,7 +35,7 @@ pub fn run(args: DecodeArgs) -> Result<()> {
     } else {
         emit_text(&card, strings.len(), variant);
     }
-    Ok(())
+    Ok(0)
 }
 
 fn emit_text(card: &KeyCard, chunks: usize, variant: &str) {

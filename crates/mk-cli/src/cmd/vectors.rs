@@ -30,9 +30,9 @@ pub struct VectorsArgs {
 }
 
 /// Run `mk vectors`.
-pub fn run(args: VectorsArgs) -> Result<()> {
+pub fn run(args: VectorsArgs) -> Result<u8> {
     if let Some(dir) = args.out {
-        return write_per_fixture_files(dir, args.pretty);
+        return write_per_fixture_files(dir, args.pretty).map(|()| 0);
     }
 
     if args.pretty {
@@ -47,7 +47,7 @@ pub fn run(args: VectorsArgs) -> Result<()> {
             println!();
         }
     }
-    Ok(())
+    Ok(0)
 }
 
 fn write_per_fixture_files(dir: PathBuf, pretty: bool) -> Result<()> {

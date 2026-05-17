@@ -54,7 +54,7 @@ pub struct EncodeArgs {
 }
 
 /// Run `mk encode`.
-pub fn run(args: EncodeArgs) -> Result<()> {
+pub fn run(args: EncodeArgs) -> Result<u8> {
     if args.privacy_preserving && args.origin_fingerprint.is_some() {
         return Err(CliError::UsageError(
             "--privacy-preserving and --origin-fingerprint are mutually exclusive".into(),
@@ -94,7 +94,7 @@ pub fn run(args: EncodeArgs) -> Result<()> {
             println!("{s}");
         }
     }
-    Ok(())
+    Ok(0)
 }
 
 fn emit_json(strings: &[String]) -> Result<()> {

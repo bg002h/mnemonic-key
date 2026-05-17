@@ -44,7 +44,7 @@ pub struct VerifyArgs {
 }
 
 /// Run `mk verify`.
-pub fn run(args: VerifyArgs) -> Result<()> {
+pub fn run(args: VerifyArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings)?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
@@ -110,7 +110,7 @@ pub fn run(args: VerifyArgs) -> Result<()> {
     }
 
     emit_ok(&card, &strings, args.json)?;
-    Ok(())
+    Ok(0)
 }
 
 fn emit_ok(card: &KeyCard, strings: &[String], json_mode: bool) -> Result<()> {

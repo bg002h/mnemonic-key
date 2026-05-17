@@ -1,6 +1,6 @@
 [package]
 name = "mk-cli"
-version = "0.3.2"
+version = "0.4.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ name = "mk"
 path = "src/main.rs"
 
 [dependencies]
-mk-codec = { path = "../mk-codec", version = "0.3.0" }
+mk-codec = { path = "../mk-codec", version = "0.3.1" }
 # v0.3 cycle: flipped from git+tag (md-codec-v0.16.2) to crates.io
 # version after md-codec 0.32.1 shipped to crates.io. API skew from
 # 0.16 to 0.32 may require source updates in this crate; verify build

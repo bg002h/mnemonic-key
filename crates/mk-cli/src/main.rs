@@ -42,6 +42,8 @@ enum Command {
     Vectors(cmd::vectors::VectorsArgs),
     /// Emit machine-readable JSON describing the CLI surface (for mnemonic-gui).
     GuiSchema(cmd::gui_schema::GuiSchemaArgs),
+    /// Repair mk1 strings via BCH error correction (exit 5 = REPAIR_APPLIED).
+    Repair(cmd::repair::RepairArgs),
 }
 
 fn main() -> ExitCode {
@@ -65,17 +67,18 @@ fn main() -> ExitCode {
 
     let json_mode = is_json_mode(&cli.command);
 
-    let result: Result<()> = match cli.command {
+    let result: Result<u8> = match cli.command {
         Command::Encode(a) => cmd::encode::run(a),
         Command::Decode(a) => cmd::decode::run(a),
         Command::Inspect(a) => cmd::inspect::run(a),
         Command::Verify(a) => cmd::verify::run(a),
         Command::Vectors(a) => cmd::vectors::run(a),
         Command::GuiSchema(a) => cmd::gui_schema::run(a),
+        Command::Repair(a) => cmd::repair::run(a),
     };
 
     match result {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => ExitCode::from(code),
         Err(e) => {
             emit_error(&e, json_mode);
             ExitCode::from(e.exit_code())
@@ -91,6 +94,7 @@ fn is_json_mode(cmd: &Command) -> bool {
         Command::Verify(a) => a.json,
         Command::Vectors(_) => false,
         Command::GuiSchema(_) => false,
+        Command::Repair(a) => a.json,
     }
 }
 

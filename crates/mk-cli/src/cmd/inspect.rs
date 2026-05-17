@@ -25,7 +25,7 @@ pub struct InspectArgs {
 }
 
 /// Run `mk inspect`.
-pub fn run(args: InspectArgs) -> Result<()> {
+pub fn run(args: InspectArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings)?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
@@ -37,7 +37,7 @@ pub fn run(args: InspectArgs) -> Result<()> {
     } else {
         emit_text(&card, &strings, &per_chunk_variants);
     }
-    Ok(())
+    Ok(0)
 }
 
 fn xpub_fingerprint_hex(card: &KeyCard) -> String {
