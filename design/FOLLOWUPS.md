@@ -55,7 +55,7 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 ### `from-md1-derivation-wire-version-skew` — `mk-cli/tests/round_trip.rs:45` `from_md1_derivation` fails `WireVersionMismatch { got: 0 }`
 
 - **Filed:** 2026-05-17 (during v0.22.x follow-ups cycle Phase A.1' execution)
-- **Status:** unresolved
+- **Status:** RESOLVED in mk-cli-v0.4.1 — md-codec dep bumped 0.32.1→0.34.0 and fixture refreshed against md-codec v0.34.0's canonical `pkh_basic.phrase.txt` (`md1yqpqqxzq2qwfv8urt848e`, replacing pre-v0.18-wire-format `md1qqpqqxyepwspuepy268e`). `from_md1_derivation` now passes.
 - **Severity:** low (pre-existing failure on pristine main; predates this cycle)
 - **Body:** the `from_md1_derivation` integration cell at `crates/mk-cli/tests/round_trip.rs:45` decodes an md1 fixture and fails with `WireVersionMismatch { got: 0 }` — the md1 fixture appears to have been authored against a pre-`mk-codec`/`md-codec` wire-version bump and was not refreshed. Cell has been failing silently for at least 3 release cycles. Fix: regenerate the md1 fixture against current md-codec, OR `#[ignore]`-gate the cell until a fresh fixture is available, OR delete the cell if md1-derivation is not in mk-cli's scope.
 - **Surfaced by:** mnemonic-toolkit v0.22.x follow-ups cycle Phase A.1' (D25 handler-signature cascade). The cell was untouched by D25 but its failure became visible against the freshly-bumped Cargo.toml.

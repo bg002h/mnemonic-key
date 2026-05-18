@@ -7,6 +7,34 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-05-17
+
+Patch release closing `from-md1-derivation-wire-version-skew` (filed
+during v0.22.x follow-ups cycle Phase A.1' execution). Standalone
+patch — no sibling lockstep.
+
+### Changed
+
+- `crates/mk-cli/Cargo.toml`: `md-codec` dep `=0.32.1` → `=0.34.0` (two
+  minor-version jump; stale pin from before the v0.18+ wire-format
+  release cycle).
+- `crates/mk-cli/tests/round_trip.rs`: `PKH_BASIC_MD1` const refreshed
+  from pre-v0.18 wire-format `md1qqpqqxyepwspuepy268e` to v0.34.0
+  canonical `md1yqpqqxzq2qwfv8urt848e` (byte-exact with md-codec
+  v0.34.0's `tests/vectors/pkh_basic.phrase.txt`).
+
+### Fixed
+
+- `from_md1_derivation` integration cell (`tests/round_trip.rs:45`)
+  previously failed `WireVersionMismatch { got: 0 }` against any
+  md-codec ≥ v0.18 — the fixture had not been refreshed since v0.17.
+  Now passes against md-codec v0.34.0.
+
+### Resolved (FOLLOWUPS)
+
+- `from-md1-derivation-wire-version-skew` — fixture refresh + dep
+  bump documented above.
+
 ## [0.3.1] — 2026-05-12
 
 ### Fixed

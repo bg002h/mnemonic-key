@@ -17,7 +17,8 @@ const V1_PATH: &str = "m/48'/0'/0'/2'";
 
 /// Canonical md1 string from descriptor-mnemonic's pkh_basic.phrase.txt.
 /// Used for the `--from-md1` derivation test.
-const PKH_BASIC_MD1: &str = "md1qqpqqxyepwspuepy268e";
+/// Refreshed in mk-cli-v0.4.1 against md-codec v0.34.0 (v0.18+ wire-format).
+const PKH_BASIC_MD1: &str = "md1yqpqqxzq2qwfv8urt848e";
 
 #[test]
 fn encode_decode_round_trip() {
