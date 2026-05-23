@@ -505,12 +505,13 @@ dependencies = [
 
 [[package]]
 name = "mk-cli"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "assert_cmd",
  "bitcoin",
  "clap",
  "hex",
+ "libc",
  "md-codec",
  "mk-codec",
  "predicates",
