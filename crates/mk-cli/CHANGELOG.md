@@ -7,6 +7,10 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-05-23
+
+**SemVer-PATCH — process argv-hardening (`PR_SET_DUMPABLE`).** `mk` now calls `prctl(PR_SET_DUMPABLE, 0)` at the top of `main()` (Linux; no-op elsewhere), making `/proc/$PID/` unreadable to OTHER non-root UIDs and disabling core dumps — so a secret passed inline on argv can no longer be harvested by another user via `/proc/$PID/cmdline` or a core file. Residual same-UID window documented + accepted. New `process_hardening` module + `libc` dep. Part of the m-format constellation argv-hardening rollout (mnemonic-toolkit v0.34.7 + md-cli v0.6.1 + ms-cli v0.4.1). Tracked via the toolkit's `argv-overwrite-after-parse` FOLLOWUP closure.
+
 ## [0.4.1] — 2026-05-17
 
 Patch release closing `from-md1-derivation-wire-version-skew` (filed
