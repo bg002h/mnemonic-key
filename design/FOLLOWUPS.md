@@ -271,3 +271,22 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **What:** The `mnemonic-gui` GUI mirrors this CLI's clap-derive flag surface at pinned tag `mk-cli-v0.2.0`. Any flag add / remove / rename / `conflicts_with` / `required_unless_present_any` change in this repo's CLI surface must land in lockstep with a companion `mnemonic-gui` PR that bumps the schema + the `pinned-upstream.toml` tag for this CLI. The `mnemonic-gui` CI gate runs `cargo install --locked --git <this-repo> --tag <pin>` + `cargo test --test schema_mirror`, so drift surfaces as a CI failure.
 - **Status:** `open` (mirror-invariant; tracking only — every flag-surface PR carries this lockstep work).
 - **Tier:** `v1 / mirror-invariant`
+
+### `error-bchuncorrectable-doc-says-8-for-long` — `Error::BchUncorrectable` doc reads "8 for long" but both codes are t=4
+
+- **Surfaced:** 2026-05-29, mk-codec test-hardening cycle (theme 2 T2-doc).
+- **Where:** `crates/mk-codec/src/error.rs:56` — `/// substitution capacity (4 for regular, 8 for long).`
+- **What:** The parenthetical reads as a correction count, but the long code `BCH(108,93,8)` has `t = 4` (the `8` is the designed minimum distance / syndrome count). Both regular and long correct up to 4 substitutions (`string_layer/bch.rs:376,451`; `bch_decode.rs:566` rejects `deg > 4`). Reword to "(t = 4 for both; the trailing 8 in BCH(•,•,8) is the min-distance, not the correction count)".
+- **Why deferred:** doc-only; no behavior impact. Fold into any error-surface touch.
+- **Status:** `open`
+- **Tier:** `docs`
+
+### `mk1-depth-child-lossless-by-construction-unenforced` — encoder drops xpub.depth/child_number and reconstructs from path WITHOUT validating agreement
+
+- **Surfaced:** 2026-05-29, mk-codec test-hardening cycle (theme-1 strategy design; `design/SPEC_mk_codec_test_hardening.md` §1.1).
+- **Where:** `crates/mk-codec/src/bytecode/xpub_compact.rs:4` (drops depth/child), `:85-106` (`reconstruct_xpub` rebuilds them from `origin_path`), `bytecode/encode.rs` (`XpubCompact::from_xpub` silently drops). SPEC `design/SPEC_mk_v0_1.md:263,301` claims "lossless by construction" + removes `XpubDepthMismatch`.
+- **What:** The "lossless by construction" claim holds ONLY when the caller passes `xpub.depth == origin_path.len()` and `xpub.child_number == origin_path.last()`. Nothing enforces this; a depth-4 xpub + 3-component path silently round-trips to a DIFFERENT xpub. Decide: (a) re-introduce encode-time `XpubDepthMismatch` (genuinely lossless), OR (b) document the lossy contract + pin it with a test. The toolkit compensates downstream (`mnemonic-toolkit/crates/mnemonic-toolkit/src/synthesize.rs:494-503` depth check) — option (a) would let it drop that.
+- **Why deferred:** behavior/contract decision (likely MINOR bump + toolkit coordination), out of the test-only test-hardening cycle's scope. The cycle's theme-1 strategy sidesteps it by building the xpub from the path (depth/child consistent by construction).
+- **Status:** `open`
+- **Tier:** `v0.4`
+- **Companion:** `mnemonic-toolkit` FOLLOWUP `mk1-depth-child-compensating-check-watch`.
