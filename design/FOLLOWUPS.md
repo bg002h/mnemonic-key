@@ -290,3 +290,12 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open`
 - **Tier:** `v0.4`
 - **Companion:** `mnemonic-toolkit` FOLLOWUP `mk1-depth-child-compensating-check-watch`.
+
+### `rustfmt-drift-fn-signature-collapse-3-files` — current stable rustfmt collapses fn signatures that origin/main keeps multi-line (CI `fmt --check --all` latent failure)
+
+- **Surfaced:** 2026-05-29, mk-codec test-hardening cycle (Phase 3 verification).
+- **Where:** `crates/mk-cli/src/cmd/repair.rs:65`, `crates/mk-cli/tests/cli_repair.rs:366`, `crates/mk-codec/src/string_layer/bch.rs:271` (`polymod_run` signature). All on origin/main.
+- **What:** The repo is edition 2024. Current stable/nightly rustfmt collapses short multi-line fn signatures / call args to one line, but origin/main was last formatted with an older rustfmt that kept them multi-line. `cargo fmt --check --all` (CI `.github/workflows/ci.yml:60-61`) with a current `dtolnay/rust-toolchain@stable` therefore flags these 3 files — a latent CI-fmt failure that surfaces on the next push, NOT caused by any feature change. Fix: a one-shot `cargo fmt --all` chore commit (mechanical, no behavior change).
+- **Why deferred:** out of scope for the test-only mk-codec test-hardening cycle (touches production source); pre-existing repo-hygiene condition. The cycle's own new test files are edition-2024 fmt-clean.
+- **Status:** `open`
+- **Tier:** `ci-hygiene`
