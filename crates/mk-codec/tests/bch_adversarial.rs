@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 use bitcoin::bip32::{DerivationPath, Fingerprint};
 use common::{csid_strategy, flip_chars, keycard_strategy};
-use mk_codec::{KeyCard, decode, encode_with_chunk_set_id};
+use mk_codec::{Error, KeyCard, decode, encode_with_chunk_set_id};
 use proptest::prelude::*;
 
 /// Build a deterministic multi-chunk card large enough that `strings[0]` is a
@@ -179,4 +179,49 @@ proptest! {
         }
         // Err(_) => BchUncorrectable / CrossChunkHashMismatch — both legal
     }
+}
+
+#[test]
+fn t4_stub_count_boundary_255_roundtrip_256_reject() {
+    let path = DerivationPath::from_str("48'/0'/0'/2'").unwrap();
+    let secp = bitcoin::secp256k1::Secp256k1::new();
+    let sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x07u8; 32]).unwrap();
+    let pk = bitcoin::secp256k1::PublicKey::from_secret_key(&secp, &sk);
+    let comps: Vec<bitcoin::bip32::ChildNumber> = path.as_ref().to_vec();
+    let xpub = bitcoin::bip32::Xpub {
+        network: bitcoin::NetworkKind::Main,
+        depth: comps.len() as u8,
+        parent_fingerprint: Fingerprint::from([0x10, 0x20, 0x30, 0x40]),
+        child_number: *comps.last().unwrap(),
+        public_key: pk,
+        chain_code: bitcoin::bip32::ChainCode::from([0xCCu8; 32]),
+    };
+
+    // 255 stubs (the encoder's 1-byte stub_count max) — ~1100-byte bytecode ⇒
+    // a many-chunk (>2) real-card round-trip. 255 distinct 4-byte stubs.
+    let stubs_255: Vec<[u8; 4]> = (0..255u16)
+        .map(|i| [i as u8, (i >> 8) as u8, 0xAB, 0xCD])
+        .collect();
+    let card_255 = KeyCard::new(stubs_255, None, path.clone(), xpub);
+    let strings = encode_with_chunk_set_id(&card_255, 1).expect("255 stubs encodes");
+    assert!(
+        strings.len() > 2,
+        "255 stubs must produce a >2-chunk card; got {}",
+        strings.len()
+    );
+    let parts: Vec<&str> = strings.iter().map(String::as_str).collect();
+    assert_eq!(decode(&parts).expect("255-stub card decodes"), card_255);
+
+    // 256 stubs — over the 1-byte cap ⇒ encoder rejects.
+    let stubs_256: Vec<[u8; 4]> = (0..256u16)
+        .map(|i| [i as u8, (i >> 8) as u8, 0xAB, 0xCD])
+        .collect();
+    let card_256 = KeyCard::new(stubs_256, None, path, xpub);
+    assert!(
+        matches!(
+            encode_with_chunk_set_id(&card_256, 1),
+            Err(Error::InvalidPolicyIdStubCount)
+        ),
+        "256 stubs must be rejected with InvalidPolicyIdStubCount"
+    );
 }
