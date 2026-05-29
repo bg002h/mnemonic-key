@@ -65,8 +65,7 @@ pub fn run(args: RepairArgs) -> Result<u8> {
         // BCH-uncorrectable rejections surface as `mk_codec::Error` and
         // route to exit 2 via `CliError::Codec(_) => 2` in error.rs.
         let decoded = mk_codec::string_layer::decode_string(original)?;
-        let (corrected_chunk, corrected_positions) =
-            reconstruct_corrected(original, &decoded);
+        let (corrected_chunk, corrected_positions) = reconstruct_corrected(original, &decoded);
         reports.push(RepairDetail {
             chunk_index: idx,
             original_chunk: original.clone(),

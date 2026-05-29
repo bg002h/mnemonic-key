@@ -271,12 +271,7 @@ pub fn hrp_expand(hrp: &str) -> Vec<u8> {
 /// BIP-93 BCH(93,80,8) generator). Test-helper-drift concern remains
 /// resolved by the sibling `bch_decode` module using THIS function
 /// directly rather than re-implementing.
-pub fn polymod_run(
-    values: &[u8],
-    r#gen: &[u128; 5],
-    shift: u32,
-    mask: u128,
-) -> u128 {
+pub fn polymod_run(values: &[u8], r#gen: &[u128; 5], shift: u32, mask: u128) -> u128 {
     let mut residue = POLYMOD_INIT;
     for &v in values {
         residue = polymod_step(residue, v as u128, r#gen, shift, mask);

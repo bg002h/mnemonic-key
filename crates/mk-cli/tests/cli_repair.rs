@@ -366,8 +366,5 @@ fn repair_json_envelope_shape() {
     assert!(p0["now"].is_string(), "now must be a string");
     // The `was` character was at the corrupted-position; the `now` is the
     // restored char. They MUST differ.
-    assert_ne!(
-        p0["was"], p0["now"],
-        "was != now for a real correction"
-    );
+    assert_ne!(p0["was"], p0["now"], "was != now for a real correction");
 }
