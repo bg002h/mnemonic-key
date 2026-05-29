@@ -10,7 +10,7 @@
 
 **Source spec (R0-gate GREEN):** `design/SPEC_mk_codec_test_hardening.md`. **Branch:** `mk-codec-test-hardening` (off `main`). **Verified SHA:** `d9d2ed9`.
 
-**Plan-doc R0 gate:** RED 0C/2I/5M → folded (I1 data_part_len, I2 T3b mapping, M1/M2/M3) → R1 pending. Reviews: `design/agent-reports/mk-test-hardening-plan-R0-review.md`.
+**Plan-doc R0 gate: GREEN** (R0 RED 0C/2I/5M → folded I1/I2/M1/M2/M3 → R1 GREEN 0C/0I). Cleared for execution. Reviews: `design/agent-reports/mk-test-hardening-plan-R{0,1}-review.md`.
 
 ---
 
@@ -895,6 +895,6 @@ If no bug surfaced: commit any R0 folds, then the branch is ready to merge to `m
 
 **Spec coverage:** P1/P2 (§3 theme 1) → Task 0.3. T2a/T2b/T2c (§4 theme 2) → Tasks 1.1/1.2/1.3. T2-doc (§4) → Task 1.5. T3a/T3b (§5 theme 3) → Task 2.1. T4 255-stub boundary (§7) → Task 1.4. depth/child seam (§1.1) → Task 2.2. `proptest`+gitignore+`-D warnings` (§3/§6/§7) → Tasks 0.1/0.3. Branch/SemVer/bug-handling (§6) → Task 3.2. End-of-cycle R0 (§8) → Task 3.2. All spec sections mapped.
 
-**Placeholder scan:** every code step contains complete code. The two `(verify at impl)` notes (T3b trim target; rust-bitcoin API names) are explicitly-flagged deterministic-arithmetic / API-arity confirmations, not behavioral TBDs — the test intent is fixed.
+**Placeholder scan:** every code step contains complete code. The one `(verify at impl)` note (rust-bitcoin API names, Task 0.2 Step 2) is an explicitly-flagged API-arity confirmation, not a behavioral TBD — the test intent is fixed. (T3b's trim target is now fully pinned post-R0: 97 → data-part 94 → `InvalidStringLength(94)`.)
 
 **Type consistency:** `keycard_strategy`/`csid_strategy`/`flip_chars`/`STANDARD_PATHS` defined in `common/mod.rs` (Task 0.2) and used by the same names in 0.3/1.1/1.3. `multi_chunk_card`/`data_part_len` defined in 1.1, reused in 1.2/1.3. `KeyCard::new(stubs, fp, path, xpub)` and `Error::{InvalidPolicyIdStubCount, InvalidStringLength, BchUncorrectable, CrossChunkHashMismatch}` used consistently with the verified source.
