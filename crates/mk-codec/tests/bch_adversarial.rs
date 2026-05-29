@@ -9,8 +9,9 @@ mod common;
 use std::str::FromStr;
 
 use bitcoin::bip32::{DerivationPath, Fingerprint};
-use common::flip_chars;
+use common::{csid_strategy, flip_chars, keycard_strategy};
 use mk_codec::{KeyCard, decode, encode_with_chunk_set_id};
+use proptest::prelude::*;
 
 /// Build a deterministic multi-chunk card large enough that `strings[0]` is a
 /// long-code (non-last, full-size) chunk and `strings.last()` is a regular-code
@@ -134,4 +135,48 @@ fn t2b_checksum_region_and_mixed_correction() {
         card,
         "mixed data+checksum 4-error correction failed"
     );
+}
+
+proptest! {
+    // T2c — randomized miscorrection sweep. Corrupt 5–8 distinct symbols in
+    // ONE chunk's data part. The robust, non-flaky property is
+    // `decode(perturbed) != Ok(original)`: three outcomes are all legal —
+    // Err(BchUncorrectable), Err(CrossChunkHashMismatch), or (≈2⁻³², the
+    // accepted 4-byte cross-chunk-hash residual) Ok(a DIFFERENT card). The
+    // contract under test is "a ≥5-error corruption never SILENTLY returns the
+    // original as if clean." Asserting `.is_err()` would flake ~1-in-4.3e9.
+    #[test]
+    fn t2c_five_to_eight_error_corruption_never_returns_original(
+        card in keycard_strategy(),
+        csid in csid_strategy(),
+        n_errors in 5usize..=8usize,
+        seed in any::<u64>(),
+    ) {
+        let strings = encode_with_chunk_set_id(&card, csid).unwrap();
+        // (encode always yields ≥1 string — no assume needed; R0 M1.)
+        // Target chunk 0; corrupt n distinct data-part positions (char-index ≥ 11
+        // for chunked, ≥ 5 for single-chunk — use ≥ 11 and require enough length).
+        let s0 = &strings[0];
+        let len = s0.chars().count();
+        prop_assume!(len > 11 + n_errors);
+        let mut positions = Vec::new();
+        let mut x = seed | 1;
+        while positions.len() < n_errors {
+            x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+            let idx = 11 + (x as usize % (len - 11));
+            if !positions.contains(&idx) { positions.push(idx); }
+        }
+        let mut perturbed = strings.clone();
+        perturbed[0] = flip_chars(s0, &positions);
+        let parts: Vec<&str> = perturbed.iter().map(String::as_str).collect();
+
+        if let Ok(recovered) = decode(&parts) {
+            prop_assert_ne!(
+                recovered,
+                card.clone(),
+                "≥5-error corruption silently returned the original card"
+            );
+        }
+        // Err(_) => BchUncorrectable / CrossChunkHashMismatch — both legal
+    }
 }
