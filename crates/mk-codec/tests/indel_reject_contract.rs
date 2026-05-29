@@ -12,10 +12,10 @@
 
 use std::str::FromStr;
 
+use bitcoin::NetworkKind;
 use bitcoin::bip32::{ChainCode, ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-use bitcoin::NetworkKind;
-use mk_codec::{decode, encode_with_chunk_set_id, Error, KeyCard};
+use mk_codec::{Error, KeyCard, decode, encode_with_chunk_set_id};
 
 fn fixture_card() -> KeyCard {
     let path = DerivationPath::from_str("48'/0'/0'/2'").unwrap();
