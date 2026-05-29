@@ -9,3 +9,6 @@
 # Cargo build output
 /target/
 **/target/
+
+# proptest shrink-regression corpora (per-test-file, nested under tests/)
+**/proptest-regressions/
