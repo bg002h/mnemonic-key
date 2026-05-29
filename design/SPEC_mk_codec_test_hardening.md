@@ -1,6 +1,6 @@
 # SPEC — mk-codec test-hardening (themes 1/2/3 from the constellation survey)
 
-**Status:** DRAFT — pre-R0
+**Status:** R0-GATE GREEN (R0 RED 0C/2I/5M → R1 GREEN 0C/0I). Cleared for the implementation plan. Reviews: `design/agent-reports/mk-test-hardening-spec-R{0,1}-review.md`.
 **Repo / branch:** `mnemonic-key`, default branch **`main`**, crate `crates/mk-codec` v0.3.1
 **Source ground-truth SHA:** `d9d2ed9` (origin/main at authoring; all line numbers grep-verified against it)
 **Recon:** `mnemonic-toolkit/cycle-prep-recon-codec-test-hardening-themes-1-2-3.md`
@@ -14,7 +14,7 @@ mk-codec encodes xpubs as `mk1` (codex32-family BCH; an xpub spans multiple chun
 
 1. **No property/fuzz testing** of the `KeyCard` encode↔decode bijection (mk-codec `Cargo.toml` has no `proptest`/`quickcheck`/`fuzz` dep; all round-trip coverage is hand-fixtures).
 2. **BCH correction is exercised only at low error counts and never through the public `decode()` path** at 3–4 errors; the miscorrection regime (5+ errors) and the cross-chunk-hash guard that defends it are under-tested.
-3. **No indel reject-contract test** — the toolkit's shipped `repair --max-indel` uses `mk_codec::decode` as a verify-or-reject oracle (`Mk1IndelOracle`, `mnemonic-toolkit/src/repair.rs:1001`; the comment at `repair.rs:997-998` notes `decode` "self-corrects t≤4 UNGUARDED, which would defeat the pure-indel rule"), so the toolkit's recovery soundness rests on mk's substitution-only / fail-closed behavior, which mk-codec never tests.
+3. **No indel reject-contract test** — the toolkit's shipped `repair --max-indel` uses `mk_codec::decode` as a verify-or-reject oracle (`Mk1IndelOracle`, `mnemonic-toolkit/crates/mnemonic-toolkit/src/repair.rs:1001`; the comment at `:997-1000` notes `decode` "self-corrects t≤4 UNGUARDED, which would defeat the pure-indel rule"), so the toolkit's recovery soundness rests on mk's substitution-only / fail-closed behavior, which mk-codec never tests.
 
 This is a **test-only** cycle (decision locked at brainstorm). It introduces no public-API change. If a new test surfaces a clear, contained bug, it is fixed inline (→ a mk-codec PATCH/MINOR bump + a toolkit git-dep pin refresh, with its own R0); a large/ambiguous bug is deferred (`#[ignore]` + FOLLOWUP). See §6.
 
@@ -43,7 +43,7 @@ Add `proptest = "1"` to `crates/mk-codec/Cargo.toml` `[dev-dependencies]`.
 
 **Shared generator** — `tests/common/mod.rs`, consumed by theme-1 and theme-2 via `mod common;`:
 - `fn keycard_strategy() -> impl Strategy<Value = KeyCard>` producing a **valid, encodable, depth/child-consistent** card:
-  - random 32-byte seed → `Xpriv::new_master(network, &seed)` → derive at the chosen path → `xpub` (so `xpub.depth == path.len()` and `xpub.child_number == path.last()`; mirrors `test_helpers.rs::synthetic_xpub` — sidesteps the §1.1 seam by construction).
+  - the `xpub` is built by **direct `Xpub` struct construction** following the existing precedent `bytecode/test_helpers.rs::synthetic_xpub:22-40` (NOT `Xpriv::new_master`/derivation — R0 I1): `depth := path.len()` and `child_number := path.last()` are taken from the chosen path (so they are consistent by construction → sidesteps the §1.1 seam), while `public_key`/`chain_code`/`parent_fingerprint` are filled from a strategy-generated 32-byte array (`SecretKey::from_slice(..)` with `prop_filter` discarding the ~2⁻¹²⁸ invalid-scalar case → `PublicKey`; random chain_code/parent_fp) so the harness varies key material rather than pinning the `synthetic_xpub` constants. NOTE: `synthetic_xpub` hardcodes `network: Main`; this strategy instead sets `xpub.network` from the network axis below (it is the round-trip source of truth).
   - **path** drawn from both encode modes: (a) a random entry of the 14-entry standard dictionary (exercises the 1-byte indicator), and (b) a random explicit path of **1..=10** components with random hardened bits (never empty). NOTE: an explicit path that happens to match a dictionary entry will encode via the indicator (`lookup_path`) — that is correct; the strategy does not assert encoding-mode from input-mode.
   - `policy_id_stubs`: `Vec<[u8;4]>`, length **1..=8** typically (a separate deterministic cell covers 255 — §4).
   - `origin_fingerprint`: random `Some`/`None`.
@@ -53,7 +53,7 @@ Add `proptest = "1"` to `crates/mk-codec/Cargo.toml` `[dev-dependencies]`.
 - **P1 (bijection):** for a strategy-drawn `card` and a strategy-drawn `csid` masked to 20 bits, `decode(&encode_with_chunk_set_id(&card, csid).unwrap().iter().map(String::as_str).collect::<Vec<_>>()) == card`. (Use `encode_with_chunk_set_id`, not `encode()` — deterministic, shrinkable, no `getrandom` panic; mask csid so the `.unwrap()` can't hit `ChunkedHeaderMalformed`.)
 - **P2 (panic-freedom):** `mk_codec::decode(&[s])` never panics for an arbitrary `s: String` (`"\\PC*"`) — returns `Err`. Plus a structured-corrupt variant: a valid encoding with random byte/symbol flips, still never panics. (Optional secondary target: the BCH-layer `string_layer::bch::decode_string` on arbitrary `&str`, if we choose to fuzz that layer directly — spec leaves it to P2-primary on the public `decode`.)
 
-`proptest-regressions/` policy: **add `proptest-regressions/` to `mnemonic-key/.gitignore`** (cleaner than ms-codec's silent-untracked state).
+`proptest-regressions/` policy: **add `**/proptest-regressions/` to `mnemonic-key/.gitignore`** (R0 M5 — proptest writes per-test-file regression dirs at `crates/mk-codec/tests/proptest-regressions/`, a nested path, so the glob must mirror the repo's existing `**/target/` form; a bare root-level `proptest-regressions/` would not match). Cleaner than ms-codec's silent-untracked state.
 
 ---
 
@@ -61,7 +61,7 @@ Add `proptest = "1"` to `crates/mk-codec/Cargo.toml` `[dev-dependencies]`.
 
 mk's guard model differs from md/ms: per-chunk, `bch_correct_*` re-verifies the corrected chunk's checksum (`bch.rs:434,487`) and `decode_errors` rejects `deg > 4` (`bch_decode.rs:566`); the residual defense against a 5+-error pattern that BM fits to a *wrong-but-valid* ≤4-degree codeword is the **4-byte cross-chunk hash** at reassembly (`pipeline.rs:288`, `chunk.rs:189-201`).
 
-- **T2a — deterministic 3- and 4-error correction through public `decode()`** (today 3/4 errors are tested only at the raw `decode_long_errors` layer, `bch_decode.rs:779`; ≤2 via `bch_correct_*`). Encode a real card → perturb exactly 3, then 4, symbols in one chunk's **data part** → `decode` returns `Ok(original)` (chunk silently corrected). Cap at **4** — never expect >4 recovery (both codes t=4).
+- **T2a — deterministic 3- and 4-error correction through public `decode()`** (today 3/4 errors are tested only at the raw `decode_long_errors` layer, `bch_decode.rs:779`; ≤2 via `bch_correct_*`). Encode a real card → perturb exactly 3, then 4, symbols in one chunk's **data part** → `decode` returns `Ok(original)` (chunk silently corrected). Cap at **4** — never expect >4 recovery (both codes t=4). **Both code variants (R0 M4):** a typical ~84-byte card's chunks are BOTH regular-code (data-part lengths in 14..=93). To exercise the **long** code `BCH(108,93,8)`, T2a/T2b must run against a chunk whose data-part length lands in **96..=108** — size the fixture deliberately (e.g. a larger-bytecode card via more `policy_id_stubs`, reusing the §7 T4 255-stub card whose chunks reach the long band) so the "both code variants" goal is actually met, not left to incidental chunk sizing. Run T2a/T2b once against a known regular-band chunk and once against a known long-band chunk.
 - **T2b — checksum/parity-region + mixed correction.** Perturb 1–4 symbols inside the 13-symbol (regular) / 15-symbol (long) BCH **checksum tail**, and a mixed data+checksum case at the t=4 boundary → assert `Ok(original)`. Exercises the position-translation `k = L-1-d` (`bch_decode.rs:587`) the current corpus never reaches (it only corrupts the data part).
 - **T2c — randomized miscorrection sweep (proptest, via `common`).** Corrupt **5–8** random-position symbols in one chunk of a multi-chunk card → assert **`decode(perturbed) != Ok(original_card)`**. Rationale (architect must-fix): three outcomes are all legal — `Err(BchUncorrectable)`, `Err(CrossChunkHashMismatch)`, or (≈2⁻³²) `Ok(a different valid card)`. Asserting `.is_err()` would be flaky ~1-in-4.3e9 and proptest-shrink would chase a non-bug. The real, robust contract is "a ≥5-error corruption never *silently returns the original* as if clean." If a perturbation ever yields `Ok(original)` despite ≥5 changed symbols, that is the clear/contained bug we fix inline (§6).
 - **T2-doc** — add a one-line doc-only note (and a FOLLOWUP) that `error.rs:56`'s "(4 for regular, 8 for long)" parenthetical reads as a correction count but means min-distance; both codes are t=4.
@@ -74,7 +74,8 @@ Entry point: **`mk_codec::decode(&[&str])`** (NOT `reassemble` — no string-tak
 
 - **T3a — in-band-length single indel.** Take a valid multi-chunk card; in one chunk (a) insert one symbol and (b) delete one symbol such that the chunk's data-part length stays within a valid BCH band → `decode` returns **`Err(_)`** (assert `is_err()`, NOT a specific variant — an indel can legally surface `BchUncorrectable` / `CrossChunkHashMismatch` / `MalformedPayloadPadding`). The toolkit-relevant property: an indel never self-corrects into a *different valid* `Ok`.
 - **T3b — band-boundary deterministic fixture.** A delete that pushes a chunk's length into the reserved 94/95 gap (or a length outside any band) → assert the specific **`Err(InvalidStringLength)`** (`bch.rs:669` — this one IS deterministic and safe to pin).
-- **T3-doc** — the test file's module doc cross-cites the consumer it protects: `mnemonic-toolkit/src/repair.rs:1001` (`Mk1IndelOracle`) + `:997-998`.
+- **T3-doc** — the test file's module doc cross-cites the consumer it protects: `mnemonic-toolkit/crates/mnemonic-toolkit/src/repair.rs:1001` (`Mk1IndelOracle`) + the comment at `:997-1000`.
+- **Assertion-strength rationale (R0 M3):** T3a/T3b pin a FIXED indel verified to error at authoring time, so `is_err()` (T3a) and the `InvalidStringLength` variant-pin (T3b) are safe. The weaker `!= Ok(original)` is reserved for the *randomized* T2c sweep (§4) — an in-band indel could in principle, via the same 4-byte cross-chunk-hash path, yield `Ok(a different card)` at ≈2⁻³², so a future maintainer must NOT convert T3a into a randomized form with an `is_err()` assertion (it would inherit T2c's residual-collision flake).
 
 ---
 
@@ -101,7 +102,7 @@ Entry point: **`mk_codec::decode(&[&str])`** (NOT `reassemble` — no string-tak
 | T3b | `indel_reject_contract.rs` | length-out-of-band delete → `Err(InvalidStringLength)` |
 | T4 | `bch_adversarial.rs` or `round_trip.rs` | **255-stub round-trip** (≈21 chunks → >2-chunk real-card coverage) + **256-stub → `Err(InvalidPolicyIdStubCount)`** |
 
-Gate: `cargo test -p mk-codec` green; `cargo clippy -p mk-codec --all-targets` clean; existing 3 test files + in-src unit tests stay green.
+Gate: `cargo test -p mk-codec` green; `cargo clippy -p mk-codec --all-targets -- -D warnings` clean (R0 M2 — CI runs `clippy --workspace --all-targets -- -D warnings` at `.github/workflows/ci.yml:58`, so the local gate must include `-D warnings` or a proptest-harness lint passes locally but fails CI); existing 3 test files + in-src unit tests stay green.
 
 ---
 
@@ -125,4 +126,4 @@ Gate: `cargo test -p mk-codec` green; `cargo clippy -p mk-codec --all-targets` c
 ---
 
 ## §10 Source citations (verified at `d9d2ed9`)
-`key_card.rs:23` (derive), `lib.rs:51` (API), `bytecode/encode.rs:23,25` (stub cap), `bytecode/path.rs:114` + `consts.rs:27` (path cap), `bytecode/xpub_compact.rs:4,85-106` (depth/child seam), `string_layer/bch.rs:376,451` (t=4), `bch_decode.rs:566` (deg>4), `bch_decode.rs:587` (k=L-1-d), `bch_decode.rs:779,811` (raw-layer 4-error / 5-error), `consts.rs:45` + `chunk.rs:70,189-201` (4-byte hash), `error.rs:56,97` (doc + CrossChunkHashMismatch), `pipeline.rs:45-49,85-93,271-348,288` (getrandom, csid cap, existing 5-burst test, guard). Consumer: `mnemonic-toolkit/src/repair.rs:997-998,1001`. Precedent: `mnemonic-secret/crates/ms-codec/tests/round_trip.rs:11`.
+`key_card.rs:23` (derive), `lib.rs:51` (API), `bytecode/encode.rs:23,25` (stub cap), `bytecode/path.rs:114` + `consts.rs:27` (path cap), `bytecode/xpub_compact.rs:4,85-106` (depth/child seam), `string_layer/bch.rs:376,451` (t=4), `bch_decode.rs:566` (deg>4), `bch_decode.rs:587` (k=L-1-d), `bch_decode.rs:779,811` (raw-layer 4-error / 5-error), `consts.rs:45` + `chunk.rs:67-70,189-201` (4-byte hash + the cross-chunk-hash guard), `error.rs:56,97` (doc + CrossChunkHashMismatch), `pipeline.rs:45-49,85-93` (getrandom, csid cap), `pipeline.rs:271-348` (existing 5-symbol-burst test; line 288 is that test's comment, NOT the guard — the guard is `chunk.rs:189-201`). Strategy precedent: `bytecode/test_helpers.rs:22-40` (`synthetic_xpub`, direct construction). Consumer: `mnemonic-toolkit/crates/mnemonic-toolkit/src/repair.rs:1001` (`Mk1IndelOracle`) + comment `:997-1000`. proptest precedent: `mnemonic-secret/crates/ms-codec/tests/round_trip.rs:11`.
