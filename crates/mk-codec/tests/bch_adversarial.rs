@@ -101,3 +101,37 @@ fn t2a_three_and_four_error_correction_through_public_decode() {
         );
     }
 }
+
+#[test]
+fn t2b_checksum_region_and_mixed_correction() {
+    let card = multi_chunk_card();
+    let strings = encode_with_chunk_set_id(&card, 0).unwrap();
+    let li = strings.len() - 1;
+    let last = &strings[li];
+    let total = last.chars().count();
+
+    // The BCH checksum is the trailing 13 symbols (regular code). Corrupt
+    // inside the checksum tail (NOT the data part) — exercises the
+    // position-translation `k = L-1-d` (src/string_layer/bch_decode.rs:587)
+    // that the existing corpus never reaches.
+    let checksum_positions: Vec<usize> = (total - 4..total).collect(); // 4 tail symbols
+    let mut s_csum = strings.clone();
+    s_csum[li] = flip_chars(last, &checksum_positions);
+    let parts: Vec<&str> = s_csum.iter().map(String::as_str).collect();
+    assert_eq!(
+        decode(&parts).expect("BCH corrects checksum-region errors"),
+        card,
+        "checksum-region 4-error correction failed"
+    );
+
+    // Mixed: 2 in the data part + 2 in the checksum tail (total 4 = t-boundary).
+    let mixed: Vec<usize> = vec![11, 12, total - 2, total - 1];
+    let mut s_mix = strings.clone();
+    s_mix[li] = flip_chars(last, &mixed);
+    let parts: Vec<&str> = s_mix.iter().map(String::as_str).collect();
+    assert_eq!(
+        decode(&parts).expect("BCH corrects mixed data+checksum at the t=4 boundary"),
+        card,
+        "mixed data+checksum 4-error correction failed"
+    );
+}
