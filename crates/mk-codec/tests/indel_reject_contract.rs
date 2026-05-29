@@ -40,15 +40,20 @@ fn fixture_card() -> KeyCard {
     )
 }
 
-// T3a — a single in-band-length indel (insert one symbol, then delete one)
-// must fail closed (`Err`), never self-correct into a different valid card.
+// T3a — a single-symbol indel (insert one symbol, then delete one) must fail
+// closed (`Err`), never self-correct into a different valid card. Covers BOTH
+// rejection paths: the DELETE keeps the chunk in-band (data-part 108→107, the
+// hard case → BCH/cross-chunk-hash rejection), while the INSERT pushes it
+// out-of-band (108→109 > the long-code 108 cap → `InvalidStringLength`). Both
+// assert `is_err()` (variant not pinned — an indel can surface
+// `BchUncorrectable`/`CrossChunkHashMismatch`/`MalformedPayloadPadding`).
 #[test]
-fn t3a_in_band_single_indel_fails_closed() {
+fn t3a_single_indel_fails_closed() {
     let card = fixture_card();
     let strings = encode_with_chunk_set_id(&card, 0).unwrap();
     let s0 = &strings[0];
 
-    // INSERT one symbol mid-data-part (char-index 15) → length+1.
+    // INSERT one symbol mid-data-part (char-index 15) → length+1 (out-of-band).
     let mut chars: Vec<char> = s0.chars().collect();
     chars.insert(15, 'p');
     let inserted: String = chars.into_iter().collect();
