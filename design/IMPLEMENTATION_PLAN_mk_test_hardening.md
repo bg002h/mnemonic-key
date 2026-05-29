@@ -10,7 +10,7 @@
 
 **Source spec (R0-gate GREEN):** `design/SPEC_mk_codec_test_hardening.md`. **Branch:** `mk-codec-test-hardening` (off `main`). **Verified SHA:** `d9d2ed9`.
 
-**This plan is itself subject to the mandatory opus R0 gate before any task is executed.**
+**Plan-doc R0 gate:** RED 0C/2I/5M → folded (I1 data_part_len, I2 T3b mapping, M1/M2/M3) → R1 pending. Reviews: `design/agent-reports/mk-test-hardening-plan-R0-review.md`.
 
 ---
 
@@ -142,7 +142,9 @@ pub fn path_strategy() -> impl Strategy<Value = DerivationPath> {
 /// depth/child "lossless by construction" seam — SPEC §1.1). `public_key`,
 /// `chain_code`, `parent_fingerprint`, and `network` are strategy-varied.
 pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
-    let components: Vec<ChildNumber> = path.into_iter().copied().collect();
+    // `path.as_ref()` → `&[ChildNumber]` (avoids `clippy::into_iter_on_ref`
+    // under CI's `-D warnings`; R0 M3). `path` is moved into the closure below.
+    let components: Vec<ChildNumber> = path.as_ref().to_vec();
     let depth = components.len() as u8;
     let child_number = *components
         .last()
@@ -351,7 +353,7 @@ fn multi_chunk_card() -> KeyCard {
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x42u8; 32]).unwrap();
     let pk = bitcoin::secp256k1::PublicKey::from_secret_key(&secp, &sk);
-    let comps: Vec<bitcoin::bip32::ChildNumber> = path.into_iter().copied().collect();
+    let comps: Vec<bitcoin::bip32::ChildNumber> = path.as_ref().to_vec();
     let xpub = bitcoin::bip32::Xpub {
         network: bitcoin::NetworkKind::Main,
         depth: comps.len() as u8,
@@ -368,11 +370,16 @@ fn multi_chunk_card() -> KeyCard {
     )
 }
 
-/// data-part length (symbols) of a chunked mk1 string: total minus the 3-char
-/// `mk1` HRP+separator minus the 8-symbol chunked header. Used only to assert
-/// the test actually exercises both BCH code variants.
+/// data-part length (symbols) AS SEEN BY `bch_code_for_length` — the full
+/// post-`mk1` data part (chunked header + payload + BCH checksum), i.e. total
+/// chars minus the 3-char `mk1` HRP+separator. The 8-symbol chunked header is
+/// PART of the band-table input — do NOT subtract it (R0 I1; verified at
+/// `src/string_layer/bch.rs:662,669`: `data_part = &rest[1..]`,
+/// `bch_code_for_length(data_part.len())`). Used to assert both BCH code
+/// variants are exercised. For the 6-stub `multi_chunk_card`, `strings[0]`
+/// data-part = 108 (Long), `strings.last()` = 25 (Regular).
 fn data_part_len(s: &str) -> usize {
-    s.chars().count().saturating_sub(3).saturating_sub(8)
+    s.chars().count().saturating_sub(3)
 }
 
 #[test]
@@ -531,7 +538,7 @@ proptest! {
         seed in any::<u64>(),
     ) {
         let strings = encode_with_chunk_set_id(&card, csid).unwrap();
-        prop_assume!(strings.len() >= 1);
+        // (encode always yields ≥1 string — no assume needed; R0 M1.)
         // Target chunk 0; corrupt n distinct data-part positions (char-index ≥ 11
         // for chunked, ≥ 5 for single-chunk — use ≥ 11 and require enough length).
         let s0 = &strings[0];
@@ -591,7 +598,7 @@ fn t4_stub_count_boundary_255_roundtrip_256_reject() {
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x07u8; 32]).unwrap();
     let pk = bitcoin::secp256k1::PublicKey::from_secret_key(&secp, &sk);
-    let comps: Vec<bitcoin::bip32::ChildNumber> = path.into_iter().copied().collect();
+    let comps: Vec<bitcoin::bip32::ChildNumber> = path.as_ref().to_vec();
     let xpub = bitcoin::bip32::Xpub {
         network: bitcoin::NetworkKind::Main,
         depth: comps.len() as u8,
@@ -602,9 +609,7 @@ fn t4_stub_count_boundary_255_roundtrip_256_reject() {
     };
 
     // 255 stubs (the encoder's 1-byte stub_count max) — ~1100-byte bytecode ⇒
-    // a many-chunk (>2) real-card round-trip.
-    let stubs_255: Vec<[u8; 4]> = (0..255u32).map(|i| (i as u8).to_le_bytes().map(|b| b).into()).collect();
-    // (simpler, distinct stubs:)
+    // a many-chunk (>2) real-card round-trip. 255 distinct 4-byte stubs.
     let stubs_255: Vec<[u8; 4]> = (0..255u16).map(|i| [i as u8, (i >> 8) as u8, 0xAB, 0xCD]).collect();
     let card_255 = KeyCard::new(stubs_255, None, path.clone(), xpub.clone());
     let strings = encode_with_chunk_set_id(&card_255, 1).expect("255 stubs encodes");
@@ -624,8 +629,6 @@ fn t4_stub_count_boundary_255_roundtrip_256_reject() {
     );
 }
 ```
-
-> **Implementer note:** delete the first (commented-as-simpler) `stubs_255` line — keep only the `[i as u8, (i>>8) as u8, 0xAB, 0xCD]` form (255 distinct 4-byte stubs). Two lines are shown only to make the intent unambiguous; the second shadows the first.
 
 - [ ] **Step 2: Run T4**
 
@@ -708,7 +711,7 @@ fn fixture_card() -> KeyCard {
     let secp = Secp256k1::new();
     let sk = SecretKey::from_slice(&[0x42u8; 32]).unwrap();
     let pk = PublicKey::from_secret_key(&secp, &sk);
-    let comps: Vec<ChildNumber> = path.into_iter().copied().collect();
+    let comps: Vec<ChildNumber> = path.as_ref().to_vec();
     let xpub = Xpub {
         network: NetworkKind::Main,
         depth: comps.len() as u8,
@@ -776,23 +779,26 @@ fn t3b_out_of_band_length_is_invalid_string_length() {
     // Find a chunk long enough to trim into the reserved gap.
     let long = strings.iter().max_by_key(|s| s.chars().count()).unwrap();
     let chars: Vec<char> = long.chars().collect();
-    // Target total length = 3 + 94 = 97 (data-part 94 = reserved-invalid).
-    // (If the chunk has an 8-symbol chunked header counted within the data
-    //  part band, adjust the target so bch_code_for_length sees 94/95 — verify
-    //  against src/string_layer/bch.rs:117 at impl time.)
-    if chars.len() > 97 {
-        let trimmed: String = chars[..97].iter().collect();
-        match decode(&[trimmed.as_str()]) {
-            Err(Error::InvalidStringLength(_)) => {}
-            other => panic!("reserved-gap length must be InvalidStringLength; got {other:?}"),
-        }
-    } else {
-        panic!("fixture chunk too short to trim into the reserved gap; enlarge fixture_card()");
-    }
+    // Target total length = 97 → data-part = 97 - 3 = 94 (reserved-invalid gap).
+    // The mapping is `data_part = total - 3` (HRP `mk` + separator `1`); the
+    // 8-symbol chunked header is INSIDE the data part (R0 I2; verified at
+    // `src/string_layer/bch.rs:662,669` — `data_part = &rest[1..]`,
+    // `bch_code_for_length(data_part.len())`). So 94 → `None` →
+    // `InvalidStringLength(94)`, deterministically. Pin the value.
+    assert!(
+        chars.len() > 97,
+        "fixture chunk too short to trim into the reserved gap; enlarge fixture_card()"
+    );
+    let trimmed: String = chars[..97].iter().collect();
+    assert!(
+        matches!(decode(&[trimmed.as_str()]), Err(Error::InvalidStringLength(94))),
+        "reserved-gap length (data-part 94) must be InvalidStringLength(94); got {:?}",
+        decode(&[trimmed.as_str()])
+    );
 }
 ```
 
-> **Implementer note (T3b):** the exact arithmetic mapping `string length → bch_code_for_length`'s `data_part_len` must be confirmed against `src/string_layer/bch.rs:117` + the decode entry (`decode_string`). If the band table's `data_part_len` excludes the HRP/separator only (not the chunked header), the target total length is `3 + 94 = 97`; if it excludes the header too, use `3 + 8 + 94 = 105`. Pick the value that makes `bch_code_for_length` return `None`; this IS deterministic — verify once and pin the constant. The test's *intent* (a reserved-gap length → `InvalidStringLength`) is fixed; only the trim target may need adjustment.
+> **Implementer note (T3b):** the mapping is DEFINITE (R0 I2): `decode_string` computes `data_part = &rest[1..]` (everything after `mk` + `1`) and calls `bch_code_for_length(data_part.len())` (`src/string_layer/bch.rs:662,669`). So `data_part = total − 3`; the 8-symbol chunked header is INSIDE the data part. Trim total to **97** → data-part 94 → reserved-invalid → `Err(Error::InvalidStringLength(94))`. No `3+8+94=105` alternative — that mapping is wrong. The value-level pin `InvalidStringLength(94)` is safe and deterministic.
 
 - [ ] **Step 2: Run T3a + T3b**
 
