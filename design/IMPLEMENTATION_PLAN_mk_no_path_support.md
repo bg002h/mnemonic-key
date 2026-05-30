@@ -232,7 +232,14 @@ Run: `cargo test -p mk-codec --lib bytecode::encode::tests::depth0_card_round_tr
 
 - [ ] **Step 2 — T9 (proptest depth-0 arm).** In `tests/common/mod.rs`:
   - `path_strategy` (`:55`): `prop_oneof![standard, explicit].boxed()` → `prop_oneof![standard, explicit, Just(DerivationPath::from_str("m").unwrap())].boxed()`.
-  - `xpub_strategy` (`:68-70`): change `.expect("path is non-empty (standard entries + explicit 1..=10)")` → `.unwrap_or(ChildNumber::Normal { index: 0 })` (keep `let child_number = ...` binding).
+  - `xpub_strategy` (`:66-70`): the live binding is `let child_number = *components.last().expect("path is non-empty (standard entries + explicit 1..=10)");` — `components.last()` is `Option<&ChildNumber>`, so a literal `.expect→.unwrap_or` swap will NOT compile (`unwrap_or` needs a `&ChildNumber`, and the leading `*` then derefs a non-reference — R0 C1). Replace the whole binding, dropping the `*` and inserting `.copied()` (mirrors `synthetic_xpub` / the production guard):
+
+```rust
+    let child_number = components
+        .last()
+        .copied()
+        .unwrap_or(ChildNumber::Normal { index: 0 });
+```
 
 Run: `cargo test -p mk-codec --test '*'` (the `keycard_roundtrip` proptest) → PASS, now sampling depth-0.
 
