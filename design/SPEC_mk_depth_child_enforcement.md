@@ -15,7 +15,7 @@ mk1's compact-73 xpub wire form drops `xpub.depth` and `xpub.child_number` (`cra
 
 ## §2 — The fix: an encoder-side agreement guard
 
-**This is ENCODER-ONLY enforcement.** The decoder genuinely *cannot* detect the mismatch — the wire form carries no depth/child to compare against — so this rule is structurally parallel to the existing fingerprint-flag encoder invariant (`SPEC:292`), NOT a decoder-rejection rule.
+**This is ENCODER-ONLY enforcement.** The decoder genuinely *cannot* detect the mismatch — the wire form carries no depth/child to compare against — so this rule is structurally parallel to the existing fingerprint-flag encoder invariant (`SPEC:292`; the retired `FingerprintFlagMismatch` variant at `error.rs:231-236` is the direct in-codebase precedent for an encoder-side invariant), NOT a decoder-rejection rule.
 
 ### §2.1 — Guard location (sole chokepoint)
 `encode_bytecode` (`bytecode/encode.rs`) is the **single** xpub-serialization site. Architect-traced: both public encode entries (`string_layer/pipeline.rs:56,67`) call `encode_bytecode(card)` first, then `encode_bytecode_stream` operates on opaque bytes — the single-string, chunked, long-code, and vector-gen paths all flow through `encode_bytecode`, and none re-serializes the xpub. A guard here covers **100%** of wire emission. (NOT `KeyCard::new` — `KeyCard` fields are `pub`, so a constructor check is bypassable. NOT `from_xpub` — it lacks the path.)
@@ -53,7 +53,7 @@ Name is `XpubOriginPathMismatch` (NOT the historical `XpubDepthMismatch` — tha
 
 ### §2.4 — Edge cases (architect-verified: NO false positives against any valid card)
 - **Standard-table indicator** path: the dictionary always dereferences to the FULL path (`bytecode/path.rs:38-55`); a correctly-derived xpub-at-that-path matches the full deref depth/child. The only divergence is the bug itself.
-- **Elided / partial origin** (the make-or-break risk): mk1 has **NONE** — `path.rs` encodes the full path in both standard-table and explicit modes (no md1-style "last N components" facility; md1's elided origin lives in a different codec/layer). `depth == len` enforces the format's existing contract (`SPEC:257`), not a new constraint.
+- **Elided / partial origin** (the make-or-break risk): mk1 has **NONE** — `path.rs` encodes the full path in both standard-table (table `:38-55`, deref `lookup_indicator` `:60-65`) and explicit (`encode_path` `:85-98`, LEB128 every component) modes; no md1-style "last N components" facility (md1's elided origin lives in a different codec/layer). `depth == len` enforces the format's existing contract (`SPEC:257`), not a new constraint.
 - **depth-0 master xpub:** mk1 cannot represent one (paths are `1..=10`; `encode_path`→decoder rejects `count==0` as `PathTooDeep(0)`). No spurious reject.
 
 ## §3 — SPEC_mk_v0_1.md edits (re-grep line numbers at impl time)
@@ -73,6 +73,7 @@ The decoder-cannot-detect framing MUST be preserved — keep these in the encode
 3. **Empty-path reject:** hand-built `KeyCard` with empty `origin_path` → `Err` (`path_child: None`), no panic.
 4. **Aligned card still encodes + round-trips:** a correctly-aligned card (incl. the existing `xpub_compact.rs:144` `round_trip_full_xpub_depth_4` fixture) encodes successfully and `reconstruct_xpub` yields the identical xpub — genuine losslessness.
 5. **Standard-table-indicator aligned card** encodes (no false positive on a real dictionary-path card).
+6. *(optional, plan-author discretion — R0 suggestion)* **Standard-table child-mismatch:** a card using a dictionary indicator (e.g. `0x05` = `m/48'/0'/0'/2'`) but with `xpub.child_number` set to a different terminal (e.g. `1'`) → `Err(XpubOriginPathMismatch{..})`. Strengthens dictionary-path child coverage symmetrically to cell 5.
 
 ## §6 — Cross-cutting
 - **Fix-the-class (architect-verified clean):** no 2nd instance in mk-codec (parent_fingerprint/version/chain_code/public_key all carried verbatim; depth/child are the only reconstructed fields → one variant, one chokepoint). No analog in md-codec (md1 hardcodes depth/child, never reconstructs — `descriptor-mnemonic/.../md-codec/src/derive.rs:44-60`). No share path (v0.1 has none).
