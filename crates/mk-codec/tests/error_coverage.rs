@@ -74,6 +74,7 @@ enum ErrorVariantName {
     UnexpectedEnd,
     TrailingBytes,
     CardPayloadTooLarge,
+    XpubOriginPathMismatch,
 }
 
 impl ErrorVariantName {
@@ -104,6 +105,7 @@ impl ErrorVariantName {
             Self::UnexpectedEnd => "unexpected end of bytecode",
             Self::TrailingBytes => "trailing bytes after xpub",
             Self::CardPayloadTooLarge => "card payload too large",
+            Self::XpubOriginPathMismatch => "xpub origin-path mismatch",
         }
     }
 }
@@ -118,6 +120,12 @@ fn is_exempt(variant: &ErrorVariantName) -> Option<&'static str> {
              reachable via `decode`'s string-input path because chunked input \
              is bounded by `MAX_CHUNKS=32 × 53-byte fragments = 1696 bytes` \
              stream, exactly the encoder's emit ceiling.",
+        ),
+        ErrorVariantName::XpubOriginPathMismatch => Some(
+            "encoder-side invariant: emitted only from `encode_bytecode` when a \
+             KeyCard's xpub.depth/child_number disagree with origin_path; not \
+             reachable via `decode`'s string-input path (depth/child_number are \
+             not carried on-wire, so there is nothing for a decoder to violate).",
         ),
         _ => None,
     }

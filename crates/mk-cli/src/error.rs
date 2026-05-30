@@ -130,6 +130,7 @@ fn mk_codec_error_kind(e: &mk_codec::Error) -> &'static str {
         mk_codec::Error::UnexpectedEnd => "UnexpectedEnd",
         mk_codec::Error::TrailingBytes => "TrailingBytes",
         mk_codec::Error::CardPayloadTooLarge { .. } => "CardPayloadTooLarge",
+        mk_codec::Error::XpubOriginPathMismatch { .. } => "XpubOriginPathMismatch",
         // `mk_codec::Error` is `#[non_exhaustive]`; keep a fallback.
         _ => "Unknown",
     }
