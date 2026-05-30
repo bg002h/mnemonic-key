@@ -73,6 +73,17 @@ path applies, no path is included on the wire,* and that no-path card must
   WIF shape: depth 0, child `Normal{0}`. No test-helper change needed.
 - **`error.rs`** — `Error::XpubOriginPathMismatch { xpub_depth, path_depth, xpub_child,
   path_child }` already exists (added 0.3.2). **No new error variant** in this cycle.
+  Its rustdoc (`error.rs:170-171`) points at `design/SPEC_mk_v0_1.md` §4 **and**
+  `design/SPEC_mk_depth_child_enforcement.md` — the latter still asserts the
+  pre-0.4.0 "empty path → reject" rule and must get a superseding note (E10).
+- **Stale doc-comment sites asserting the old `1..=10` / non-empty rule** (updated in
+  Phase 0, no functional impact): `path.rs:18-20` module rustdoc ("1-byte component
+  count (1..=10)"); `key_card.rs:46-51` (the `xpub` field reconstruction-rule block —
+  `child_number := last_component(origin_path)`, no empty-path note).
+- **`tests/common/mod.rs:39-72`** — `path_strategy` (`:39-56`) generates standard-table
+  OR `1..=10`-component explicit paths only; `xpub_strategy` (`:68-70`)
+  `.expect("path is non-empty …")`. The proptest bijection (`keycard_roundtrip`) thus
+  has **no** depth-0 coverage today (T9 adds it).
 - **Mirrors already complete (0.3.2), unchanged this cycle:** `tests/error_coverage.rs`
   (`ErrorVariantName::XpubOriginPathMismatch :77`, `display_prefix :108`, `is_exempt
   :124` — exempt because encoder-only / not producible via `decode`; still true),
@@ -152,6 +163,16 @@ only change is `Some(card.xpub.child_number) != path_child` →
 The guard remains exactly "does this xpub survive `from_xpub` + `reconstruct_xpub`"
 — now correct at depth 0.
 
+### 3.3a Doc-comment touches (same files, no functional impact)
+
+- **`path.rs:18-20`** module rustdoc: "1-byte component count **(1..=10)**" →
+  "**(0..=10; 0 = no-path / depth-0 key)**".
+- **`key_card.rs:46-51`** the `xpub` field reconstruction-rule block: append a
+  `child_number := Normal{0} when origin_path is empty (depth-0 / no-path key)` line to
+  the `text` block, matching SPEC §4 E4.
+- **`xpub_compact.rs:83-91`** rustdoc (already in §3.2): drop "MUST be non-empty";
+  document depth-0 → `Normal{0}`.
+
 ### 3.4 Losslessness at depth 0
 
 For the WIF card: compact-73 carries `version`, `parent_fingerprint` (zeros),
@@ -182,15 +203,17 @@ All edits land in the same PR; internal consistency checked in §6 Phase 1.
 path (`depth 0`); see §3.6. Earlier decoders reject it as `PathTooDeep(0)` — the
 addition is wire-additive, like `0x16`."*
 
-**E4 — `:254-261`** (reconstruction rule). Replace the two-line block with:
+**E4 — the reconstruction-rule block at `:257-258`** (inside the fence `:256-259`;
+keep the `:254` intro line and the `:261` standard-table sentence). Replace the two
+lines with:
 ```
 depth        := component_count(origin_path)              (0 for the no-path case)
 child_number := last_component(origin_path) (with hardened-bit encoding),
                 or Normal{0} when origin_path is empty (depth-0 / no-path key)
 ```
-Keep the following sentence (`For a standard-table indicator … on-wire components.`)
-and append: *"For the no-path case (explicit `count == 0`), `depth = 0` and
-`child_number = Normal{0}` (the BIP-32 master convention)."*
+Keep `:261` (`For a standard-table indicator … on-wire components.`) and append:
+*"For the no-path case (explicit `count == 0`), `depth = 0` and `child_number =
+Normal{0}` (the BIP-32 master convention)."*
 
 **E5 — `:263`** ("Why compact-73"). The losslessness claim is unchanged in substance;
 append to the parenthetical that the encoder agreement check treats an empty path as
@@ -215,6 +238,25 @@ to include the empty-path → `Normal{0}` expectation, consistent with E7.
 **E9 — `:265` / `:360`** (limit-of-detection notes). No semantic change; the
 wrong-indicator hazard is unaffected by the no-path addition. Leave as-is unless a
 reference to "`1..=10`" appears (it does not).
+
+**E10 — `design/SPEC_mk_depth_child_enforcement.md` (the 0.3.2 companion doc, cited
+normatively from `error.rs:170-171`).** It asserts the *opposite* of 0.4.0 in three
+places and MUST get a superseding note so a reader following the `error.rs` pointer
+isn't misled:
+- `:30` — "An empty `origin_path` (`None`) is a mismatch → reject (… `encode_path` +
+  the decoder require `1..=10` components …)."
+- `:57` — "**depth-0 master xpub:** mk1 cannot represent one (paths are `1..=10`;
+  `encode_path`→decoder rejects `count==0` as `PathTooDeep(0)`). No spurious reject."
+- `:14` — frames `depth := component_count(origin_path)` as "the invariant" with no
+  depth-0 carve-out.
+Edit: insert a `> **Superseded in part by mk-codec 0.4.0** (`SPEC_mk_no_path_support.md`):`
+blockquote at the head of the doc, and inline at `:30`/`:57` a one-line
+"**(0.4.0: an empty `origin_path` IS now representable — a consistent depth-0 card
+with child `Normal{0}` encodes and round-trips; only genuine disagreement is
+rejected.)**" so the historical text stays but the live rule is unambiguous. The
+0.3.2 guard description elsewhere in the doc stays accurate (genuine mismatches are
+still rejected). `error.rs:170-171` rustdoc needs no change (it references both docs;
+the superseding note makes the chain consistent).
 
 ---
 
@@ -275,6 +317,15 @@ All cells compile against live types; the three reject-inversions FAIL pre-chang
   `decode_bytecode` entry point.) This is the highest-value cell — it proves the WIF
   card the toolkit emits now survives the full mk-codec round-trip.
 
+**Property test (`tests/common/mod.rs` + the `keycard_roundtrip` bijection):**
+- **T9 (depth-0 in the proptest bijection):** add an empty-path arm to `path_strategy`
+  (`:39-56`) — `prop_oneof![standard, explicit, Just(DerivationPath::from_str("m").unwrap())]`
+  — and relax `xpub_strategy`'s `.expect("path is non-empty …")` (`:68-70`) to
+  `.unwrap_or(ChildNumber::Normal { index: 0 })`. Without this the green proptest gives
+  **no** depth-0 coverage (R0 M2); with it, every round-trip property now exercises the
+  no-path card too. (Per-comment at `:66-67`: keep `path.as_ref()` to avoid
+  `clippy::into_iter_on_ref` under `-D warnings`.)
+
 **Optional (plan-author discretion):** add one canonical no-path KeyCard to the
 generated test-vector corpus (`vectors.rs` / `gen_mk_vectors.rs`) for cross-impl
 conformance. Deferrable if it materially enlarges the cycle.
@@ -292,12 +343,15 @@ path); `cargo clippy -p mk-codec -p mk-cli --all-targets -- -D warnings`;
 0.1 `decode_explicit_path` count==0 relax (§3.1) + T1/T2/T3.
 0.2 `reconstruct_xpub` empty→Normal{0} + rustdoc (§3.2) + T4.
 0.3 guard expected_child + `use ChildNumber` (§3.3) + T5/T6/T7.
-0.4 end-to-end T8.
+0.4 end-to-end T8 + proptest depth-0 arm T9 (§3.3a doc touches `path.rs:18-20` +
+    `key_card.rs:46-51` land here too).
 Per-phase: tests fail first → impl → green → `clippy -D warnings` → `fmt --check`.
 
-**Phase 1 — `SPEC_mk_v0_1.md` edits (§4 E1-E9).** Re-grep each citation before
-editing; verify no residual `1..=10` / `(or == 0)` survives; internal-consistency
-pass (E4/E7/E8 mutually consistent on the empty→`Normal{0}` rule).
+**Phase 1 — doc edits (§4 E1-E10).** `SPEC_mk_v0_1.md` E1-E9 (re-grep each citation
+before editing; verify no residual `1..=10` / `(or == 0)` survives; internal-consistency
+pass — E4/E7/E8 mutually consistent on the empty→`Normal{0}` rule) **plus E10**
+(superseding note in `SPEC_mk_depth_child_enforcement.md`, the companion doc cited from
+`error.rs:170-171`).
 
 **Phase 2 — version + FOLLOWUP + ship.** `mk-codec` 0.3.2→0.4.0, `mk-cli`
 0.4.3→0.5.0 + re-pin; file `mnemonic-key` FOLLOWUP `mk1-no-path-depth0-support`
