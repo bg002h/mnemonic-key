@@ -16,8 +16,8 @@
 //! v0.2+ decoders accept and resolve to `m/48'/1'/0'/1'`).
 //!
 //! Explicit-path encoding: indicator `0xFE`, 1-byte component count
-//! (1..=10), then each component as LEB128-encoded u32 with the BIP 32
-//! hardened-bit in the high bit.
+//! (0..=10; 0 = no-path / depth-0 key, e.g. a WIF), then each component as
+//! LEB128-encoded u32 with the BIP 32 hardened-bit in the high bit.
 
 use bitcoin::bip32::{ChildNumber, DerivationPath};
 
@@ -111,9 +111,11 @@ pub fn decode_path(cursor: &mut &[u8]) -> Result<DerivationPath> {
 
 fn decode_explicit_path(cursor: &mut &[u8]) -> Result<DerivationPath> {
     let count = read_u8(cursor)?;
-    if count == 0 || count > MAX_PATH_COMPONENTS {
+    if count > MAX_PATH_COMPONENTS {
         return Err(Error::PathTooDeep(count));
     }
+    // count == 0 → no-path / depth-0 root key (e.g. a WIF). The component loop
+    // below runs zero times → DerivationPath::from(vec![]) = empty path "m".
     let mut components: Vec<ChildNumber> = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let raw = leb128_decode_u32(cursor)?;
@@ -246,15 +248,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_path_count_zero() {
-        // count = 0 isn't a real path; rejected as PathTooDeep(0) per
-        // spec MUST be 1..=10
+    fn accepts_path_count_zero_as_empty_path() {
+        // count = 0 is the no-path / depth-0 case (e.g. a WIF). v0.4.0+: decode
+        // returns the empty path; older decoders rejected it as PathTooDeep(0).
         let bytes = vec![0xFE, 0u8];
         let mut cursor: &[u8] = &bytes;
-        assert!(matches!(
-            decode_path(&mut cursor),
-            Err(Error::PathTooDeep(0)),
-        ));
+        let decoded = decode_path(&mut cursor).unwrap();
+        assert_eq!(decoded.into_iter().count(), 0, "empty path");
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn round_trip_empty_path() {
+        let path = DerivationPath::from_str("m").unwrap(); // empty
+        let encoded = encode_path(&path);
+        assert_eq!(encoded, vec![0xFE, 0x00]);
+        let mut cursor: &[u8] = &encoded;
+        let decoded = decode_path(&mut cursor).unwrap();
+        assert_eq!(decoded, path);
+        assert!(cursor.is_empty());
     }
 
     #[test]
