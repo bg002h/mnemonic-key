@@ -169,7 +169,7 @@ After the bytecode header, the payload encodes the following fields in order (pe
 [stub_count        : 1 B; MUST be ≥ 1]
 [policy_id_stubs   : 4 × N B]
 [origin_fingerprint: 4 B]   ← present iff bytecode_header bit 2 set
-[origin_path       : 1 B (std-table indicator) OR 3..=52 B (explicit: 0xFE + count + 1..=10 LEB128 components, ≤5 B each; see §3.5)]
+[origin_path       : 1 B (std-table indicator) OR 2..=52 B (explicit: 0xFE + count + 0..=10 LEB128 components, ≤5 B each; count 0 = no-path / depth-0 key; see §3.5)]
 [xpub_compact      : 73 B]
 ```
 
@@ -226,7 +226,7 @@ mk1-internal indicator-byte path dictionary plus a `0xFE` explicit-path escape h
 
 ```text
 [0xFE]
-[component_count: 1 byte; MUST be in 1..=10]
+[component_count: 1 byte; MUST be in 0..=10 (0 = no-path / depth-0 root key)]
 [component_1 ... component_N: each LEB128-encoded u32]
 ```
 
@@ -234,7 +234,7 @@ Each component encodes a u32 BIP 32 child number (hardened bit set in the high b
 
 **Component-byte sizing.** LEB128 of a u32 takes 1–5 bytes depending on the encoded value: any u32 with bit 28 or higher set (which includes every hardened component, since the hardened-marker is bit 31) requires the full 5 bytes; non-hardened components < 2²⁸ take 1–4 bytes. The closure design's and implementation plan's worst-case bound `1 + 1 + 5N B` is the upper limit for an N-component explicit path; for typical BIP-style paths (which are mostly hardened), this bound is also the typical case. Concretely: `m/48'/0'/0'/2'` (4 components, all hardened) explicit-encodes to `1 + 1 + 4×5 = 22 bytes` — though such a path would normally use the 1-byte standard-table indicator `0x05` instead. The `5N` shorthand in §3.2 below uses this worst-case bound.
 
-**Path-component cap = 10** (closure Q-3). BIP 32 itself allows depth ≤ 255; real wallets use ≤ 6. The 10-component cap bounds chunk-size attacks without rejecting any plausibly real path; tighter caps don't lock out real users while bounding worst-case malicious-path inflation more aggressively. Decoders MUST reject `component_count > 10` with `Error::PathTooDeep`.
+**Path-component cap = 10** (closure Q-3). BIP 32 itself allows depth ≤ 255; real wallets use ≤ 6. The 10-component cap bounds chunk-size attacks without rejecting any plausibly real path; tighter caps don't lock out real users while bounding worst-case malicious-path inflation more aggressively. Decoders MUST reject `component_count > 10` with `Error::PathTooDeep`. `component_count == 0` is **valid** as of v0.4.0 and denotes a key with no derivation path (`depth 0` — e.g. a raw WIF / master key); see §3.6. Earlier decoders reject it as `PathTooDeep(0)`, so the addition is wire-additive (like `0x16`).
 
 Indicators `0x00`, `0x08`–`0x10`, `0x18`–`0xFD`, and `0xFF` are **reserved** and MUST NOT be emitted by encoders. Decoders MUST reject reserved indicator bytes with `Error::InvalidPathIndicator`.
 
@@ -254,13 +254,14 @@ mk1 v0.1 encodes xpubs in a **73-byte compact form** (closure Q-7):
 The fields `xpub.depth` and `xpub.child_number` are absent from the wire and reconstructed at decode time from `origin_path`:
 
 ```
-depth        := component_count(origin_path)
-child_number := last_component(origin_path) including hardened-bit encoding
+depth        := component_count(origin_path)              (0 for the no-path case)
+child_number := last_component(origin_path) including hardened-bit encoding,
+                or Normal{0} when origin_path is empty (depth-0 / no-path key)
 ```
 
-For a standard-table indicator, both come from the dictionary entry. For the explicit-path escape hatch, both come from the on-wire components.
+For a standard-table indicator, both come from the dictionary entry. For the explicit-path escape hatch, both come from the on-wire components. For the no-path case (explicit `count == 0`), `depth = 0` and `child_number = Normal{0}` (the BIP 32 master convention).
 
-**Why compact-73:** the dropped fields (`depth`, `child_number`) are redundant with `origin_path`; carrying them on-wire risks the drift detected by md1-style drift-rule logic. Compact-73 is *lossless because the encoder enforces agreement*: both fields are reconstructible from the path, AND `encode` rejects any `xpub` whose `depth` / `child_number` disagree with `origin_path` (`Error::XpubOriginPathMismatch`), saving 5 bytes per card (~one row of typical hand-engraving). The drift class is closed on the emit side by that encoder invariant (§4).
+**Why compact-73:** the dropped fields (`depth`, `child_number`) are redundant with `origin_path`; carrying them on-wire risks the drift detected by md1-style drift-rule logic. Compact-73 is *lossless because the encoder enforces agreement*: both fields are reconstructible from the path, AND `encode` rejects any `xpub` whose `depth` / `child_number` disagree with `origin_path` (`Error::XpubOriginPathMismatch`), saving 5 bytes per card (~one row of typical hand-engraving). The agreement check treats an empty `origin_path` as expecting `child_number = Normal{0}`, so a consistent depth-0 / no-path card encodes while a depth-0 card with a non-`Normal{0}` child is rejected. The drift class is closed on the emit side by that encoder invariant (§4).
 
 **Limit-of-detection note (carries into §6 normative recommendations):** (As of mk-codec 0.3.2 the **emit** side of this hazard is closed: `encode` rejects a depth/child-mismatched card outright — see §4's encoder-side invariant — so the codec can no longer *produce* such a card. The residual limit-of-detection below applies only to hand-constructed bytecode fed directly to the decoder, which reconstructs from the path with no on-wire depth to cross-check.) Under compact-73, an operator who picks the wrong standard-table indicator while engraving the right xpub bytes produces a card that decodes without error and reconstructs an xpub claiming the wrong derivation path. The card's chain_code and public_key are correct (addresses derive correctly), but the path embedded in the reconstructed BIP 32 serialization is wrong. Detection of this class of error happens at the §5 step 4 Wallet Instance ID check — only when the user has an externally-anchored expected wallet identity to compare against. Single-wallet recoveries without an external anchor will reconstruct the wrong-path xpub silently. §6 recommends an out-of-band first-address verification before moving funds.
 
@@ -282,7 +283,7 @@ A decoder MUST reject mk1 bytecode that:
 2. Has any reserved bit set in v0.1 (`Error::ReservedBitsSet`).
 3. Has `stub_count == 0` (`Error::InvalidPolicyIdStubCount`).
 4. Has an origin path indicator outside the defined table (`Error::InvalidPathIndicator`).
-5. Has an explicit path with `component_count > 10` (or `== 0`) (`Error::PathTooDeep`).
+5. Has an explicit path with `component_count > 10` (`Error::PathTooDeep`). `component_count == 0` is **valid** as of v0.4.0 (no-path / depth-0 key; see §3.6).
 6. Has any path component with the BIP 32 child-number high bits set in invalid ways, or LEB128 overflow (`Error::InvalidPathComponent`).
 7. Has xpub version bytes that don't match a known network's xpub prefix (`Error::InvalidXpubVersion`).
 8. Has xpub `public_key` bytes that do not parse as a valid compressed secp256k1 point (`Error::InvalidXpubPublicKey`). Realistically unreachable for inputs that pass BCH verification, but required for hand-constructed inputs fed directly to the bytecode decoder.
@@ -291,7 +292,7 @@ A decoder MUST reject mk1 bytecode that:
 
 Encoder-side invariant (not a decoder rule): encoders MUST set the bytecode-header fingerprint flag (bit 2) if and only if `origin_fingerprint` is present in the payload. The invariant is structurally undetectable at decode time (no length prefix distinguishes "flag set, fp present" from "flag unset, fp omitted"); a decoder follows the flag verbatim. A hand-crafted bytecode that violates the invariant decodes to a wrong-but-internally-consistent `KeyCard`; detection happens at the higher Wallet Instance ID check (§5 step 4).
 
-Encoder-side invariant (not a decoder rule): encoders MUST reject a card whose `xpub.depth ≠ component_count(origin_path)` OR `xpub.child_number ≠ last_component(origin_path)` with `Error::XpubOriginPathMismatch`. Compact-73 drops `depth`/`child_number` and the decoder reconstructs them from `origin_path`, so a mismatched card would decode to a different-metadata xpub (chain_code/public_key — and therefore addresses — are unaffected). Like the fingerprint-flag invariant, this is structurally undetectable at decode (no on-wire depth to compare); a hand-crafted bytecode violating it decodes to a wrong-but-internally-consistent `KeyCard`, detectable only at the higher Wallet Instance ID check (§5 step 4).
+Encoder-side invariant (not a decoder rule): encoders MUST reject a card whose `xpub.depth ≠ component_count(origin_path)` OR whose `xpub.child_number ≠ [last_component(origin_path), or Normal{0} when origin_path is empty]`, with `Error::XpubOriginPathMismatch`. A consistent depth-0 / no-path card (`depth 0`, empty path, child `Normal{0}` — e.g. a raw WIF) is **valid** and encodes; the invariant rejects only genuine disagreement. Compact-73 drops `depth`/`child_number` and the decoder reconstructs them from `origin_path`, so a mismatched card would decode to a different-metadata xpub (chain_code/public_key — and therefore addresses — are unaffected). Like the fingerprint-flag invariant, this is structurally undetectable at decode (no on-wire depth to compare); a hand-crafted bytecode violating it decodes to a wrong-but-internally-consistent `KeyCard`, detectable only at the higher Wallet Instance ID check (§5 step 4).
 
 Additional decoder rules at the string/chunking layer:
 
@@ -300,7 +301,7 @@ Additional decoder rules at the string/chunking layer:
 13. For chunked input: reassembled bytecode's trailing `cross_chunk_hash` MUST equal `SHA-256(canonical_bytecode)[0..4]` (`Error::CrossChunkHashMismatch`).
 14. The 5-bit payload symbols, after BCH verification, MUST byte-align (i.e., the trailing pad bits of the final 5-bit symbol are zero). Non-zero pad bits MUST be rejected with `Error::MalformedPayloadPadding` (parallels md1's analog).
 
-Note: the v0 spec sketch's `XpubDepthMismatch` rule is re-instated under compact-73 as an **encoder-side invariant** `Error::XpubOriginPathMismatch`, covering BOTH `depth ≠ component_count(origin_path)` and `child_number ≠ last_component(origin_path)` (the original sketch was depth-only). It is enforced at encode (see the encoder-side invariant paragraph above); the decoder cannot detect it because `depth`/`child_number` are not carried on-wire.
+Note: the v0 spec sketch's `XpubDepthMismatch` rule is re-instated under compact-73 as an **encoder-side invariant** `Error::XpubOriginPathMismatch`, covering BOTH `depth ≠ component_count(origin_path)` and `child_number ≠ last_component(origin_path)` — where an empty `origin_path` (the no-path / depth-0 case) expects `child_number = Normal{0}` rather than a terminal component (the original sketch was depth-only). It is enforced at encode (see the encoder-side invariant paragraph above); the decoder cannot detect it because `depth`/`child_number` are not carried on-wire.
 
 ## §5. Linkage to MD
 
