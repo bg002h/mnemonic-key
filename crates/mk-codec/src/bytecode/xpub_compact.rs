@@ -178,7 +178,10 @@ mod tests {
         let reconstructed = reconstruct_xpub(&compact, &path).unwrap();
         assert_eq!(reconstructed.depth, 0);
         assert_eq!(reconstructed.child_number, ChildNumber::Normal { index: 0 });
-        assert_eq!(reconstructed.parent_fingerprint, xpub_full.parent_fingerprint);
+        assert_eq!(
+            reconstructed.parent_fingerprint,
+            xpub_full.parent_fingerprint
+        );
         assert_eq!(reconstructed.chain_code, xpub_full.chain_code);
         assert_eq!(reconstructed.public_key, xpub_full.public_key);
         assert_eq!(reconstructed.network, xpub_full.network);
