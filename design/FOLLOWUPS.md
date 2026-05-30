@@ -291,6 +291,16 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Tier:** `v0.4`
 - **Companion:** `mnemonic-toolkit` FOLLOWUP `mk1-depth-child-compensating-check-watch`.
 
+### `mk1-no-path-depth0-support` — mk1 carries no origin path for a depth-0 / no-path key (WIF, master)
+
+- **Surfaced:** 2026-05-30, toolkit-side discovery during the mk-codec 0.3.2 re-pin (a `mnemonic bundle --slot wif=…` card builds a depth-0 xpub with an empty `origin_path`; the 0.3.2 guard rejected it, and even pre-guard the wire couldn't decode it). Design directive: "permissive on input, expressive on output; no path applies, no path is included on the wire."
+- **Where:** `crates/mk-codec/src/bytecode/path.rs` (`decode_explicit_path` accepted only `count 1..=10`), `xpub_compact.rs:85-106` (`reconstruct_xpub` `.expect()`d a non-empty path), `bytecode/encode.rs` (the 0.3.2 `XpubOriginPathMismatch` guard rejected empty paths via the child clause). `design/SPEC_mk_no_path_support.md` (R1-GREEN spec).
+- **What:** A raw WIF / non-HD master key has no derivation path; mk1 must carry none on the wire and round-trip a depth-0 xpub. 0.4.0: `decode_explicit_path` accepts explicit `count == 0` → empty path; `reconstruct_xpub` empty → `depth 0` / child `Normal{0}`; the encode guard accepts a consistent depth-0 card (`expected_child = path_child.unwrap_or(Normal{0})`) while still rejecting genuine disagreement. Wire-additive (reuses `0xFE 0x00`), so MINOR.
+- **Why deferred:** N/A — shipped in mk-codec 0.4.0 / mk-cli 0.5.0.
+- **Status:** `resolved 82c015e` — mk-codec 0.4.0. SPEC_mk_v0_1.md §3.5/§3.6/§4 updated (E1-E9); `SPEC_mk_depth_child_enforcement.md` superseded-in-part (E10). No new error variant; no GUI/manual lockstep.
+- **Tier:** `v0.4`
+- **Companion:** `mnemonic-toolkit` FOLLOWUP `mk1-wif-bundle-depth0-invalid-card` (toolkit re-pin to 0.4.0 + error-mirror + verify-bundle round-trip regression).
+
 ### `rustfmt-drift-fn-signature-collapse-3-files` — current stable rustfmt collapses fn signatures that origin/main keeps multi-line (CI `fmt --check --all` latent failure)
 
 - **Surfaced:** 2026-05-29, mk-codec test-hardening cycle (Phase 3 verification).
