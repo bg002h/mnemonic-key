@@ -76,23 +76,25 @@ fn version_to_network(version: [u8; 4]) -> Result<NetworkKind> {
 ///
 /// ```text
 /// depth        := component_count(origin_path)
-/// child_number := last_component(origin_path) (with hardened-bit encoding)
+/// child_number := last_component(origin_path) (with hardened-bit encoding),
+///                 or Normal{0} when origin_path is empty (depth-0 / no-path key)
 /// ```
 ///
-/// `origin_path` MUST be non-empty (caller responsibility; the spec
-/// guarantees this since standard-table indicators have ≥3 components
-/// and explicit-path encoding requires `count ≥ 1`).
+/// An empty `origin_path` (the no-path / depth-0 case, e.g. a WIF) yields
+/// `depth = 0` and `child_number = Normal{0}` (the BIP-32 master
+/// convention) — v0.4.0+; earlier versions required a non-empty path.
 pub fn reconstruct_xpub(compact: &XpubCompact, origin_path: &DerivationPath) -> Result<Xpub> {
     let network = version_to_network(compact.version)?;
     let components: Vec<ChildNumber> = origin_path.into_iter().copied().collect();
     let depth = components.len() as u8;
-    // origin_path is non-empty per SPEC §3.5: standard-table indicators
-    // dereference to ≥3 components, and explicit-path encoding rejects
-    // count == 0 with PathTooDeep(0) before reaching reconstruct_xpub.
+    // child_number defaults to the BIP-32 master convention Normal{0} when
+    // origin_path is empty (a depth-0 / no-path key, e.g. a WIF — SPEC §3.6).
+    // For a non-empty path it is the terminal component; this is the exact
+    // inverse of the encode-side guard in encode.rs.
     let child_number = components
         .last()
         .copied()
-        .expect("origin_path must be non-empty per SPEC §3.5");
+        .unwrap_or(ChildNumber::Normal { index: 0 });
     let public_key = PublicKey::from_slice(&compact.public_key)
         .map_err(|e| Error::InvalidXpubPublicKey(format!("{e}")))?;
     Ok(Xpub {
@@ -166,6 +168,20 @@ mod tests {
         assert_eq!(reconstructed.public_key, xpub_full.public_key);
         // child_number reconstruction
         assert_eq!(reconstructed.child_number, xpub_full.child_number);
+    }
+
+    #[test]
+    fn reconstruct_depth0_empty_path() {
+        let path = DerivationPath::from_str("m").unwrap(); // empty
+        let xpub_full = synthetic_xpub(&path); // depth 0, child Normal{0}
+        let compact = XpubCompact::from_xpub(&xpub_full);
+        let reconstructed = reconstruct_xpub(&compact, &path).unwrap();
+        assert_eq!(reconstructed.depth, 0);
+        assert_eq!(reconstructed.child_number, ChildNumber::Normal { index: 0 });
+        assert_eq!(reconstructed.parent_fingerprint, xpub_full.parent_fingerprint);
+        assert_eq!(reconstructed.chain_code, xpub_full.chain_code);
+        assert_eq!(reconstructed.public_key, xpub_full.public_key);
+        assert_eq!(reconstructed.network, xpub_full.network);
     }
 
     #[test]
