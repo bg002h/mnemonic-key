@@ -1,5 +1,12 @@
 # SPEC — mk-codec encode-time xpub ⇄ origin_path agreement enforcement
 
+> **Superseded in part by mk-codec 0.4.0** (`design/SPEC_mk_no_path_support.md`): an
+> empty `origin_path` is now a *valid, representable* no-path / depth-0 card (child
+> `Normal{0}` — e.g. a raw WIF), **not** a mismatch. The depth/child agreement guard
+> described below remains accurate for **genuine** disagreements only; the
+> "empty path → reject" / "mk1 cannot represent a depth-0 xpub" claims at the marked
+> lines are reversed in 0.4.0.
+
 **Status:** design → mandatory opus R0 gate (0C/0I before any implementation).
 **Repo:** `mnemonic-key` (default branch **`main`**). **Source SHA:** `998f3c9` (origin/main @ recon).
 **Resolves:** FOLLOWUP `mk1-depth-child-lossless-by-construction-unenforced` (`design/FOLLOWUPS.md:284`); Theme-C of the constellation feature survey (recon: `mnemonic-toolkit/cycle-prep-recon-theme-c-footguns.md` item 2).
@@ -27,7 +34,7 @@ Reject if EITHER:
 - `card.xpub.depth as usize != card.origin_path.into_iter().count()`, OR
 - `card.xpub.child_number != <last component of origin_path>`.
 
-Extract the last component as `card.origin_path.into_iter().last().copied()` → `Option<ChildNumber>`. Compare the raw `ChildNumber` with `==` (bitcoin `0.32` `ChildNumber` is an enum `Normal{index}`/`Hardened{index}` carrying the hardened bit structurally — direct `==` is the exact inverse of reconstruction; do NOT `u32`-normalize). An empty `origin_path` (`None`) is a mismatch → reject (it is encode-unreachable for a valid card — `encode_path` + the decoder require `1..=10` components, `SPEC:237,285` — but is hand-buildable via the `pub` fields, so the guard must not `unwrap`).
+Extract the last component as `card.origin_path.into_iter().last().copied()` → `Option<ChildNumber>`. Compare the raw `ChildNumber` with `==` (bitcoin `0.32` `ChildNumber` is an enum `Normal{index}`/`Hardened{index}` carrying the hardened bit structurally — direct `==` is the exact inverse of reconstruction; do NOT `u32`-normalize). An empty `origin_path` (`None`) is a mismatch → reject (it is encode-unreachable for a valid card — `encode_path` + the decoder require `1..=10` components, `SPEC:237,285` — but is hand-buildable via the `pub` fields, so the guard must not `unwrap`). **(0.4.0: an empty `origin_path` IS now representable — a consistent depth-0 card with child `Normal{0}` encodes and round-trips; the guard expects `Normal{0}` for the empty case and rejects only genuine disagreement.)**
 
 ### §2.3 — Error variant
 mk-codec `error.rs` enum is `#[non_exhaustive]` (`:18`) → additive. **It is NOT alphabetized** (it is grouped string-layer then bytecode-layer with section banners, `:99` "Bytecode-layer errors"). Place the new variant in the **bytecode-layer group** (near `TrailingBytes`/`UnexpectedEnd`, `:141-146`). **Do NOT alphabetize** — that is the *toolkit's* `ToolkitError` convention, not mk-codec's; flag this in the plan so a reviewer doesn't "correct" it.
@@ -54,7 +61,7 @@ Name is `XpubOriginPathMismatch` (NOT the historical `XpubDepthMismatch` — tha
 ### §2.4 — Edge cases (architect-verified: NO false positives against any valid card)
 - **Standard-table indicator** path: the dictionary always dereferences to the FULL path (`bytecode/path.rs:38-55`); a correctly-derived xpub-at-that-path matches the full deref depth/child. The only divergence is the bug itself.
 - **Elided / partial origin** (the make-or-break risk): mk1 has **NONE** — `path.rs` encodes the full path in both standard-table (table `:38-55`, deref `lookup_indicator` `:60-65`) and explicit (`encode_path` `:85-98`, LEB128 every component) modes; no md1-style "last N components" facility (md1's elided origin lives in a different codec/layer). `depth == len` enforces the format's existing contract (`SPEC:257`), not a new constraint.
-- **depth-0 master xpub:** mk1 cannot represent one (paths are `1..=10`; `encode_path`→decoder rejects `count==0` as `PathTooDeep(0)`). No spurious reject.
+- **depth-0 master xpub:** mk1 cannot represent one (paths are `1..=10`; `encode_path`→decoder rejects `count==0` as `PathTooDeep(0)`). No spurious reject. **(0.4.0: this is reversed — mk1 now represents a depth-0 / no-path key as explicit `count==0`; decode → depth 0, child `Normal{0}`. See `SPEC_mk_no_path_support.md`.)**
 
 ## §3 — SPEC_mk_v0_1.md edits (re-grep line numbers at impl time)
 The decoder-cannot-detect framing MUST be preserved — keep these in the encoder-side-invariant bucket, do not move into the numbered decoder rules.
