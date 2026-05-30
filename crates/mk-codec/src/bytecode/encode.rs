@@ -26,6 +26,21 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
         return Err(Error::InvalidPolicyIdStubCount);
     }
 
+    // Encoder-side invariant (SPEC_mk_v0_1.md §4): compact-73 reconstructs depth/
+    // child_number from origin_path on decode; reject any xpub whose depth/
+    // child_number disagree, else the emitted card decodes to a different-
+    // metadata xpub (the decoder cannot detect — no on-wire depth).
+    let path_depth = card.origin_path.into_iter().count();
+    let path_child = card.origin_path.into_iter().last().copied();
+    if card.xpub.depth as usize != path_depth || Some(card.xpub.child_number) != path_child {
+        return Err(Error::XpubOriginPathMismatch {
+            xpub_depth: card.xpub.depth,
+            path_depth: path_depth as u8,
+            xpub_child: card.xpub.child_number,
+            path_child,
+        });
+    }
+
     let header = BytecodeHeader {
         version: 0,
         fingerprint_flag: card.origin_fingerprint.is_some(),
@@ -50,7 +65,7 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::bytecode::test_helpers::synthetic_xpub;
-    use bitcoin::bip32::{DerivationPath, Fingerprint};
+    use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint};
     use std::str::FromStr;
 
     fn fixture_card_1stub_with_fp() -> KeyCard {
@@ -102,5 +117,75 @@ mod tests {
         let a = encode_bytecode(&card).unwrap();
         let b = encode_bytecode(&card).unwrap();
         assert_eq!(a, b, "encoder must be byte-deterministic");
+    }
+
+    // ── XpubOriginPathMismatch encoder-side guard (SPEC §5) ──────────────────
+
+    // Cell 1: xpub.depth ≠ component_count(origin_path) → reject.
+    #[test]
+    fn rejects_xpub_depth_mismatch() {
+        let mut card = fixture_card_1stub_with_fp(); // path m/48'/0'/0'/2' → depth 4
+        card.xpub.depth = 3;
+        assert!(matches!(
+            encode_bytecode(&card),
+            Err(Error::XpubOriginPathMismatch {
+                xpub_depth: 3,
+                path_depth: 4,
+                ..
+            }),
+        ));
+    }
+
+    // Cell 2 + 6: same depth, wrong terminal child (the previously-silent case;
+    // the fixture is a standard-table path, so this also covers the dictionary
+    // child-mismatch). A depth-only check (as the toolkit's does) would MISS this.
+    #[test]
+    fn rejects_xpub_child_mismatch_same_depth() {
+        let mut card = fixture_card_1stub_with_fp(); // terminal child = 2'
+        card.xpub.child_number = ChildNumber::Hardened { index: 1 }; // → 1', depth still 4
+        assert!(matches!(
+            encode_bytecode(&card),
+            Err(Error::XpubOriginPathMismatch { .. }),
+        ));
+    }
+
+    // Cell 3: empty origin_path (depth-0, hand-buildable via pub fields) → reject
+    // via the child clause (Some(Normal{0}) != None), no panic; path_child = None.
+    #[test]
+    fn rejects_empty_origin_path() {
+        let path = DerivationPath::from_str("m").unwrap(); // empty path
+        let card = KeyCard {
+            policy_id_stubs: vec![[0xAA; 4]],
+            origin_fingerprint: None,
+            xpub: synthetic_xpub(&path), // depth 0, child Normal{0}
+            origin_path: path,
+        };
+        assert!(matches!(
+            encode_bytecode(&card),
+            Err(Error::XpubOriginPathMismatch {
+                path_child: None,
+                ..
+            }),
+        ));
+    }
+
+    // Cell 4: an aligned EXPLICIT-path card (not in the standard table) encodes
+    // OK — guards against false-positives on explicit-mode paths. (The existing
+    // `encodes_typical_1stub_card_to_84_bytes` covers the standard-table-aligned
+    // case = SPEC cell 5; `xpub_compact.rs::round_trip_full_xpub_depth_4` covers
+    // the reconstruct round-trip = SPEC cell 4 losslessness.)
+    #[test]
+    fn aligned_explicit_path_card_encodes() {
+        let path = DerivationPath::from_str("m/44'/0'/0'/0/5").unwrap(); // 5 comps, explicit
+        let card = KeyCard {
+            policy_id_stubs: vec![[0xAA; 4]],
+            origin_fingerprint: None,
+            xpub: synthetic_xpub(&path), // depth 5, child Normal{5} — aligned
+            origin_path: path,
+        };
+        assert!(
+            encode_bytecode(&card).is_ok(),
+            "aligned explicit-path card must encode"
+        );
     }
 }
