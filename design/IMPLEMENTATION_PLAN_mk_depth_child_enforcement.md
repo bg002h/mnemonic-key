@@ -142,7 +142,7 @@ Change to:
 
 - [ ] **Step 1:** in `encode_bytecode`, insert the guard immediately AFTER the two `policy_id_stubs` length checks (after the second `return Err(Error::InvalidPolicyIdStubCount);` block, before `let header = BytecodeHeader { … }`). Placing it at the top (rather than adjacent to `from_xpub`) makes it run before `encode_path`, so the empty-path cell is rejected cleanly without depending on `encode_path`'s empty-input behavior. The guard reads only `card.xpub` + `card.origin_path`:
 ```rust
-    // SPEC §2.2 (encoder-side invariant): compact-73 reconstructs depth/
+    // Encoder-side invariant (SPEC_mk_v0_1.md §4): compact-73 reconstructs depth/
     // child_number from origin_path on decode; reject any xpub whose depth/
     // child_number disagree, else the emitted card decodes to a different-
     // metadata xpub (the decoder cannot detect — no on-wire depth).
