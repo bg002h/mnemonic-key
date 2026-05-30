@@ -195,6 +195,27 @@ mod tests {
         ));
     }
 
+    // Cell 8: the WIF/no-path card survives the full bytecode round-trip
+    // (encode_bytecode → decode_bytecode), proving end-to-end support.
+    #[test]
+    fn depth0_card_round_trips() {
+        use crate::bytecode::decode::decode_bytecode;
+        let path = DerivationPath::from_str("m").unwrap();
+        let card = KeyCard {
+            policy_id_stubs: vec![[0xAA; 4]],
+            origin_fingerprint: None,
+            xpub: synthetic_xpub(&path),
+            origin_path: path.clone(),
+        };
+        let wire = encode_bytecode(&card).unwrap();
+        let decoded = decode_bytecode(&wire).unwrap();
+        assert_eq!(decoded.origin_path, path);
+        assert_eq!(decoded.xpub.depth, 0);
+        assert_eq!(decoded.xpub.child_number, ChildNumber::Normal { index: 0 });
+        assert_eq!(decoded.xpub.public_key, card.xpub.public_key);
+        assert_eq!(decoded.xpub.chain_code, card.xpub.chain_code);
+    }
+
     // Cell 4: an aligned EXPLICIT-path card (not in the standard table) encodes
     // OK — guards against false-positives on explicit-mode paths. (The existing
     // `encodes_typical_1stub_card_to_84_bytes` covers the standard-table-aligned

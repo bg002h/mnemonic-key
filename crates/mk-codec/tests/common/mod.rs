@@ -52,7 +52,11 @@ pub fn path_strategy() -> impl Strategy<Value = DerivationPath> {
     )
     .prop_map(DerivationPath::from);
 
-    prop_oneof![standard, explicit].boxed()
+    // The empty path (no-path / depth-0 key, e.g. a WIF) — encodes as `0xFE 0x00`,
+    // decodes to depth-0 / child Normal{0}. v0.4.0+ (mk1-no-path-depth0-support).
+    let empty = Just(DerivationPath::from_str("m").expect("empty path parses"));
+
+    prop_oneof![standard, explicit, empty].boxed()
 }
 
 /// An `Xpub` built by DIRECT struct construction (precedent:
@@ -65,9 +69,12 @@ pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
     // under CI's `-D warnings`; R0 M3). `path` is moved into the closure below.
     let components: Vec<ChildNumber> = path.as_ref().to_vec();
     let depth = components.len() as u8;
-    let child_number = *components
+    // Normal{0} for the empty (no-path / depth-0) case; terminal component
+    // otherwise. Mirrors reconstruct_xpub / synthetic_xpub.
+    let child_number = components
         .last()
-        .expect("path is non-empty (standard entries + explicit 1..=10)");
+        .copied()
+        .unwrap_or(ChildNumber::Normal { index: 0 });
 
     (
         any::<[u8; 32]>().prop_filter("valid secp256k1 scalar", |b| {

@@ -47,7 +47,8 @@ pub struct KeyCard {
     ///
     /// ```text
     /// depth        := component_count(origin_path)
-    /// child_number := last_component(origin_path)
+    /// child_number := last_component(origin_path),
+    ///                 or Normal{0} when origin_path is empty (depth-0 / no-path key)
     /// ```
     pub xpub: Xpub,
 }
