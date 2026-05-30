@@ -11,6 +11,8 @@
 //! [xpub_compact      : 73 B]
 //! ```
 
+use bitcoin::bip32::ChildNumber;
+
 use crate::bytecode::header::BytecodeHeader;
 use crate::bytecode::path::encode_path;
 use crate::bytecode::xpub_compact::{XpubCompact, encode_xpub_compact};
@@ -30,9 +32,13 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
     // child_number from origin_path on decode; reject any xpub whose depth/
     // child_number disagree, else the emitted card decodes to a different-
     // metadata xpub (the decoder cannot detect — no on-wire depth).
+    // expected_child mirrors reconstruct_xpub exactly: the terminal component,
+    // or Normal{0} for an empty path (depth-0 / no-path key, e.g. a WIF). A card
+    // encodes iff it survives compact-drop + reconstruction unchanged.
     let path_depth = card.origin_path.into_iter().count();
     let path_child = card.origin_path.into_iter().last().copied();
-    if card.xpub.depth as usize != path_depth || Some(card.xpub.child_number) != path_child {
+    let expected_child = path_child.unwrap_or(ChildNumber::Normal { index: 0 });
+    if card.xpub.depth as usize != path_depth || card.xpub.child_number != expected_child {
         return Err(Error::XpubOriginPathMismatch {
             xpub_depth: card.xpub.depth,
             path_depth: path_depth as u8,
@@ -149,10 +155,10 @@ mod tests {
         ));
     }
 
-    // Cell 3: empty origin_path (depth-0, hand-buildable via pub fields) → reject
-    // via the child clause (Some(Normal{0}) != None), no panic; path_child = None.
+    // Cell 5 (v0.4.0): a consistent depth-0 / no-path card (empty path, depth 0,
+    // child Normal{0} — the WIF shape) now ENCODES. Was rejected pre-0.4.0.
     #[test]
-    fn rejects_empty_origin_path() {
+    fn accepts_consistent_depth0_card() {
         let path = DerivationPath::from_str("m").unwrap(); // empty path
         let card = KeyCard {
             policy_id_stubs: vec![[0xAA; 4]],
@@ -160,9 +166,29 @@ mod tests {
             xpub: synthetic_xpub(&path), // depth 0, child Normal{0}
             origin_path: path,
         };
+        assert!(
+            encode_bytecode(&card).is_ok(),
+            "consistent depth-0 no-path card must encode"
+        );
+    }
+
+    // Cell 6: a depth-0 card with a non-canonical terminal child (Normal{5})
+    // would NOT round-trip (reconstruct yields Normal{0}) → still rejected.
+    #[test]
+    fn rejects_depth0_noncanonical_child() {
+        let path = DerivationPath::from_str("m").unwrap(); // empty path
+        let mut card = KeyCard {
+            policy_id_stubs: vec![[0xAA; 4]],
+            origin_fingerprint: None,
+            xpub: synthetic_xpub(&path), // depth 0, child Normal{0}
+            origin_path: path,
+        };
+        card.xpub.child_number = ChildNumber::Normal { index: 5 };
         assert!(matches!(
             encode_bytecode(&card),
             Err(Error::XpubOriginPathMismatch {
+                xpub_depth: 0,
+                path_depth: 0,
                 path_child: None,
                 ..
             }),
