@@ -9,6 +9,7 @@
 //! (tracked as `decoder-error-variant-parity` in
 //! `design/FOLLOWUPS.md`).
 
+use bitcoin::bip32::ChildNumber;
 use thiserror::Error;
 
 /// All errors `mk-codec` can produce.
@@ -158,6 +159,29 @@ pub enum Error {
         bytecode_len: usize,
         /// Maximum bytecode length the v0.1 chunking layer can carry.
         max_supported: usize,
+    },
+
+    /// Encoder-side invariant: the supplied `xpub`'s BIP-32 `depth` /
+    /// `child_number` disagree with `origin_path` (`depth ≠` component
+    /// count, or `child_number ≠` the terminal component). Compact-73
+    /// reconstructs both fields from the path on decode, so emitting such a
+    /// card would yield a different-metadata xpub. Rejected at encode to keep
+    /// compact-73 genuinely lossless. The decoder cannot detect this (no
+    /// on-wire depth) — see `design/SPEC_mk_v0_1.md` §4 (encoder-side
+    /// invariant) and `design/SPEC_mk_depth_child_enforcement.md`.
+    #[error(
+        "xpub origin-path mismatch: xpub depth {xpub_depth} / child {xpub_child} \
+         vs origin_path depth {path_depth} / last {path_child:?}"
+    )]
+    XpubOriginPathMismatch {
+        /// `xpub.depth` as supplied.
+        xpub_depth: u8,
+        /// `component_count(origin_path)`.
+        path_depth: u8,
+        /// `xpub.child_number` as supplied.
+        xpub_child: ChildNumber,
+        /// Terminal component of `origin_path` (`None` for an empty path).
+        path_child: Option<ChildNumber>,
     },
 }
 
