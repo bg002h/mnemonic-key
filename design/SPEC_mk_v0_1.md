@@ -260,9 +260,9 @@ child_number := last_component(origin_path) including hardened-bit encoding
 
 For a standard-table indicator, both come from the dictionary entry. For the explicit-path escape hatch, both come from the on-wire components.
 
-**Why compact-73:** the dropped fields (`depth`, `child_number`) are redundant with `origin_path`; carrying them on-wire risks the drift detected by md1-style drift-rule logic. Compact-73 is *lossless* — both fields are reconstructible from the path — and saves 5 bytes per card (~one row of typical hand-engraving). The drift class is impossible by construction.
+**Why compact-73:** the dropped fields (`depth`, `child_number`) are redundant with `origin_path`; carrying them on-wire risks the drift detected by md1-style drift-rule logic. Compact-73 is *lossless because the encoder enforces agreement*: both fields are reconstructible from the path, AND `encode` rejects any `xpub` whose `depth` / `child_number` disagree with `origin_path` (`Error::XpubOriginPathMismatch`), saving 5 bytes per card (~one row of typical hand-engraving). The drift class is closed on the emit side by that encoder invariant (§4).
 
-**Limit-of-detection note (carries into §6 normative recommendations):** under compact-73, an operator who picks the wrong standard-table indicator while engraving the right xpub bytes produces a card that decodes without error and reconstructs an xpub claiming the wrong derivation path. The card's chain_code and public_key are correct (addresses derive correctly), but the path embedded in the reconstructed BIP 32 serialization is wrong. Detection of this class of error happens at the §5 step 4 Wallet Instance ID check — only when the user has an externally-anchored expected wallet identity to compare against. Single-wallet recoveries without an external anchor will reconstruct the wrong-path xpub silently. §6 recommends an out-of-band first-address verification before moving funds.
+**Limit-of-detection note (carries into §6 normative recommendations):** (As of mk-codec 0.3.2 the **emit** side of this hazard is closed: `encode` rejects a depth/child-mismatched card outright — see §4's encoder-side invariant — so the codec can no longer *produce* such a card. The residual limit-of-detection below applies only to hand-constructed bytecode fed directly to the decoder, which reconstructs from the path with no on-wire depth to cross-check.) Under compact-73, an operator who picks the wrong standard-table indicator while engraving the right xpub bytes produces a card that decodes without error and reconstructs an xpub claiming the wrong derivation path. The card's chain_code and public_key are correct (addresses derive correctly), but the path embedded in the reconstructed BIP 32 serialization is wrong. Detection of this class of error happens at the §5 step 4 Wallet Instance ID check — only when the user has an externally-anchored expected wallet identity to compare against. Single-wallet recoveries without an external anchor will reconstruct the wrong-path xpub silently. §6 recommends an out-of-band first-address verification before moving funds.
 
 ### 3.7 Bytecode header reserved bits
 
@@ -291,6 +291,8 @@ A decoder MUST reject mk1 bytecode that:
 
 Encoder-side invariant (not a decoder rule): encoders MUST set the bytecode-header fingerprint flag (bit 2) if and only if `origin_fingerprint` is present in the payload. The invariant is structurally undetectable at decode time (no length prefix distinguishes "flag set, fp present" from "flag unset, fp omitted"); a decoder follows the flag verbatim. A hand-crafted bytecode that violates the invariant decodes to a wrong-but-internally-consistent `KeyCard`; detection happens at the higher Wallet Instance ID check (§5 step 4).
 
+Encoder-side invariant (not a decoder rule): encoders MUST reject a card whose `xpub.depth ≠ component_count(origin_path)` OR `xpub.child_number ≠ last_component(origin_path)` with `Error::XpubOriginPathMismatch`. Compact-73 drops `depth`/`child_number` and the decoder reconstructs them from `origin_path`, so a mismatched card would decode to a different-metadata xpub (chain_code/public_key — and therefore addresses — are unaffected). Like the fingerprint-flag invariant, this is structurally undetectable at decode (no on-wire depth to compare); a hand-crafted bytecode violating it decodes to a wrong-but-internally-consistent `KeyCard`, detectable only at the higher Wallet Instance ID check (§5 step 4).
+
 Additional decoder rules at the string/chunking layer:
 
 11. For chunked input: chunks share a common `chunk_set_id`; mismatched `chunk_set_id` MUST be rejected (`Error::ChunkSetIdMismatch`).
@@ -298,7 +300,7 @@ Additional decoder rules at the string/chunking layer:
 13. For chunked input: reassembled bytecode's trailing `cross_chunk_hash` MUST equal `SHA-256(canonical_bytecode)[0..4]` (`Error::CrossChunkHashMismatch`).
 14. The 5-bit payload symbols, after BCH verification, MUST byte-align (i.e., the trailing pad bits of the final 5-bit symbol are zero). Non-zero pad bits MUST be rejected with `Error::MalformedPayloadPadding` (parallels md1's analog).
 
-Note: the v0 spec sketch's `XpubDepthMismatch` rule is removed under compact-73 — `xpub.depth` is no longer carried on-wire, so drift between the depth field and the path is impossible by construction.
+Note: the v0 spec sketch's `XpubDepthMismatch` rule is re-instated under compact-73 as an **encoder-side invariant** `Error::XpubOriginPathMismatch`, covering BOTH `depth ≠ component_count(origin_path)` and `child_number ≠ last_component(origin_path)` (the original sketch was depth-only). It is enforced at encode (see the encoder-side invariant paragraph above); the decoder cannot detect it because `depth`/`child_number` are not carried on-wire.
 
 ## §5. Linkage to MD
 
