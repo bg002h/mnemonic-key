@@ -95,9 +95,16 @@ pub fn run(args: AddressArgs) -> Result<u8> {
     let mut rows: Vec<(u32, u32, String)> = Vec::new();
     for &chain in args.chain.chains() {
         for &index in &indices {
+            // `chain` is 0/1 (in-range); `index` is bounded < 2^31 by
+            // `resolve_indices`, but map the error rather than `.unwrap()` (no
+            // panic on user-derived values — C1).
             let dp: DerivationPath = vec![
                 ChildNumber::from_normal_idx(chain).unwrap(),
-                ChildNumber::from_normal_idx(index).unwrap(),
+                ChildNumber::from_normal_idx(index).map_err(|_| {
+                    CliError::UsageError(format!(
+                        "index {index} out of BIP-32 normal range (0..2147483647)"
+                    ))
+                })?,
             ]
             .into();
             let child = card.xpub.derive_pub(&secp, &dp).map_err(|e| {
@@ -175,10 +182,25 @@ fn resolve_network(xpub: &Xpub, explicit: Option<CliNetwork>) -> Result<CliNetwo
 }
 
 /// `--count N` → `0..N`; `--range A,B` → `A..=B`; neither → `0..10`.
+///
+/// The highest generated index is validated against the BIP-32 normal-index
+/// ceiling (`< 2^31`) before any allocation (C1): an out-of-range `--count` /
+/// `--range` is a `UsageError` (exit 64), never a `from_normal_idx` panic or a
+/// multi-gigabyte allocation.
 fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> {
+    // Valid BIP-32 normal indices are 0..=2^31-1.
+    const MAX_NORMAL: u32 = (1u32 << 31) - 1;
     match (count, range) {
         (Some(_), Some(_)) => unreachable!("clap conflicts_with"),
-        (Some(c), None) => Ok((0..c).collect()),
+        (Some(c), None) => {
+            // indices 0..c → highest is c-1; require c-1 <= MAX_NORMAL.
+            if c > MAX_NORMAL.saturating_add(1) {
+                return Err(CliError::UsageError(format!(
+                    "--count {c} exceeds the BIP-32 normal-index ceiling (max 2147483648)"
+                )));
+            }
+            Ok((0..c).collect())
+        }
         (None, Some(r)) => {
             let (a, b) = r
                 .split_once(',')
@@ -194,6 +216,11 @@ fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> 
             if a > b {
                 return Err(CliError::UsageError(format!(
                     "--range start {a} must be <= end {b}"
+                )));
+            }
+            if b > MAX_NORMAL {
+                return Err(CliError::UsageError(format!(
+                    "--range end {b} exceeds the BIP-32 normal-index ceiling (2147483647)"
                 )));
             }
             Ok((a..=b).collect())

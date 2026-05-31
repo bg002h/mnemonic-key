@@ -139,3 +139,11 @@ fn child_xpub_roundtrips_through_encode() {
     );
     assert!(String::from_utf8_lossy(&enc.stdout).contains("mk1"));
 }
+
+#[test]
+fn out_of_range_index_is_usage_error_not_panic() {
+    // C1: --index ≥ 2^31 must be a UsageError (exit 64), not a from_normal_idx panic (101).
+    let c = card(V2_84_MAIN, "m/84'/0'/0'");
+    let o = run(&c, &["--index", "2147483648"]);
+    assert_eq!(code(&o), 64, "{}", String::from_utf8_lossy(&o.stderr));
+}

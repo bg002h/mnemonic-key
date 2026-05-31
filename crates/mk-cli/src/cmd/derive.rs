@@ -45,11 +45,16 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,
-        (None, Some(i)) => vec![
-            ChildNumber::from_normal_idx(0).unwrap(),
-            ChildNumber::from_normal_idx(i).unwrap(),
-        ]
-        .into(),
+        (None, Some(i)) => {
+            // `--index N` = m/0/N. N must be a valid BIP-32 normal index (< 2^31);
+            // map the error rather than `.unwrap()` so a huge index is exit 64, not a panic (C1).
+            let leaf = ChildNumber::from_normal_idx(i).map_err(|_| {
+                CliError::UsageError(format!(
+                    "--index {i} out of BIP-32 normal range (0..2147483647)"
+                ))
+            })?;
+            vec![ChildNumber::from_normal_idx(0).unwrap(), leaf].into()
+        }
         // ArgGroup(required, !multiple) guarantees exactly one.
         _ => unreachable!("clap ArgGroup target is required + exclusive"),
     };

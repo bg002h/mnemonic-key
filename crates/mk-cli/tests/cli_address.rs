@@ -223,3 +223,14 @@ fn json_shape() {
     assert_eq!(addrs[0]["index"], 0);
     assert_eq!(addrs[0]["address"], V2_84_M0_0_P2WPKH);
 }
+
+#[test]
+fn out_of_range_count_and_range_are_usage_error_not_panic() {
+    // C1: an index ≥ 2^31 must be a UsageError (exit 64), never a from_normal_idx
+    // panic (exit 101) or a multi-GB allocation.
+    let c = card(V2_84_MAIN, "m/84'/0'/0'");
+    let big_count = run(&c, &["--count", "2147483649"]);
+    assert_eq!(code(&big_count), 64, "{}", stderr(&big_count));
+    let big_range = run(&c, &["--range", "2147483648,2147483648"]);
+    assert_eq!(code(&big_range), 64, "{}", stderr(&big_range));
+}
