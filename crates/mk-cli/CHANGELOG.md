@@ -7,6 +7,18 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-05-30
+
+**SemVer-MINOR — two new read-only public-derivation subcommands: `mk address` + `mk derive`.** No private keys, no signing (an xpub has none); read-only by construction.
+
+- **`mk address`** — render N receive/change addresses controlled by a card's xpub. The address type is inferred from the origin-path purpose **at canonical single-sig account depth** (`m/44'`→p2pkh, `49'`→p2sh-p2wpkh, `84'`→p2wpkh, `86'`→p2tr) and is overridable with `--address-type`; a card whose origin is **not** at account depth requires the explicit flag (and emits a stderr advisory that addresses are derived relative to the card's xpub). Multisig-cosigner cards (`m/48'`/`m/87'`) are **refused** (single-key addresses would not match the wallet). `--count N` (default 10) / `--range A,B`; `--chain receive|change|both`; `--network` override that must agree with the xpub's network kind (distinguishes signet/regtest); `--json`.
+- **`mk derive`** — derive a child xpub at a relative **unhardened** path (`--path m/0/5`, or `--index N` sugar for `m/0/N`); hardened components are rejected (an xpub cannot derive them). Multisig cards are allowed (per-cosigner child derivation is legitimate). The emitted `child_xpub` is composable back through `mk encode`. `--json`.
+- New shared `cmd::derive_support` module (`AddressType`/`CliNetwork` value enums, account-depth-gated `infer_address_type`, `render_address` under a `verification_only()` secp). No `mk-codec` change. `mk gui-schema` auto-reflects the new surface (value-enum dropdowns); paired `mnemonic-gui` schema-mirror + manual (`44-mk-cli.md`) + install-pin updates land in lockstep.
+
+## [0.5.0] — 2026-05-30
+
+**SemVer-MINOR — adopt `mk-codec 0.4.0` (mk1 no-path / depth-0 support).** A WIF / non-HD key now round-trips as an mk1 card carrying an empty wire path (no derivation path applies, so none is encoded); the decoder accepts a consistent depth-0 card. `mk-codec 0.4.0` also added the encode-time `XpubOriginPathMismatch` guard (rejects any card whose `xpub.depth`/`child_number` disagree with `origin_path`). (Backfilled changelog entry — the 0.5.0 release predated this file's coverage.)
+
 ## [0.4.2] — 2026-05-23
 
 **SemVer-PATCH — process argv-hardening (`PR_SET_DUMPABLE`).** `mk` now calls `prctl(PR_SET_DUMPABLE, 0)` at the top of `main()` (Linux; no-op elsewhere), making `/proc/$PID/` unreadable to OTHER non-root UIDs and disabling core dumps — so a secret passed inline on argv can no longer be harvested by another user via `/proc/$PID/cmdline` or a core file. Residual same-UID window documented + accepted. New `process_hardening` module + `libc` dep. Part of the m-format constellation argv-hardening rollout (mnemonic-toolkit v0.34.7 + md-cli v0.6.1 + ms-cli v0.4.1). Tracked via the toolkit's `argv-overwrite-after-parse` FOLLOWUP closure.

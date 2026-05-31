@@ -1,11 +1,11 @@
 [package]
 name = "mk-cli"
-version = "0.5.0"
+version = "0.6.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Standalone CLI for mk1 (mnemonic-key) plate handling — encode, decode, inspect, verify, vectors, gui-schema."
+description = "Standalone CLI for mk1 (mnemonic-key) plate handling — encode, decode, inspect, verify, repair, address, derive, vectors, gui-schema."
 homepage = "https://github.com/bg002h/mnemonic-key"
 documentation = "https://docs.rs/mk-cli"
 readme = "README.md"
