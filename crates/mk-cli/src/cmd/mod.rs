@@ -2,6 +2,7 @@
 //! the foundation modules + the `mk-codec` and `md-codec` libraries.
 
 pub mod decode;
+pub mod derive_support;
 pub mod encode;
 pub mod gui_schema;
 pub mod inspect;
