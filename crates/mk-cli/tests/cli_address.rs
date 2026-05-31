@@ -78,7 +78,10 @@ fn account_84_default_p2wpkh_count10() {
     let c = card(V2_84_MAIN, "m/84'/0'/0'");
     let o = run(&c, &[]);
     assert_eq!(code(&o), 0, "{}", stderr(&o));
-    assert_eq!(stdout(&o).lines().filter(|l| l.contains("bc1q")).count(), 10);
+    assert_eq!(
+        stdout(&o).lines().filter(|l| l.contains("bc1q")).count(),
+        10
+    );
 }
 
 #[test]
@@ -107,8 +110,12 @@ fn address_type_override_on_84_yields_legacy() {
     let c = card(V2_84_MAIN, "m/84'/0'/0'");
     let o = run(&c, &["--address-type", "p2pkh", "--count", "1"]);
     // legacy P2PKH addresses start with '1'
-    assert!(stdout(&o).lines().any(|l| l.trim_start().contains("  1")
-        || l.split_whitespace().last().is_some_and(|a| a.starts_with('1'))));
+    assert!(stdout(&o).lines().any(|l| {
+        l.trim_start().contains("  1")
+            || l.split_whitespace()
+                .last()
+                .is_some_and(|a| a.starts_with('1'))
+    }));
 }
 
 #[test]
@@ -131,7 +138,11 @@ fn nonstandard_requires_address_type_then_succeeds() {
     let c = card(V5_NONSTD, "m/9999'/1234'/56'/7'");
     let no_flag = run(&c, &["--count", "1"]);
     assert_eq!(code(&no_flag), 64, "{}", stderr(&no_flag));
-    assert!(stderr(&no_flag).contains("address-type"), "{}", stderr(&no_flag));
+    assert!(
+        stderr(&no_flag).contains("address-type"),
+        "{}",
+        stderr(&no_flag)
+    );
     let with_flag = run(&c, &["--address-type", "p2wpkh", "--count", "1"]);
     assert_eq!(code(&with_flag), 0, "{}", stderr(&with_flag));
 }
@@ -146,7 +157,11 @@ fn leaf_card_requires_then_advises_depth() {
     // with --address-type → succeeds, but emits the depth advisory on stderr
     let with_flag = run(&c, &["--address-type", "p2wpkh", "--count", "1"]);
     assert_eq!(code(&with_flag), 0, "{}", stderr(&with_flag));
-    assert!(stderr(&with_flag).contains("depth"), "{}", stderr(&with_flag));
+    assert!(
+        stderr(&with_flag).contains("depth"),
+        "{}",
+        stderr(&with_flag)
+    );
 }
 
 #[test]
@@ -154,7 +169,10 @@ fn range_inclusive_and_validation() {
     let c = card(V2_84_MAIN, "m/84'/0'/0'");
     let ok = run(&c, &["--range", "2,4"]);
     assert_eq!(code(&ok), 0, "{}", stderr(&ok));
-    assert_eq!(stdout(&ok).lines().filter(|l| l.contains("bc1q")).count(), 3); // 2,3,4
+    assert_eq!(
+        stdout(&ok).lines().filter(|l| l.contains("bc1q")).count(),
+        3
+    ); // 2,3,4
     let backwards = run(&c, &["--range", "5,2"]);
     assert_eq!(code(&backwards), 64, "{}", stderr(&backwards));
 }

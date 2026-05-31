@@ -5,14 +5,14 @@
 //! `--address-type`; multisig cosigner cards are refused), derive `m/chain/index`
 //! relative to the card's xpub, and render. No private keys, no signing.
 
-use bitcoin::bip32::{ChildNumber, DerivationPath, Xpub};
 use bitcoin::NetworkKind;
+use bitcoin::bip32::{ChildNumber, DerivationPath, Xpub};
 use clap::Args;
 use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::derive_support::{
-    infer_address_type, render_address, secp_verify, AddressType, AddressTypeInference, CliNetwork,
+    AddressType, AddressTypeInference, CliNetwork, infer_address_type, render_address, secp_verify,
 };
 use crate::cmd::read_mk1_strings;
 use crate::error::{CliError, Result};
@@ -95,13 +95,19 @@ pub fn run(args: AddressArgs) -> Result<u8> {
     let mut rows: Vec<(u32, u32, String)> = Vec::new();
     for &chain in args.chain.chains() {
         for &index in &indices {
-            let dp: DerivationPath =
-                vec![ChildNumber::from_normal_idx(chain).unwrap(), ChildNumber::from_normal_idx(index).unwrap()]
-                    .into();
+            let dp: DerivationPath = vec![
+                ChildNumber::from_normal_idx(chain).unwrap(),
+                ChildNumber::from_normal_idx(index).unwrap(),
+            ]
+            .into();
             let child = card.xpub.derive_pub(&secp, &dp).map_err(|e| {
                 CliError::UsageError(format!("derivation failed at m/{chain}/{index}: {e}"))
             })?;
-            rows.push((chain, index, render_address(&secp, &child, addr_type, network)));
+            rows.push((
+                chain,
+                index,
+                render_address(&secp, &child, addr_type, network),
+            ));
         }
     }
 
@@ -156,7 +162,11 @@ fn resolve_network(xpub: &Xpub, explicit: Option<CliNetwork>) -> Result<CliNetwo
                     "--network {} disagrees with the xpub's network ({}); refusing to render \
                      wrong-network addresses",
                     net.label(),
-                    if kind == NetworkKind::Main { "mainnet" } else { "testnet" }
+                    if kind == NetworkKind::Main {
+                        "mainnet"
+                    } else {
+                        "testnet"
+                    }
                 )));
             }
             Ok(net)
@@ -170,15 +180,17 @@ fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> 
         (Some(_), Some(_)) => unreachable!("clap conflicts_with"),
         (Some(c), None) => Ok((0..c).collect()),
         (None, Some(r)) => {
-            let (a, b) = r.split_once(',').ok_or_else(|| {
-                CliError::UsageError(format!("--range expects `A,B`, got {r:?}"))
-            })?;
-            let a: u32 = a.trim().parse().map_err(|e| {
-                CliError::UsageError(format!("--range start {a:?}: {e}"))
-            })?;
-            let b: u32 = b.trim().parse().map_err(|e| {
-                CliError::UsageError(format!("--range end {b:?}: {e}"))
-            })?;
+            let (a, b) = r
+                .split_once(',')
+                .ok_or_else(|| CliError::UsageError(format!("--range expects `A,B`, got {r:?}")))?;
+            let a: u32 = a
+                .trim()
+                .parse()
+                .map_err(|e| CliError::UsageError(format!("--range start {a:?}: {e}")))?;
+            let b: u32 = b
+                .trim()
+                .parse()
+                .map_err(|e| CliError::UsageError(format!("--range end {b:?}: {e}")))?;
             if a > b {
                 return Err(CliError::UsageError(format!(
                     "--range start {a} must be <= end {b}"

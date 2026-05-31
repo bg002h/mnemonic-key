@@ -193,3 +193,51 @@ fn gui_schema_detects_repeating_positional() {
         "mk1_strings is repeating"
     );
 }
+
+/// v0.6: `mk address` + `mk derive` surface, with the value-enum dropdowns the
+/// mnemonic-gui schema mirror consumes.
+#[test]
+fn gui_schema_lists_address_and_derive_with_dropdowns() {
+    let mut cmd = Command::cargo_bin("mk").expect("mk binary");
+    let out = cmd
+        .arg("gui-schema")
+        .output()
+        .expect("invoke mk gui-schema");
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).expect("JSON");
+    let subs = v["subcommands"].as_array().expect("subcommands array");
+
+    let address = subs
+        .iter()
+        .find(|s| s["name"] == "address")
+        .expect("address subcommand present");
+    let aflags = address["flags"].as_array().expect("address flags");
+    let find = |name: &str| aflags.iter().find(|f| f["name"] == name).cloned();
+
+    let at = find("--address-type").expect("--address-type present");
+    assert_eq!(at["kind"], Value::from("dropdown"));
+    assert_eq!(
+        at["choices"],
+        serde_json::json!(["p2pkh", "p2sh-p2wpkh", "p2wpkh", "p2tr"])
+    );
+    let chain = find("--chain").expect("--chain present");
+    assert_eq!(
+        chain["choices"],
+        serde_json::json!(["receive", "change", "both"])
+    );
+    let net = find("--network").expect("--network present");
+    assert_eq!(
+        net["choices"],
+        serde_json::json!(["mainnet", "testnet", "signet", "regtest"])
+    );
+    assert!(find("--count").is_some() && find("--range").is_some());
+
+    let derive = subs
+        .iter()
+        .find(|s| s["name"] == "derive")
+        .expect("derive subcommand present");
+    let dflags = derive["flags"].as_array().expect("derive flags");
+    let dnames: Vec<&str> = dflags.iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert!(dnames.contains(&"--path"));
+    assert!(dnames.contains(&"--index"));
+}

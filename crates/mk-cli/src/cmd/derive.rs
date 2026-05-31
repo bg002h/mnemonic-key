@@ -6,8 +6,8 @@
 
 use std::str::FromStr;
 
-use bitcoin::bip32::{ChildNumber, DerivationPath};
 use bitcoin::NetworkKind;
+use bitcoin::bip32::{ChildNumber, DerivationPath};
 use clap::Args;
 use serde_json::json;
 
@@ -55,9 +55,10 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     };
 
     let secp = secp_verify();
-    let child = card.xpub.derive_pub(&secp, &rel).map_err(|e| {
-        CliError::UsageError(format!("derivation failed at m/{rel}: {e}"))
-    })?;
+    let child = card
+        .xpub
+        .derive_pub(&secp, &rel)
+        .map_err(|e| CliError::UsageError(format!("derivation failed at m/{rel}: {e}")))?;
 
     let network = match card.xpub.network {
         NetworkKind::Main => "mainnet",
@@ -83,7 +84,10 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
         println!("parent_origin_path:   {}", card.origin_path);
         println!("relative_path:        m/{rel}");
         println!("child_xpub:           {child}");
-        println!("child_fingerprint:    {}", fmt_fingerprint(&child.fingerprint()));
+        println!(
+            "child_fingerprint:    {}",
+            fmt_fingerprint(&child.fingerprint())
+        );
         println!("depth:                {}", child.depth);
         println!("network:              {network}");
     }

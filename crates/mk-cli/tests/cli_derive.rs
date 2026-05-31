@@ -48,7 +48,10 @@ fn code(o: &Output) -> i32 {
 /// Independently derive the expected child xpub via the `bitcoin` crate.
 fn expected_child(parent: &str, rel: &str) -> Xpub {
     let secp = Secp256k1::verification_only();
-    Xpub::from_str(parent).unwrap().derive_pub(&secp, &p(rel)).unwrap()
+    Xpub::from_str(parent)
+        .unwrap()
+        .derive_pub(&secp, &p(rel))
+        .unwrap()
 }
 
 #[test]
@@ -60,7 +63,10 @@ fn relative_path_derivation_matches_bitcoin() {
     let exp = expected_child(V2_84_MAIN, "m/0/5");
     assert_eq!(v["child_xpub"], exp.to_string());
     assert_eq!(v["depth"], 5); // account depth 3 + 2
-    assert_eq!(v["child_fingerprint"], hex::encode(exp.fingerprint().to_bytes()));
+    assert_eq!(
+        v["child_fingerprint"],
+        hex::encode(exp.fingerprint().to_bytes())
+    );
     assert_eq!(v["relative_path"], "m/0/5");
     assert_eq!(v["network"], "mainnet");
 }
@@ -126,6 +132,10 @@ fn child_xpub_roundtrips_through_encode() {
         ])
         .output()
         .unwrap();
-    assert!(enc.status.success(), "{}", String::from_utf8_lossy(&enc.stderr));
+    assert!(
+        enc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&enc.stderr)
+    );
     assert!(String::from_utf8_lossy(&enc.stdout).contains("mk1"));
 }

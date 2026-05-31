@@ -153,7 +153,10 @@ mod tests {
     fn address_type_kebab_values() {
         use clap::ValueEnum;
         assert_eq!(
-            AddressType::P2shP2wpkh.to_possible_value().unwrap().get_name(),
+            AddressType::P2shP2wpkh
+                .to_possible_value()
+                .unwrap()
+                .get_name(),
             "p2sh-p2wpkh"
         );
         assert_eq!(
@@ -191,10 +194,22 @@ mod tests {
     #[test]
     fn infer_account_depth_only() {
         use AddressTypeInference::*;
-        assert_eq!(infer_address_type(&p("m/84'/0'/0'")), Inferred(AddressType::P2wpkh));
-        assert_eq!(infer_address_type(&p("m/44'/0'/0'")), Inferred(AddressType::P2pkh));
-        assert_eq!(infer_address_type(&p("m/49'/0'/0'")), Inferred(AddressType::P2shP2wpkh));
-        assert_eq!(infer_address_type(&p("m/86'/0'/0'")), Inferred(AddressType::P2tr));
+        assert_eq!(
+            infer_address_type(&p("m/84'/0'/0'")),
+            Inferred(AddressType::P2wpkh)
+        );
+        assert_eq!(
+            infer_address_type(&p("m/44'/0'/0'")),
+            Inferred(AddressType::P2pkh)
+        );
+        assert_eq!(
+            infer_address_type(&p("m/49'/0'/0'")),
+            Inferred(AddressType::P2shP2wpkh)
+        );
+        assert_eq!(
+            infer_address_type(&p("m/86'/0'/0'")),
+            Inferred(AddressType::P2tr)
+        );
         // multisig at any depth
         assert_eq!(infer_address_type(&p("m/48'/0'/0'/2'")), Multisig);
         assert_eq!(infer_address_type(&p("m/87'/0'/0'")), Multisig);
@@ -211,11 +226,28 @@ mod tests {
         let secp = secp_verify();
         let xpub = Xpub::from_str(ACCT_84_XPUB).unwrap();
         let child = xpub.derive_pub(&secp, &p("m/0/0")).unwrap();
-        assert!(render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Mainnet).starts_with("bc1q"));
-        assert!(render_address(&secp, &child, AddressType::P2tr, CliNetwork::Mainnet).starts_with("bc1p"));
-        assert!(render_address(&secp, &child, AddressType::P2pkh, CliNetwork::Mainnet).starts_with('1'));
-        assert!(render_address(&secp, &child, AddressType::P2shP2wpkh, CliNetwork::Mainnet).starts_with('3'));
-        assert!(render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Regtest).starts_with("bcrt1q"));
-        assert!(render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Testnet).starts_with("tb1q"));
+        assert!(
+            render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Mainnet)
+                .starts_with("bc1q")
+        );
+        assert!(
+            render_address(&secp, &child, AddressType::P2tr, CliNetwork::Mainnet)
+                .starts_with("bc1p")
+        );
+        assert!(
+            render_address(&secp, &child, AddressType::P2pkh, CliNetwork::Mainnet).starts_with('1')
+        );
+        assert!(
+            render_address(&secp, &child, AddressType::P2shP2wpkh, CliNetwork::Mainnet)
+                .starts_with('3')
+        );
+        assert!(
+            render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Regtest)
+                .starts_with("bcrt1q")
+        );
+        assert!(
+            render_address(&secp, &child, AddressType::P2wpkh, CliNetwork::Testnet)
+                .starts_with("tb1q")
+        );
     }
 }
