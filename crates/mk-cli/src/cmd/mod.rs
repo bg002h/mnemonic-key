@@ -3,6 +3,7 @@
 
 pub mod address;
 pub mod decode;
+pub mod derive;
 pub mod derive_support;
 pub mod encode;
 pub mod gui_schema;

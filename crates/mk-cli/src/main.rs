@@ -47,6 +47,8 @@ enum Command {
     Repair(cmd::repair::RepairArgs),
     /// Render receive/change addresses controlled by a card's xpub (read-only).
     Address(cmd::address::AddressArgs),
+    /// Derive a child xpub at a relative unhardened path from a card (read-only).
+    Derive(cmd::derive::DeriveArgs),
 }
 
 fn main() -> ExitCode {
@@ -81,6 +83,7 @@ fn main() -> ExitCode {
         Command::GuiSchema(a) => cmd::gui_schema::run(a),
         Command::Repair(a) => cmd::repair::run(a),
         Command::Address(a) => cmd::address::run(a),
+        Command::Derive(a) => cmd::derive::run(a),
     };
 
     match result {
@@ -102,6 +105,7 @@ fn is_json_mode(cmd: &Command) -> bool {
         Command::GuiSchema(_) => false,
         Command::Repair(a) => a.json,
         Command::Address(a) => a.json,
+        Command::Derive(a) => a.json,
     }
 }
 
