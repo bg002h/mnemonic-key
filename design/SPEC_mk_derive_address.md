@@ -95,7 +95,7 @@ Single source of truth for both subcommands (DRY):
 ## §4. SemVer + lockstep
 
 - **mk-cli 0.5.0 → 0.6.0** (MINOR; additive subcommands). mk-codec stays 0.4.0. `Cargo.lock` re-resolved.
-- **Manual mirror** — `mnemonic-toolkit/docs/manual/src/40-cli-reference/44-mk-cli.md` MUST gain both subcommands + every flag in lockstep (toolkit-repo paired change; `docs/manual/tests/lint.sh` flag-coverage gates per (binary, subcommand)). Also fix the stale subcommand count (`:4`, "Six" → **eight**: current 7 incl. `repair` + 2 new − the existing undercount) and bump the install tag (`:12`) `mk-cli-v0.4.0 → mk-cli-v0.6.0` (M4).
+- **Manual mirror** — `mnemonic-toolkit/docs/manual/src/40-cli-reference/44-mk-cli.md` MUST gain both subcommands + every flag in lockstep (toolkit-repo paired change; `docs/manual/tests/lint.sh` flag-coverage gates per (binary, subcommand)). Also fix the documented subcommand count (`:4`, "Six" → **eight**: the manual deliberately documents the 6 user-facing subcommands and excludes the GUI-internal `gui-schema`; 6 + `address` + `derive` = 8) and bump the install tag (`:12`) `mk-cli-v0.4.0 → mk-cli-v0.6.0` (M4).
 - **GUI schema-mirror** (paired PR on mnemonic-gui) — ⚠️ larger than a pin bump (I1): `mnemonic-gui/src/schema/mk.rs` is at **"mk-cli-v0.3.1"** (header `:1` + `pinned_version` `:312`) and `SUBCOMMANDS` (`:267-308`) lists only inspect/encode/decode/verify/vectors — **`repair` was never mirrored** (accumulated drift; CLAUDE.md `gui-schema-mirror-lockstep-discipline`). The paired PR MUST: (a) add `address` + `derive` `SubcommandSchema`s; (b) **backfill the missing `repair` `SubcommandSchema`** (`--json` + `mk1-strings` positional); (c) bump header `:1` + `pinned_version` `:312` "mk 0.3.1" → "mk 0.6.0"; (d) bump `mnemonic-gui/pinned-upstream.toml:52` `mk-cli-v0.4.2 → mk-cli-v0.6.0`; (e) `AddressType` / `CliNetwork` / `--chain` value enums use `FlagKind::Dropdown` with value sets matching `mk gui-schema` EXACTLY (the gate enforces flag-NAME + dropdown-value parity); (f) `--count`/`--index` → `FlagKind::Number`, `--range` → `FlagKind::Range`. The `schema_mirror` test fires on the pin bump against ALL THREE accumulated subcommands (repair + address + derive). Note (M3): `mk gui-schema` itself emits `kind:"text"` for the numeric flags (no numeric mapping in `gui_schema.rs::classify`); the gate only checks flag-NAME + dropdown-value parity, so this is tolerated.
 - **toolkit sibling-pin** — `install.sh` + `.github/workflows/manual.yml` + `quickstart.yml` mk pin → `mk-cli-v0.6.0`; the toolkit `sibling-pin-check.yml` gate enforces this on the next toolkit push.
 - **mk gui-schema test** — `crates/mk-cli/tests/gui_schema.rs` auto-reflects the new surface; the new subcommands must appear in `cmd/gui_schema.rs::build_schema`.
@@ -111,7 +111,7 @@ Single source of truth for both subcommands (DRY):
 3. Multisig refuse — `m/48'/0'/0'/2'` and `m/87'/...` cards → **exit 64** (`UsageError`) advisory, even with `--address-type` given.
 4. Ambiguous → required — depth-0 (no-path) card and a non-standard-purpose card with no `--address-type` → **exit 64** (`UsageError`, "address-type required").
 4b. **Leaf / over-deep card (I2)** — a card at `m/84'/0'/0'/0/5` (depth 5): with no `--address-type` → exit 64 (heuristic gated on `len()==3`); with explicit `--address-type p2wpkh` → succeeds BUT emits the stderr depth advisory.
-5. `--count` default 10 + explicit; `--range A,B`; `--range` with `A>B` → exit 64 (`UsageError`); `--count`/`--range` conflict → clap error.
+5. `--count` default 10 + explicit; `--range A,B`; `--range` with `A>B` → exit 64 (`UsageError`); `--count`/`--range` conflict → clap error → **exit 64** (mk-cli `main.rs:62-67` routes all clap parse errors through a 64 catch-all).
 6. `--chain receive|change|both` — correct chain indices; `both` ordering (receive then change).
 7. Network — inferred mainnet/testnet from xpub version; `--network regtest` → `bcrt1…`; `--network mainnet` on a test xpub → **exit 64** (`UsageError`, network mismatch).
 8. Address correctness — derived addresses match independently-computed values for a known xpub (BIP-32 vector or a fixed test xpub) across all four script types.
@@ -120,7 +120,7 @@ Single source of truth for both subcommands (DRY):
 **`mk derive`:**
 10. Relative derivation — `m/0/5` from a known card → expected child xpub + `child_fingerprint` + `depth`.
 11. Unhardened-only — `--path m/0'/0` (hardened) → **exit 64** (`UsageError`, "cannot derive hardened children from an xpub").
-12. `--index N` sugar == `--path m/0/N`; `--path`/`--index` both / neither → clap group error.
+12. `--index N` sugar == `--path m/0/N`; `--path`/`--index` both / neither → clap group error → **exit 64** (same 64 catch-all).
 13. Multisig allowed — `m/48'/...` card + `mk derive` succeeds (NOT refused).
 14. `--json` shape — `child_xpub` round-trips through `mk encode` (composability smoke test).
 
