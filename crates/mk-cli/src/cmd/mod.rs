@@ -1,6 +1,7 @@
 //! Subcommand handlers for `mk-cli`. Each module is independent and consumes
 //! the foundation modules + the `mk-codec` and `md-codec` libraries.
 
+pub mod address;
 pub mod decode;
 pub mod derive_support;
 pub mod encode;

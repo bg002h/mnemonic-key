@@ -45,6 +45,8 @@ enum Command {
     GuiSchema(cmd::gui_schema::GuiSchemaArgs),
     /// Repair mk1 strings via BCH error correction (exit 5 = REPAIR_APPLIED).
     Repair(cmd::repair::RepairArgs),
+    /// Render receive/change addresses controlled by a card's xpub (read-only).
+    Address(cmd::address::AddressArgs),
 }
 
 fn main() -> ExitCode {
@@ -78,6 +80,7 @@ fn main() -> ExitCode {
         Command::Vectors(a) => cmd::vectors::run(a),
         Command::GuiSchema(a) => cmd::gui_schema::run(a),
         Command::Repair(a) => cmd::repair::run(a),
+        Command::Address(a) => cmd::address::run(a),
     };
 
     match result {
@@ -98,6 +101,7 @@ fn is_json_mode(cmd: &Command) -> bool {
         Command::Vectors(_) => false,
         Command::GuiSchema(_) => false,
         Command::Repair(a) => a.json,
+        Command::Address(a) => a.json,
     }
 }
 

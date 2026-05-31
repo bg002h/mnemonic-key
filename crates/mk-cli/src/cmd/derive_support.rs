@@ -20,6 +20,18 @@ pub enum AddressType {
     P2tr,
 }
 
+impl AddressType {
+    /// Stable kebab label for output (matches the clap value).
+    pub fn label(self) -> &'static str {
+        match self {
+            AddressType::P2pkh => "p2pkh",
+            AddressType::P2shP2wpkh => "p2sh-p2wpkh",
+            AddressType::P2wpkh => "p2wpkh",
+            AddressType::P2tr => "p2tr",
+        }
+    }
+}
+
 /// Network selector for address rendering. clap values: `mainnet|testnet|signet|regtest`.
 /// An xpub's version bytes only distinguish `Main` vs `Test`; signet/regtest share the
 /// test version bytes but differ in address HRP (`tb1…` vs `bcrt1…`).
