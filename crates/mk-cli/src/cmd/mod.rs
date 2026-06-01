@@ -125,7 +125,7 @@ pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> R
     let (xpub, variant) = crate::slip132::detect_and_normalize(s)?;
     if let Some(v) = variant {
         eprintln!(
-            "note: --xpub was a SLIP-0132 {}; normalized to canonical {} — the engraved card's script type derives from the origin path",
+            "note: --xpub was a SLIP-0132 {}; normalized to canonical {} — script type is conveyed by the origin path, not the key prefix",
             v.label(), v.canonical_label()
         );
         if let Some(path) = origin_path {

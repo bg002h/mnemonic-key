@@ -327,3 +327,13 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** Resolved by the output-class-advisory Phase 2 cycle — mk-cli **v0.6.1** + md-cli **v0.6.2** + toolkit **v0.38.3** add the always-emit 1-line stderr output-class advisory (mk→watch-only; md→template, plus watch-only for `md address`); completes the constellation-wide 'no advisory line ⟺ inert stdout' invariant. Per-phase reviews persisted in mnemonic-toolkit `design/agent-reports/output-type-advisory-phase2-*`.
 - **Tier:** `next-cycle`
 - **Companion:** `mnemonic-toolkit` FOLLOWUP `output-type-stderr-advisory-sibling-sweep-mk-md` + `output-type-stderr-advisory` (Phase 1).
+
+### `mk-slip0132-byte-parity-test-self-referential` — `slip132_version_bytes_match_slip0132` self-referentially declares its own byte array
+
+- **Surfaced:** 2026-06-01, mk-cli A2 phase review M1 (minor; filed as FOLLOWUP per reviewer recommendation).
+- **Where:** `crates/mk-cli/src/slip132.rs` — `slip132_version_bytes_match_slip0132` test (~line 145).
+- **What:** The `slip132_version_bytes_match_slip0132` test declares its own 8-entry byte-constant array and round-trips each entry through `detect_and_normalize`, confirming the variant mapping is correct. This catches a one-sided or transposition edit (change one arm in production but forget the test array, or vice versa), but a coordinated edit — the same wrong byte introduced to BOTH the test array AND the matching production arm in `detect_and_normalize` — would pass green while silently mis-normalizing that prefix to the wrong canonical key. Options: (a) pin a published BIP-49/BIP-84 extended-key test vector (a known real ypub or zpub string from the BIP itself) and assert that `detect_and_normalize` produces the expected canonical xpub — a real-key anchor that cannot be faked by editing both sides in sync; (b) `include`-compare the test byte array against the toolkit's `slip0132.rs` table (cross-crate byte-parity, already implied by the module-level comment but not mechanically enforced). Low priority — byte-parity to the CI-tested toolkit table is currently verified by code review; no key-material error has been observed. The self-referential test still catches most accidental edits; this is a hardening gap, not a correctness gap.
+- **Why deferred:** cosmetic hardening; no correctness issue; fixing requires sourcing published test vectors or adding a cross-crate comparison.
+- **Status:** `open`
+- **Tier:** `hardening`
+- **Severity:** Low

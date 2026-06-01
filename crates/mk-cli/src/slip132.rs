@@ -73,10 +73,14 @@ impl Slip132Variant {
     pub fn mismatch_help(self, path: &DerivationPath) -> String {
         use Slip132Variant::*;
         let (expects, alt) = match self {
-            Ypub | Upub => ("purpose 49' (e.g. m/49'/0'/0')", "supply the zpub/xpub for a different script type"),
-            Zpub | Vpub => ("purpose 84' (e.g. m/84'/0'/0')", "supply the ypub for a 49' path"),
-            YpubMultisig | UpubMultisig => ("m/48'/<coin>'/<account>'/1'", "use a Zpub for a 2' path, or xpub"),
-            ZpubMultisig | VpubMultisig => ("m/48'/<coin>'/<account>'/2'", "use a Ypub for a 1' path, or xpub"),
+            Ypub => ("purpose 49' (e.g. m/49'/0'/0')", "supply the zpub/xpub for a different script type"),
+            Upub => ("purpose 49' (e.g. m/49'/1'/0')", "supply the vpub/tpub for a different script type"),
+            Zpub => ("purpose 84' (e.g. m/84'/0'/0')", "supply the ypub for a 49' path, or xpub"),
+            Vpub => ("purpose 84' (e.g. m/84'/1'/0')", "supply the upub for a 49' path, or tpub"),
+            YpubMultisig => ("m/48'/<coin>'/<account>'/1'", "use a Zpub for a 2' path, or xpub"),
+            UpubMultisig => ("m/48'/<coin>'/<account>'/1'", "use a Vpub for a 2' path, or tpub"),
+            ZpubMultisig => ("m/48'/<coin>'/<account>'/2'", "use a Ypub for a 1' path, or xpub"),
+            VpubMultisig => ("m/48'/<coin>'/<account>'/2'", "use a Upub for a 1' path, or tpub"),
         };
         format!(
             "SLIP-0132/origin-path mismatch — --xpub is a {} which expects --origin-path {}, but --origin-path is {}. \
