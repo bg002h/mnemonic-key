@@ -310,6 +310,15 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open`
 - **Tier:** `ci-hygiene`
 
+### `mk-slip0132-prefix-acceptance` — accept SLIP-0132 extended-key prefixes (ypub/zpub/Ypub/Zpub + testnet upub/vpub/Upub/Vpub) on `mk encode` / `mk verify --xpub`
+
+- **Surfaced:** 2026-06-01, mk-cli A2 cycle (SPEC `design/SPEC_mk_slip0132_acceptance.md`; plan `design/IMPLEMENTATION_PLAN_mk_slip0132_acceptance.md`; reviews `design/agent-reports/mk-slip0132-spec-R0-review.md`, `mk-slip0132-plan-R0-review.md`, `mk-slip0132-plan-R1-review.md`).
+- **Where:** `crates/mk-cli/src/slip132.rs` (new module — CLI input-convenience normalization); `crates/mk-cli/tests/cli_slip132.rs` (integration cells A2–A3).
+- **What:** `mk encode` and `mk verify --xpub` now accept the full SLIP-0132 set: ypub/zpub/Ypub/Zpub (mainnet BIP-49/84 + BIP-48 1′/2′ multisig) and upub/vpub/Upub/Vpub (testnet counterparts). Normalization is a 4-byte version-byte swap at the base58check layer; key material is unchanged. A stderr note names the original prefix (e.g. `note: --xpub was a zpub (BIP-84 P2WPKH); normalized to xpub`). A prefix↔origin-path script-type mismatch (e.g. zpub with `m/49'/0'/0'`) is REFUSED (exit 64 UsageError) with an actionable message naming the disagreement. mk-codec is UNTOUCHED — normalization lives entirely in the CLI (`slip132.rs`), duplicating the toolkit's `slip0132.rs` table; byte-parity is CI-guarded by `slip132_version_bytes_match_slip0132`.
+- **Why deferred:** N/A — shipped in mk-cli v0.7.0 (this cycle).
+- **Status:** `resolved 24ba2c7` — mk-cli **v0.7.0** (A1–A3 commits `95118e8` + `1772fca` + `24ba2c7`). No sibling companion (mk-only; mk-codec untouched; no GUI/manual lockstep).
+- **Tier:** `v0.7`
+
 ### `output-type-stderr-advisory-sibling-sweep-mk-md` — add the output-class stderr advisory to this CLI (constellation cycle B, Phase 2)
 
 - **Surfaced:** 2026-05-31, mnemonic-toolkit cycle B Phase 1 ship (mnemonic + ms shipped the always-emit 3-class stderr advisory).
