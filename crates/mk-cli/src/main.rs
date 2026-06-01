@@ -8,6 +8,7 @@
 
 mod cmd;
 mod error;
+mod output_advisory;
 mod process_hardening;
 
 use std::io::Write;
