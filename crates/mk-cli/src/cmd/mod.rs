@@ -53,11 +53,6 @@ pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
     })
 }
 
-/// Parse an xpub string to `Xpub`.
-pub fn parse_xpub(s: &str) -> Result<Xpub> {
-    Xpub::from_str(s).map_err(|e| CliError::UsageError(format!("invalid xpub {s:?}: {e}")))
-}
-
 /// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.5.1.
 pub fn derive_stub_from_md1(md1_str: &str) -> Result<[u8; 4]> {
     let descriptor = md_codec::decode_md1_string(md1_str)?;

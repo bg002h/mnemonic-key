@@ -1,8 +1,9 @@
-//! Integration tests for `mk encode` SLIP-0132 prefix acceptance (A2).
+//! Integration tests for `mk encode`/`mk verify` SLIP-0132 prefix acceptance (A2/A3).
 //!
 //! Verifies that zpub/ypub/etc. inputs are normalized to canonical xpub/tpub,
-//! that the decoded card's xpub matches the canonical form, and that the
-//! expected stderr note is emitted.
+//! that the decoded card's xpub matches the canonical form, that the
+//! expected stderr note is emitted, and that `mk verify` accepts SLIP-0132
+//! prefixes (path-optional) with correct exit codes.
 
 use std::process::Command;
 use assert_cmd::cargo::CommandCargoExt;
@@ -22,6 +23,18 @@ const ZPUB_V: [u8; 4] = [0x04, 0xB2, 0x47, 0x46];
 const NOTE_ZPUB: &str = "note: --xpub was a SLIP-0132 zpub";
 /// Zpub = BIP-48 P2WSH multisig mainnet.
 const ZPUB_MULTISIG_V: [u8; 4] = [0x02, 0xAA, 0x7E, 0xD3];
+const WATCH_ONLY: &str = "note: stdout is watch-only \u{2014} public keys only, cannot spend";
+
+/// Build a real mk1 card (from V2_84_MAIN with a known origin path) and return
+/// the chunk strings ready to pass as positional args to `mk verify`.
+fn make_card() -> Vec<String> {
+    let out = Command::cargo_bin("mk").unwrap()
+        .args(["encode", "--xpub", V2_84_MAIN, "--origin-path", "m/84h/0h/0h",
+               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+        .output().unwrap();
+    assert!(out.status.success(), "make_card: mk encode failed: stderr={}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8(out.stdout).unwrap().lines().map(str::to_string).collect()
+}
 
 /// Invoke `mk encode` and decode the resulting mk1 strings via mk_codec.
 fn run_encode_decode(xpub_arg: &str) -> (std::process::Output, mk_codec::KeyCard) {
@@ -134,5 +147,74 @@ fn encode_canonical_xpub_no_note() {
     assert!(
         !stderr.contains("SLIP-0132"),
         "canonical xpub must not emit a SLIP-0132 note; stderr={stderr}"
+    );
+}
+
+// ── A3: mk verify accepts SLIP-0132 prefixes ──────────────────────────────────
+
+/// `mk verify --xpub <zpub>` (NO --origin-path) must exit 0 and emit the
+/// SLIP-0132 note. The mismatch message must NOT appear.
+#[test]
+fn verify_zpub_without_path_ok() {
+    let card = make_card();
+    let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
+    let mut cmd = Command::cargo_bin("mk").unwrap();
+    cmd.arg("verify");
+    for chunk in &card { cmd.arg(chunk); }
+    cmd.args(["--xpub", &zpub]);
+    let out = cmd.output().unwrap();
+    let code = out.status.code().unwrap();
+    let stderr = String::from_utf8(out.stderr.clone()).unwrap();
+    assert_eq!(code, 0, "expected exit 0 (zpub without path); stderr={stderr}");
+    assert!(
+        stderr.contains(NOTE_ZPUB),
+        "expected SLIP-0132 note in stderr; stderr={stderr}"
+    );
+    assert!(
+        !stderr.contains("SLIP-0132/origin-path mismatch"),
+        "must NOT contain mismatch message; stderr={stderr}"
+    );
+}
+
+/// `mk verify --xpub <zpub> --origin-path m/49h/0h/0h` must exit 64
+/// (UsageError) and emit the SLIP-0132/origin-path mismatch message.
+#[test]
+fn verify_zpub_path_mismatch_refuses() {
+    let card = make_card();
+    let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
+    let mut cmd = Command::cargo_bin("mk").unwrap();
+    cmd.arg("verify");
+    for chunk in &card { cmd.arg(chunk); }
+    cmd.args(["--xpub", &zpub, "--origin-path", "m/49h/0h/0h"]);
+    let out = cmd.output().unwrap();
+    let code = out.status.code().unwrap();
+    let stderr = String::from_utf8(out.stderr.clone()).unwrap();
+    assert_eq!(code, 64, "expected exit 64 (UsageError), got {code}; stderr={stderr}");
+    assert!(
+        stderr.contains("SLIP-0132/origin-path mismatch"),
+        "expected mismatch message in stderr; stderr={stderr}"
+    );
+}
+
+/// `mk encode --xpub <zpub>` must emit BOTH the SLIP-0132 note AND the
+/// watch-only advisory, with the SLIP-0132 note appearing before the watch-only
+/// line (SLIP-0132 fires at parse-time; watch-only fires after stdout emit).
+#[test]
+fn encode_emits_both_slip132_note_and_watchonly_advisory() {
+    let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
+    let out = Command::cargo_bin("mk").unwrap()
+        .args(["encode", "--xpub", &zpub, "--origin-path", "m/84h/0h/0h",
+               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+        .output().unwrap();
+    let code = out.status.code().unwrap();
+    let stderr = String::from_utf8(out.stderr.clone()).unwrap();
+    assert_eq!(code, 0, "expected exit 0; stderr={stderr}");
+    assert!(stderr.contains(NOTE_ZPUB), "missing SLIP-0132 note; stderr={stderr}");
+    assert!(stderr.contains(WATCH_ONLY), "missing watch-only advisory; stderr={stderr}");
+    let slip_offset = stderr.find(NOTE_ZPUB).unwrap();
+    let watch_offset = stderr.find(WATCH_ONLY).unwrap();
+    assert!(
+        slip_offset < watch_offset,
+        "SLIP-0132 note (offset {slip_offset}) must precede watch-only advisory (offset {watch_offset})"
     );
 }

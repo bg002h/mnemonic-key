@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::cmd::{
     derive_stub_from_md1, fmt_fingerprint, fmt_stub, parse_derivation_path, parse_fingerprint,
-    parse_stub_hex, parse_xpub, read_mk1_strings,
+    parse_stub_hex, parse_xpub_normalized, read_mk1_strings,
 };
 use crate::error::{CliError, Result};
 
@@ -49,8 +49,16 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
 
+    // Parse origin_path once; both the xpub normalization check and the
+    // content-match block below consume it (no double-parse).
+    let want_path: Option<bitcoin::bip32::DerivationPath> = args
+        .origin_path
+        .as_deref()
+        .map(parse_derivation_path)
+        .transpose()?;
+
     if let Some(expected) = &args.xpub {
-        let want = parse_xpub(expected)?;
+        let want = parse_xpub_normalized(expected, want_path.as_ref())?;
         if want != card.xpub {
             return Err(CliError::ContentMismatch {
                 field: "xpub".into(),
@@ -81,9 +89,8 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         }
     }
 
-    if let Some(expected) = &args.origin_path {
-        let want = parse_derivation_path(expected)?;
-        if want != card.origin_path {
+    if let Some(want) = &want_path {
+        if *want != card.origin_path {
             return Err(CliError::ContentMismatch {
                 field: "origin_path".into(),
                 expected: want.to_string(),
