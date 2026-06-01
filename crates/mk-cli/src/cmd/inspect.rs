@@ -37,6 +37,10 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     } else {
         emit_text(&card, &strings, &per_chunk_variants);
     }
+    crate::output_advisory::emit_output_class_advisory(
+        crate::output_advisory::OutputClass::WatchOnly,
+        &mut std::io::stderr(),
+    );
     Ok(0)
 }
 

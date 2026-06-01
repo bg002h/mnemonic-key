@@ -94,6 +94,10 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             println!("{s}");
         }
     }
+    crate::output_advisory::emit_output_class_advisory(
+        crate::output_advisory::OutputClass::WatchOnly,
+        &mut std::io::stderr(),
+    );
     Ok(0)
 }
 

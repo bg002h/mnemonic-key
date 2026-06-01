@@ -1,6 +1,7 @@
 //! Output-class stderr advisory tests for `mk` CLI.
 //!
-//! Verifies that `mk decode` emits the watch-only advisory line on stderr,
+//! Verifies that `mk decode` / `mk encode` / `mk inspect` / `mk repair` /
+//! `mk derive` / `mk address` all emit the watch-only advisory line on stderr,
 //! and that the advisory text is byte-identical to the toolkit's
 //! `secret_advisory` and ms-cli's `advisory` (cross-repo parity).
 
@@ -9,6 +10,7 @@ use std::str::FromStr;
 use assert_cmd::Command;
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use mk_codec::KeyCard;
+use mk_codec::string_layer::bch::ALPHABET;
 
 /// Exact watch-only advisory line (em-dash U+2014). MUST be byte-identical to
 /// mnemonic-toolkit's secret_advisory.rs + ms-cli's advisory.rs.
@@ -57,6 +59,138 @@ fn decode_emits_watch_only_advisory() {
         .output()
         .unwrap();
     assert!(out.status.success());
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains(WATCH_ONLY_LINE),
+        "missing advisory; stderr={stderr}"
+    );
+}
+
+#[test]
+fn encode_emits_watch_only_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            V2_84_MAIN,
+            "--origin-path",
+            "m/84h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "encode exited non-zero; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains(WATCH_ONLY_LINE),
+        "missing advisory; stderr={stderr}"
+    );
+}
+
+#[test]
+fn inspect_emits_watch_only_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("inspect")
+        .args(mk1_fixture())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "inspect exited non-zero; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains(WATCH_ONLY_LINE),
+        "missing advisory; stderr={stderr}"
+    );
+}
+
+#[test]
+fn derive_emits_watch_only_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("derive")
+        .args(mk1_fixture())
+        .args(["--index", "0"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "derive exited non-zero; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains(WATCH_ONLY_LINE),
+        "missing advisory; stderr={stderr}"
+    );
+}
+
+#[test]
+fn address_emits_watch_only_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("address")
+        .args(mk1_fixture())
+        .args(["--count", "1"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "address exited non-zero; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.contains(WATCH_ONLY_LINE),
+        "missing advisory; stderr={stderr}"
+    );
+}
+
+/// Flip the bech32 character at position `pos` (0-indexed into the data
+/// part, i.e. chars after the `mk1` separator). Returns a corrupted string
+/// that is parseable but BCH-invalid. Copied from `cli_repair.rs::flip_at`.
+fn flip_at(chunk: &str, pos: usize) -> String {
+    let sep = chunk.rfind('1').unwrap();
+    let (prefix, rest) = chunk.split_at(sep + 1);
+    let mut chars: Vec<char> = rest.chars().collect();
+    let was = chars[pos];
+    let alphabet_str = std::str::from_utf8(ALPHABET).unwrap();
+    let was_idx = alphabet_str.find(was).unwrap();
+    let new_idx = (was_idx + 1) % 32;
+    chars[pos] = alphabet_str.chars().nth(new_idx).unwrap();
+    let mut out = String::from(prefix);
+    for c in chars {
+        out.push(c);
+    }
+    out
+}
+
+#[test]
+fn repair_emits_watch_only_advisory() {
+    // Corrupt one data-region symbol so BCH correction fires (exit 5).
+    let chunks = mk1_fixture();
+    let corrupted = flip_at(&chunks[0], 5);
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args(["repair", &corrupted])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(5),
+        "expected exit 5 (correction applied); stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(
         stderr.contains(WATCH_ONLY_LINE),
