@@ -122,3 +122,22 @@ pub fn classify_code_variant(s: &str) -> &'static str {
         "long"
     }
 }
+
+/// Parse an xpub, accepting SLIP-0132 prefixes (normalized to canonical xpub/tpub).
+/// Emits a stderr note on normalization; refuses (UsageError) if a non-canonical
+/// prefix's implied script type contradicts `origin_path` (when supplied).
+pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> Result<Xpub> {
+    let (xpub, variant) = crate::slip132::detect_and_normalize(s)?;
+    if let Some(v) = variant {
+        eprintln!(
+            "note: --xpub was a SLIP-0132 {}; normalized to canonical {} — the engraved card's script type derives from the origin path",
+            v.label(), v.canonical_label()
+        );
+        if let Some(path) = origin_path {
+            if !v.path_matches(path) {
+                return Err(CliError::UsageError(v.mismatch_help(path)));
+            }
+        }
+    }
+    Ok(xpub)
+}

@@ -10,6 +10,7 @@ mod cmd;
 mod error;
 mod output_advisory;
 mod process_hardening;
+mod slip132;
 
 use std::io::Write;
 use std::process::ExitCode;

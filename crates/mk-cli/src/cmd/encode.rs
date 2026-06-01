@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::cmd::{
     classify_code_variant, derive_stub_from_md1, parse_derivation_path, parse_fingerprint,
-    parse_stub_hex, parse_xpub,
+    parse_stub_hex, parse_xpub_normalized,
 };
 use crate::error::{CliError, Result};
 
@@ -82,7 +82,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     };
 
     let path = parse_derivation_path(&args.origin_path)?;
-    let xpub = parse_xpub(&args.xpub)?;
+    let xpub = parse_xpub_normalized(&args.xpub, Some(&path))?;
 
     let card = KeyCard::new(stubs, fingerprint, path, xpub);
     let strings = mk_codec::encode(&card)?;
