@@ -156,6 +156,54 @@ fn address_emits_watch_only_advisory() {
     );
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Inert-subcommand negative cells
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Assert that none of the three advisory lines appear in `stderr`.
+fn assert_no_advisory(stderr: &str) {
+    for line in [PRIVATE_KEY_LINE, WATCH_ONLY_LINE, TEMPLATE_LINE] {
+        assert!(
+            !stderr.contains(line),
+            "inert command emitted an advisory: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn verify_emits_no_advisory() {
+    // `mk verify <mk1>` with no content matcher → BCH check only (inert).
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("verify")
+        .args(mk1_fixture())
+        .output()
+        .unwrap();
+    assert_no_advisory(&String::from_utf8(out.stderr).unwrap());
+}
+
+#[test]
+fn vectors_emits_no_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("vectors")
+        .output()
+        .unwrap();
+    assert_no_advisory(&String::from_utf8(out.stderr).unwrap());
+}
+
+#[test]
+fn gui_schema_emits_no_advisory() {
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("gui-schema")
+        .output()
+        .unwrap();
+    assert_no_advisory(&String::from_utf8(out.stderr).unwrap());
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 /// Flip the bech32 character at position `pos` (0-indexed into the data
 /// part, i.e. chars after the `mk1` separator). Returns a corrupted string
 /// that is parseable but BCH-invalid. Copied from `cli_repair.rs::flip_at`.
