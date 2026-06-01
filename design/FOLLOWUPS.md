@@ -309,3 +309,12 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Why deferred:** out of scope for the test-only mk-codec test-hardening cycle (touches production source); pre-existing repo-hygiene condition. The cycle's own new test files are edition-2024 fmt-clean.
 - **Status:** `open`
 - **Tier:** `ci-hygiene`
+
+### `output-type-stderr-advisory-sibling-sweep-mk-md` — add the output-class stderr advisory to this CLI (constellation cycle B, Phase 2)
+
+- **Surfaced:** 2026-05-31, mnemonic-toolkit cycle B Phase 1 ship (mnemonic + ms shipped the always-emit 3-class stderr advisory).
+- **What:** Add the always-emit one-line stderr classification of stdout's security nature — byte-identical wording to `mnemonic-toolkit/crates/mnemonic-toolkit/src/secret_advisory.rs` (`warning: stdout carries private key material (can spend) …` / `note: stdout is watch-only …` / `note: stdout is a keyless descriptor template (no keys)`) — to every output-producing subcommand; inert subcommands emit nothing. mk → watch-only (decode/derive/address/inspect). md → template (decode/encode — md1 is the keyless template, the class's first real exercise) + watch-only (address). Cross-repo byte-parity test.
+- **Why deferred:** non-secret outputs; benign interim silence (over-caution, no fund-loss path) vs the secret-bearing mnemonic/ms surfaces shipped in Phase 1.
+- **Status:** open. PATCH (stderr-only); crates.io re-publish. Bound: close before the next `install.sh` sibling-pin bump.
+- **Tier:** `next-cycle`
+- **Companion:** `mnemonic-toolkit` FOLLOWUP `output-type-stderr-advisory-sibling-sweep-mk-md` + `output-type-stderr-advisory` (Phase 1).
