@@ -2,7 +2,9 @@
 # tests. Without this, Windows checkouts (default `core.autocrlf =
 # true`) convert LF→CRLF on text files, breaking the byte-level hash
 # `tests/vectors.rs:vector_file_sha256_matches_pin` asserts.
-crates/mk-codec/tests/vectors/v0.1.json text eol=lf
+# NOTE: the corpus moved from tests/vectors/ to src/test_vectors/ — the
+# rule below MUST track the file's live path or Windows CI hash-drifts.
+crates/mk-codec/src/test_vectors/*.json text eol=lf
 
 # Default everything else to native eol so Windows users still get
 # their preferred line endings on Rust source.
