@@ -7,6 +7,17 @@ Single source of truth for items surfaced during a review or implementation pass
 **Format for each entry:**
 
 ```markdown
+### `audit-2026-06-10-backlog` — verified findings from the first independent Fable constellation audit
+
+- **Surfaced:** 2026-06-10, the 23-agent read-only architecture audit (find → adversarial-verify → synthesize). 48 verified findings constellation-wide (0 critical); this repo's share below. **Full report + per-finding detail (claim/evidence/fix/disposition):** `../../mnemonic-toolkit/design/agent-reports/constellation-architecture-audit-2026-06-10.md` (committed in the toolkit repo). Promote any line to its own `### <id>` entry when worked; resolve here as fixed.
+- **This repo's verified findings (4):**
+  - **[IMPORTANT]** `from-md1-test-tautology` — The test meant to validate the --from-md1 stub recomputes the expected value with the exact expression the implementation uses (SHA-256(md_codec::encode_payload(descriptor))[..4]) and asserts the CLI  (`crates/mk-cli/tests/round_trip.rs:44-78 (test from_md1_derivation; oracle at :46-49, assert at :77)`)
+  - **[IMPORTANT]** `stub-formula-divergence` — mk-cli's derive_stub_from_md1 computes the 4-byte policy_id_stub as SHA-256(md_codec::encode_payload(descriptor))[..4], which is byte-identical to md-codec's Md1EncodingId[..4] (encoding-sensitive: he (`crates/mk-cli/src/cmd/mod.rs:57-63 (derive_stub_from_md1); used at crates/mk-cli/src/cmd/encode.rs:68-70 and crates/mk-cli/src/cmd/verify.rs:106-117. Toolkit counterpart: crates/mnemonic-toolkit/src/synthesize.rs:157-159 (stamp) and crates/mnemonic-toolkit/src/cmd/bundle.rs:2078-2096 (self-check)`)
+  - **[obs]** `noncanonical-path-encoding-accepted` — A standard-table path (e.g. m/44'/0'/0') can be decoded either from its 1-byte table indicator or from an explicit 0xFE+count+LEB128 encoding; decode_path accepts both and yields the same DerivationPa (`crates/mk-codec/src/bytecode/path.rs:101-132 (decode_path / decode_explicit_path) vs :85-98 (encode_path)`)
+  - **[obs]** `total-chunks-underflow-internal` — `let total_chunks_wire = (total_chunks - 1) & 0x1F;` underflows if total_chunks == 0 (panic in debug, wrap to 255 then &0x1F=31 in release). The only production constructor of Chunked headers is split (`crates/mk-codec/src/string_layer/header.rs:88 (in to_5bit_symbols); sole production constructor crates/mk-codec/src/string_layer/chunk.rs:73`)
+- **Status:** open (backlog index; individual items dispositioned in the report).
+- **Tier:** audit-backlog.
+
 ### `<short-id>` — <one-line title>
 
 - **Surfaced:** <Phase X.Y review of commit SHA>, or <inline TODO at file:line>, or <design discussion 2026-MM-DD>
