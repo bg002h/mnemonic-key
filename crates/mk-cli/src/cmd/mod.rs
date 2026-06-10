@@ -15,7 +15,6 @@ pub mod verify;
 use std::str::FromStr;
 
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
-use bitcoin::hashes::{Hash, sha256};
 
 use crate::error::{CliError, Result};
 
@@ -53,12 +52,19 @@ pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
     })
 }
 
-/// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.5.1.
+/// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.3.
+///
+/// The stub is the top 4 bytes of the policy's **WalletPolicyId**
+/// (`md_codec::compute_wallet_policy_id`, md SPEC v0.13 §5.3 canonical-expanded,
+/// encoder-divergence-free) — NOT the md1 bytecode hash, which is
+/// encoding-sensitive and would not survive a re-encode of the same logical
+/// wallet. Matches the toolkit's `synthesize.rs` stub formula byte-for-byte
+/// (audit I1, 2026-06-10; see `design/PLAN_stub_formula_walletpolicyid.md`).
 pub fn derive_stub_from_md1(md1_str: &str) -> Result<[u8; 4]> {
     let descriptor = md_codec::decode_md1_string(md1_str)?;
-    let (bytecode_bytes, _bit_len) = md_codec::encode_payload(&descriptor)?;
-    let hash = sha256::Hash::hash(&bytecode_bytes);
-    let stub: [u8; 4] = hash.as_byte_array()[..4].try_into().expect("4-byte slice");
+    let id = md_codec::compute_wallet_policy_id(&descriptor)?;
+    let mut stub = [0u8; 4];
+    stub.copy_from_slice(&id.as_bytes()[..4]);
     Ok(stub)
 }
 

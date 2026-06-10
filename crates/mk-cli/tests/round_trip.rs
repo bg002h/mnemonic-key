@@ -7,7 +7,6 @@ use std::str::FromStr;
 
 use assert_cmd::cargo::CommandCargoExt;
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
-use bitcoin::hashes::{Hash, sha256};
 use mk_codec::KeyCard;
 
 /// Canonical V1 fixture from `crates/mk-codec/src/test_vectors/v0.1.json`.
@@ -39,14 +38,20 @@ fn encode_decode_round_trip() {
 }
 
 /// Confirm `mk encode --from-md1 <md1>` produces an mk1 string whose
-/// decoded `policy_id_stubs[0]` equals `SHA-256(canonical_bytecode)[..4]`.
+/// decoded `policy_id_stubs[0]` equals the top 4 bytes of the policy's
+/// **WalletPolicyId** (SPEC §3.3).
+///
+/// This is an INDEPENDENT golden, not a recomputation: `EXPECTED_STUB` is a
+/// frozen literal computed ONCE, out-of-band, via
+///   `md_codec::compute_wallet_policy_id(
+///        &md_codec::decode_md1_string(PKH_BASIC_MD1).unwrap()
+///    ).unwrap().as_bytes()[..4]`
+/// Freezing it (rather than recomputing the impl's own chain at runtime) is
+/// what lets this test catch a future re-divergence of `derive_stub_from_md1`.
+/// The test body MUST NOT call `compute_wallet_policy_id` (audit I1, 2026-06-10).
 #[test]
 fn from_md1_derivation() {
-    // Reproduce the §3.5.1 derivation directly.
-    let descriptor = md_codec::decode_md1_string(PKH_BASIC_MD1).expect("md1 decode");
-    let (bytecode_bytes, _bit_len) = md_codec::encode_payload(&descriptor).expect("md1 payload");
-    let hash = sha256::Hash::hash(&bytecode_bytes);
-    let expected_stub: [u8; 4] = hash.as_byte_array()[..4].try_into().unwrap();
+    const EXPECTED_STUB: [u8; 4] = [0x3d, 0x19, 0x0a, 0xf3];
 
     let mut cmd = Command::cargo_bin("mk").expect("mk binary");
     let out = cmd
@@ -74,7 +79,7 @@ fn from_md1_derivation() {
     let card = mk_codec::decode(&refs).expect("decode emitted strings");
 
     assert_eq!(card.policy_id_stubs.len(), 1);
-    assert_eq!(card.policy_id_stubs[0], expected_stub);
+    assert_eq!(card.policy_id_stubs[0], EXPECTED_STUB);
 }
 
 /// `mk vectors --out <DIR>` must write one file per fixture without any

@@ -1,6 +1,6 @@
 //! `mk encode` — produce one or more mk1 strings from xpub + origin metadata.
 //!
-//! Realizes SPEC §3.5.1 from the v0.2 plan.
+//! Realizes SPEC §3.3 (Policy ID stub format) from the v0.2 plan.
 
 use clap::Args;
 use mk_codec::KeyCard;
@@ -31,7 +31,7 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub policy_id_stub: Vec<String>,
 
-    /// Repeatable. Each value is an md1 string; the stub is derived per SPEC §3.5.1.
+    /// Repeatable. Each value is an md1 string; the stub is derived per SPEC §3.3.
     #[arg(long)]
     pub from_md1: Vec<String>,
 

@@ -183,7 +183,7 @@ Total bytes for a typical 1-stub mainnet card with std-table indicator and finge
 
 ### 3.3 Policy ID stub format
 
-Each stub is **4 bytes** = the top 32 bits of the MD-encoded policy card's `SHA-256(canonical_bytecode)` (closure Q-2 lock).
+Each stub is **4 bytes** = the top 4 bytes of the MD-encoded policy's **WalletPolicyId** — `md_codec::compute_wallet_policy_id(descriptor)`, the 16-byte canonical-expanded policy identity (md SPEC v0.13 §5.3; encoder-divergence-free preimage). It is **NOT** the md1 bytecode hash (`Md1EncodingId` = `SHA-256(canonical_bytecode)`), which is encoding-sensitive and would not survive a re-encode of the same logical wallet (origin/use-site elision, override-vs-baseline path placement). *This supersedes the closure Q-2 lock's bytecode-hash formula, which predated md-codec v0.13's WalletPolicyId; see §9 Q-2 and `design/PLAN_stub_formula_walletpolicyid.md` (audit I1, 2026-06-10).*
 
 Why 4 bytes:
 
@@ -305,11 +305,11 @@ Note: the v0 spec sketch's `XpubDepthMismatch` rule is re-instated under compact
 
 ## §5. Linkage to MD
 
-A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose canonical-bytecode SHA-256 prefix matches one of these stubs."
+A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose **WalletPolicyId** prefix matches one of these stubs."
 
 **Recovery flow:**
 
-1. Decode the policy card. Compute its full 16-byte Policy ID = `SHA-256(canonical_bytecode)[0..16]`. Take the top 4 bytes as `policy_stub`.
+1. Decode the policy card. Compute its full 16-byte Policy ID = the **WalletPolicyId** (`md_codec::compute_wallet_policy_id(descriptor)`). Take the top 4 bytes as `policy_stub`.
 2. For each candidate key card:
    a. Decode and extract its Policy ID stubs.
    b. Reject the card unless `policy_stub` matches one of its stubs.
@@ -382,7 +382,7 @@ All ten v0.1 open questions Q-1..Q-10 are closed. See [`docs/superpowers/specs/2
 | ID | Locked answer | Section |
 |---|---|---|
 | Q-1 | Domain `b"shibbolethnumskey"`; constants 0x1062435f91072fa5c (regular), 0x41890d7e441cbe97273 (long) | §2.3 |
-| Q-2 | 4-byte Policy ID stub | §3.3 |
+| Q-2 | 4-byte Policy ID stub (formula superseded 2026-06-10: top 4 bytes of **WalletPolicyId**, not the bytecode hash — predated md-codec v0.13; audit I1, see §3.3 + `PLAN_stub_formula_walletpolicyid.md`) | §3.3 |
 | Q-3 | Path-component cap = 10 | §3.5 |
 | Q-4 | mk1 declares authority precedence; md1 tag-byte allocation shipped as `Tag::OriginPaths = 0x36` in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) | §5.1 |
 | Q-5 | Chunk types 0x00=SingleString, 0x01=Chunked; full string-layer header structure pinned | §2.5 |

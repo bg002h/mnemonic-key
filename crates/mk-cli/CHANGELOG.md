@@ -7,6 +7,18 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-06-10
+
+**SemVer-MINOR — `policy_id_stub` derivation aligned to the constellation's `WalletPolicyId`.** `mk encode --from-md1` and `mk verify --from-md1` now derive the 4-byte Policy ID stub from `md_codec::compute_wallet_policy_id(descriptor)` (md SPEC v0.13 §5.3 — the canonical-*expanded*, encoding-stable policy identity) instead of the md1 bytecode hash `SHA-256(canonical_bytecode)`. This matches `mnemonic-toolkit`'s `synthesize.rs` stub formula byte-for-byte, so a stub minted via `mk --from-md1` now agrees with toolkit-emitted bundle cards **and** survives a re-encode of the same logical wallet (origin/use-site elision, override-vs-baseline path placement) — which the bytecode hash did not. **Behavior change:** a stub a user previously stamped via the OLD `--from-md1` no longer matches. The bytecode-hash formula predated md-codec v0.13's WalletPolicyId and was stale; SPEC §3.3/§5/§9 + the BIP draft are updated in lockstep. No `mk-codec` change and no `md-codec` pin bump (`compute_wallet_policy_id` is present and byte-stable at the pinned `md-codec-v0.34.0`). Resolves `audit-2026-06-10-backlog` items `stub-formula-divergence` (I1) + `from-md1-test-tautology` (I2).
+
+## [0.7.0] — 2026-05-30
+
+**SemVer-MINOR — SLIP-0132 typed-prefix acceptance (A2).** (Backfilled entry — release commit `ac76f2d`; predated this file's coverage.) Resolved a tracked FOLLOWUP.
+
+## [0.6.1] — 2026-05-30
+
+**SemVer-PATCH — test-only.** (Backfilled entry — release commit `1748bd8`.) Added inert-subcommand negative-test cells (Phase 2). No CLI surface change.
+
 ## [0.6.0] — 2026-05-30
 
 **SemVer-MINOR — two new read-only public-derivation subcommands: `mk address` + `mk derive`.** No private keys, no signing (an xpub has none); read-only by construction.
