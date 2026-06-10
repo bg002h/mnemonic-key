@@ -54,13 +54,15 @@ impl Slip132Variant {
     /// Canonical neutral form this variant normalizes to ("xpub" or "tpub").
     pub fn canonical_label(self) -> &'static str {
         use Slip132Variant::*;
-        match self { Upub | Vpub | UpubMultisig | VpubMultisig => "tpub", _ => "xpub" }
+        match self {
+            Upub | Vpub | UpubMultisig | VpubMultisig => "tpub",
+            _ => "xpub",
+        }
     }
     /// Does `path` satisfy this variant's implied (HARDENED) shape?
     pub fn path_matches(self, path: &DerivationPath) -> bool {
         let c: &[ChildNumber] = path.as_ref();
-        let h = |x: Option<&ChildNumber>, idx: u32|
-            matches!(x, Some(ChildNumber::Hardened { index }) if *index == idx);
+        let h = |x: Option<&ChildNumber>, idx: u32| matches!(x, Some(ChildNumber::Hardened { index }) if *index == idx);
         use Slip132Variant::*;
         match self {
             Ypub | Upub => h(c.first(), 49),
@@ -73,19 +75,46 @@ impl Slip132Variant {
     pub fn mismatch_help(self, path: &DerivationPath) -> String {
         use Slip132Variant::*;
         let (expects, alt) = match self {
-            Ypub => ("purpose 49' (e.g. m/49'/0'/0')", "supply the zpub/xpub for a different script type"),
-            Upub => ("purpose 49' (e.g. m/49'/1'/0')", "supply the vpub/tpub for a different script type"),
-            Zpub => ("purpose 84' (e.g. m/84'/0'/0')", "supply the ypub for a 49' path, or xpub"),
-            Vpub => ("purpose 84' (e.g. m/84'/1'/0')", "supply the upub for a 49' path, or tpub"),
-            YpubMultisig => ("m/48'/<coin>'/<account>'/1'", "use a Zpub for a 2' path, or xpub"),
-            UpubMultisig => ("m/48'/<coin>'/<account>'/1'", "use a Vpub for a 2' path, or tpub"),
-            ZpubMultisig => ("m/48'/<coin>'/<account>'/2'", "use a Ypub for a 1' path, or xpub"),
-            VpubMultisig => ("m/48'/<coin>'/<account>'/2'", "use a Upub for a 1' path, or tpub"),
+            Ypub => (
+                "purpose 49' (e.g. m/49'/0'/0')",
+                "supply the zpub/xpub for a different script type",
+            ),
+            Upub => (
+                "purpose 49' (e.g. m/49'/1'/0')",
+                "supply the vpub/tpub for a different script type",
+            ),
+            Zpub => (
+                "purpose 84' (e.g. m/84'/0'/0')",
+                "supply the ypub for a 49' path, or xpub",
+            ),
+            Vpub => (
+                "purpose 84' (e.g. m/84'/1'/0')",
+                "supply the upub for a 49' path, or tpub",
+            ),
+            YpubMultisig => (
+                "m/48'/<coin>'/<account>'/1'",
+                "use a Zpub for a 2' path, or xpub",
+            ),
+            UpubMultisig => (
+                "m/48'/<coin>'/<account>'/1'",
+                "use a Vpub for a 2' path, or tpub",
+            ),
+            ZpubMultisig => (
+                "m/48'/<coin>'/<account>'/2'",
+                "use a Ypub for a 1' path, or xpub",
+            ),
+            VpubMultisig => (
+                "m/48'/<coin>'/<account>'/2'",
+                "use a Upub for a 1' path, or tpub",
+            ),
         };
         format!(
             "SLIP-0132/origin-path mismatch — --xpub is a {} which expects --origin-path {}, but --origin-path is {}. \
              To engrave a backup, reconcile them: match the path to the prefix, or {}.",
-            self.label(), expects, path, alt
+            self.label(),
+            expects,
+            path,
+            alt
         )
     }
 }
@@ -99,8 +128,12 @@ pub fn detect_and_normalize(s: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
     let from_str = |s: &str| -> Result<Xpub> {
         Xpub::from_str(s).map_err(|e| CliError::UsageError(format!("invalid xpub {s:?}: {e}")))
     };
-    let Ok(data) = base58::decode_check(s) else { return Ok((from_str(s)?, None)); };
-    if data.len() < 4 { return Ok((from_str(s)?, None)); }
+    let Ok(data) = base58::decode_check(s) else {
+        return Ok((from_str(s)?, None));
+    };
+    if data.len() < 4 {
+        return Ok((from_str(s)?, None));
+    }
     let ver: [u8; 4] = data[0..4].try_into().unwrap();
     let (swap, variant) = match ver {
         [0x04, 0x9D, 0x7C, 0xB2] => (XPUB_MAINNET, Ypub),
@@ -185,11 +218,24 @@ mod tests {
 
         let (normalized, variant) = detect_and_normalize(&zpub).unwrap();
 
-        assert_eq!(variant, Some(Slip132Variant::Zpub), "must detect Zpub variant");
-        assert_eq!(normalized.public_key, canonical.public_key, "public_key mismatch");
-        assert_eq!(normalized.chain_code, canonical.chain_code, "chain_code mismatch");
+        assert_eq!(
+            variant,
+            Some(Slip132Variant::Zpub),
+            "must detect Zpub variant"
+        );
+        assert_eq!(
+            normalized.public_key, canonical.public_key,
+            "public_key mismatch"
+        );
+        assert_eq!(
+            normalized.chain_code, canonical.chain_code,
+            "chain_code mismatch"
+        );
         assert_eq!(normalized.depth, canonical.depth, "depth mismatch");
-        assert_eq!(normalized.child_number, canonical.child_number, "child_number mismatch");
+        assert_eq!(
+            normalized.child_number, canonical.child_number,
+            "child_number mismatch"
+        );
         assert_eq!(
             normalized.parent_fingerprint, canonical.parent_fingerprint,
             "parent_fingerprint mismatch"
@@ -200,7 +246,10 @@ mod tests {
     #[test]
     fn canonical_xpub_is_none() {
         let (_, variant) = detect_and_normalize(V2_84_MAIN).unwrap();
-        assert_eq!(variant, None, "canonical xpub must not detect a SLIP-0132 variant");
+        assert_eq!(
+            variant, None,
+            "canonical xpub must not detect a SLIP-0132 variant"
+        );
     }
 
     /// An xpub-length base58check string with a bogus version must return an error
@@ -209,7 +258,10 @@ mod tests {
     fn unknown_version_errors() {
         let bogus = to_slip132(V2_84_MAIN, [0xDE, 0xAD, 0xBE, 0xEF]);
         let result = detect_and_normalize(&bogus);
-        assert!(result.is_err(), "bogus version bytes must return an error, got: {result:?}");
+        assert!(
+            result.is_err(),
+            "bogus version bytes must return an error, got: {result:?}"
+        );
     }
 
     /// `path_matches` truth table — every case from the plan doc.

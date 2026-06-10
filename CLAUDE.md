@@ -53,6 +53,6 @@ The end-user manual for the m-format star lives in the sibling `bg002h/mnemonic-
 ## Practical tips
 
 - `cargo test -p mk-codec` runs all tests. As of `32f273e`, 46 unit tests pass + 4 ignored scaffolds for Phase 5 work.
-- `cargo clippy` and `cargo fmt` may be shimmed via a stale `~/.cargo/bin/rustup` looking for a nightly toolchain that isn't installed. System-installed clippy/fmt at `/usr/bin` work but aren't picked up by the shim. Workaround: skip clippy/fmt gates if the shim errors; the user is aware.
+- Formatting is gated by CI's dedicated `fmt` job pinned to **1.95.0** (the canonical fmt toolchain — see `.github/workflows/ci.yml`). Format locally with `cargo +1.95.0 fmt --all` (NOT the floating local default, which may be a newer nightly that formats differently). When bumping the pin, re-run the fmt in the same commit. Do NOT add a rust-toolchain.toml (it would hijack the 3-toolchain CI matrix — rustup file-beats-default precedence).
 - The repo has its own `Cargo.toml` workspace at `crates/mk-codec`. md-codec is in a separate repo and a separate workspace.
 - Bitcoin crate is `bitcoin = "0.32"`. `DerivationPath`'s `Display` does NOT include the `m/` prefix; use structural comparison (`path.parse::<DerivationPath>() == other`) rather than string formatting when matching paths against the standard table.

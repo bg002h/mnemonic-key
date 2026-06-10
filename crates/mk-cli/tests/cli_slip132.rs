@@ -5,9 +5,9 @@
 //! expected stderr note is emitted, and that `mk verify` accepts SLIP-0132
 //! prefixes (path-optional) with correct exit codes.
 
-use std::process::Command;
 use assert_cmd::cargo::CommandCargoExt;
 use bitcoin::base58;
+use std::process::Command;
 
 const V2_84_MAIN: &str = "xpub6BmeGmRo4LosAcU21HDaGcvtaQ7GrqQcY48nBkE22qM6KVwQUjRJ1BGzk84SFVHgLcd61Vcnhr8petHexjjn5WbQ9PriVrRhphw4oCp2z6a";
 /// Depth-4 m/48'/0'/0'/2' account xpub (BIP-48 P2WSH multisig).
@@ -28,21 +28,53 @@ const WATCH_ONLY: &str = "note: stdout is watch-only \u{2014} public keys only, 
 /// Build a real mk1 card (from V2_84_MAIN with a known origin path) and return
 /// the chunk strings ready to pass as positional args to `mk verify`.
 fn make_card() -> Vec<String> {
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", V2_84_MAIN, "--origin-path", "m/84h/0h/0h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
-        .output().unwrap();
-    assert!(out.status.success(), "make_card: mk encode failed: stderr={}", String::from_utf8_lossy(&out.stderr));
-    String::from_utf8(out.stdout).unwrap().lines().map(str::to_string).collect()
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            V2_84_MAIN,
+            "--origin-path",
+            "m/84h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "make_card: mk encode failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 /// Invoke `mk encode` and decode the resulting mk1 strings via mk_codec.
 fn run_encode_decode(xpub_arg: &str) -> (std::process::Output, mk_codec::KeyCard) {
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", xpub_arg, "--origin-path", "m/84h/0h/0h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
-        .output().unwrap();
-    assert!(out.status.success(), "mk encode failed: stderr={}", String::from_utf8_lossy(&out.stderr));
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            xpub_arg,
+            "--origin-path",
+            "m/84h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "mk encode failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8(out.stdout.clone()).unwrap();
     let strings: Vec<String> = stdout.lines().map(str::to_string).collect();
     assert!(!strings.is_empty(), "no mk1 strings on stdout");
@@ -59,7 +91,10 @@ fn encode_accepts_zpub_with_matching_path() {
 
     // stderr must contain the SLIP-0132 normalization note
     let stderr = String::from_utf8(zpub_out.stderr).unwrap();
-    assert!(stderr.contains(NOTE_ZPUB), "missing SLIP-0132 note; stderr={stderr}");
+    assert!(
+        stderr.contains(NOTE_ZPUB),
+        "missing SLIP-0132 note; stderr={stderr}"
+    );
 
     // The decoded xpub must equal the canonical xpub.
     // (mk encode is non-deterministic due to random chunk_set_id; we compare
@@ -76,14 +111,26 @@ fn encode_accepts_zpub_with_matching_path() {
 #[test]
 fn encode_zpub_path_mismatch_refuses() {
     let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", &zpub, "--origin-path", "m/49h/0h/0h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            &zpub,
+            "--origin-path",
+            "m/49h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
         .output()
         .unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 64, "expected exit 64 (UsageError), got {code}; stderr={stderr}");
+    assert_eq!(
+        code, 64,
+        "expected exit 64 (UsageError), got {code}; stderr={stderr}"
+    );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),
         "expected mismatch message in stderr; stderr={stderr}"
@@ -99,14 +146,26 @@ fn encode_zpub_path_mismatch_refuses() {
 #[test]
 fn encode_zpub_multisig_match() {
     let zpub_multisig = to_slip132(V1_48_MULTISIG, ZPUB_MULTISIG_V);
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", &zpub_multisig, "--origin-path", "m/48h/0h/0h/2h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            &zpub_multisig,
+            "--origin-path",
+            "m/48h/0h/0h/2h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
         .output()
         .unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 0, "expected exit 0 for matching Zpub multisig; stderr={stderr}");
+    assert_eq!(
+        code, 0,
+        "expected exit 0 for matching Zpub multisig; stderr={stderr}"
+    );
     assert!(
         stderr.contains("note: --xpub was a SLIP-0132 Zpub"),
         "expected Zpub normalization note; stderr={stderr}"
@@ -118,14 +177,26 @@ fn encode_zpub_multisig_match() {
 #[test]
 fn encode_zpub_multisig_index_mismatch() {
     let zpub_multisig = to_slip132(V1_48_MULTISIG, ZPUB_MULTISIG_V);
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", &zpub_multisig, "--origin-path", "m/48h/0h/0h/1h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            &zpub_multisig,
+            "--origin-path",
+            "m/48h/0h/0h/1h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
         .output()
         .unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 64, "expected exit 64 for index mismatch; stderr={stderr}");
+    assert_eq!(
+        code, 64,
+        "expected exit 64 for index mismatch; stderr={stderr}"
+    );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),
         "expected mismatch message; stderr={stderr}"
@@ -136,14 +207,26 @@ fn encode_zpub_multisig_index_mismatch() {
 /// SLIP-0132 note on stderr.
 #[test]
 fn encode_canonical_xpub_no_note() {
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", V2_84_MAIN, "--origin-path", "m/84h/0h/0h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            V2_84_MAIN,
+            "--origin-path",
+            "m/84h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
         .output()
         .unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 0, "expected exit 0 for canonical xpub; stderr={stderr}");
+    assert_eq!(
+        code, 0,
+        "expected exit 0 for canonical xpub; stderr={stderr}"
+    );
     assert!(
         !stderr.contains("SLIP-0132"),
         "canonical xpub must not emit a SLIP-0132 note; stderr={stderr}"
@@ -160,12 +243,17 @@ fn verify_zpub_without_path_ok() {
     let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
     let mut cmd = Command::cargo_bin("mk").unwrap();
     cmd.arg("verify");
-    for chunk in &card { cmd.arg(chunk); }
+    for chunk in &card {
+        cmd.arg(chunk);
+    }
     cmd.args(["--xpub", &zpub]);
     let out = cmd.output().unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 0, "expected exit 0 (zpub without path); stderr={stderr}");
+    assert_eq!(
+        code, 0,
+        "expected exit 0 (zpub without path); stderr={stderr}"
+    );
     assert!(
         stderr.contains(NOTE_ZPUB),
         "expected SLIP-0132 note in stderr; stderr={stderr}"
@@ -184,12 +272,17 @@ fn verify_zpub_path_mismatch_refuses() {
     let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
     let mut cmd = Command::cargo_bin("mk").unwrap();
     cmd.arg("verify");
-    for chunk in &card { cmd.arg(chunk); }
+    for chunk in &card {
+        cmd.arg(chunk);
+    }
     cmd.args(["--xpub", &zpub, "--origin-path", "m/49h/0h/0h"]);
     let out = cmd.output().unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
-    assert_eq!(code, 64, "expected exit 64 (UsageError), got {code}; stderr={stderr}");
+    assert_eq!(
+        code, 64,
+        "expected exit 64 (UsageError), got {code}; stderr={stderr}"
+    );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),
         "expected mismatch message in stderr; stderr={stderr}"
@@ -202,15 +295,31 @@ fn verify_zpub_path_mismatch_refuses() {
 #[test]
 fn encode_emits_both_slip132_note_and_watchonly_advisory() {
     let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
-    let out = Command::cargo_bin("mk").unwrap()
-        .args(["encode", "--xpub", &zpub, "--origin-path", "m/84h/0h/0h",
-               "--policy-id-stub", "deadbeef", "--privacy-preserving"])
-        .output().unwrap();
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .args([
+            "encode",
+            "--xpub",
+            &zpub,
+            "--origin-path",
+            "m/84h/0h/0h",
+            "--policy-id-stub",
+            "deadbeef",
+            "--privacy-preserving",
+        ])
+        .output()
+        .unwrap();
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
     assert_eq!(code, 0, "expected exit 0; stderr={stderr}");
-    assert!(stderr.contains(NOTE_ZPUB), "missing SLIP-0132 note; stderr={stderr}");
-    assert!(stderr.contains(WATCH_ONLY), "missing watch-only advisory; stderr={stderr}");
+    assert!(
+        stderr.contains(NOTE_ZPUB),
+        "missing SLIP-0132 note; stderr={stderr}"
+    );
+    assert!(
+        stderr.contains(WATCH_ONLY),
+        "missing watch-only advisory; stderr={stderr}"
+    );
     let slip_offset = stderr.find(NOTE_ZPUB).unwrap();
     let watch_offset = stderr.find(WATCH_ONLY).unwrap();
     assert!(

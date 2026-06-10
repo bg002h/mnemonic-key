@@ -1,8 +1,8 @@
 # CI workflow for the `mnemonic-key` workspace.
 #
 # Triggers: push to main, push to mk-cli-v* / mk-codec-v* tags, PRs.
-# Jobs: build matrix (3 toolchains × 3 OS = 9), vectors-roundtrip on stable,
-# release-on-tag.
+# Jobs: build matrix (3 toolchains × 3 OS = 9), fmt (pinned toolchain),
+# vectors-roundtrip on stable, release-on-tag.
 #
 # Note on apt-get hangs: this workflow doesn't install texlive (no PDF
 # build here, unlike the toolkit's manual workflow), so the recurring
@@ -21,7 +21,7 @@ on:
 
 # Workflow-level permissions are not granted; each job declares its own.
 # Only the release-on-tag job needs `contents: write` (release upload);
-# build + vectors-roundtrip run with the default read-only token.
+# build + fmt + vectors-roundtrip run with the default read-only token.
 
 env:
   CARGO_TERM_COLOR: always
@@ -42,7 +42,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-          components: clippy, rustfmt
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -56,6 +56,26 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # 1.95.0 is the canonical FORMATTING toolchain; bump it DELIBERATELY
+  # (re-run `cargo +<new> fmt --all` in the same commit) — do not float
+  # `stable` here (recurrence: FOLLOWUPS
+  # `rustfmt-drift-fn-signature-collapse-3-files`: each rustfmt release
+  # re-reds the repo). A committed rust-toolchain.toml would override this
+  # pin too (rustup file-beats-default precedence) — keep the repo free of
+  # one. The build matrix no longer runs fmt (it was 9x redundant and the
+  # recurrence vector); clippy/build/test stay per-lane.
+  fmt:
+    name: fmt (pinned 1.95.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.95.0 (canonical fmt toolchain)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt
 
       - name: Rustfmt
         run: cargo fmt --check --all
@@ -91,7 +111,7 @@ jobs:
           # the pinned corpus (sort by name to make the comparison
           # deterministic regardless of iteration order).
           pinned=$(jq -S '.vectors | sort_by(.name)' \
-            crates/mk-codec/tests/vectors/v0.1.json)
+            crates/mk-codec/src/test_vectors/v0.1.json)
           rebuilt=$(jq -s -S 'sort_by(.name)' /tmp/vectors-out/*.json)
           if [ "$pinned" != "$rebuilt" ]; then
             echo "::error::vectors-roundtrip mismatch between mk vectors --out and pinned corpus"
@@ -104,7 +124,7 @@ jobs:
     name: release-on-tag
     if: startsWith(github.ref, 'refs/tags/mk-cli-v') || startsWith(github.ref, 'refs/tags/mk-codec-v')
     runs-on: ubuntu-latest
-    needs: [build, vectors-roundtrip]
+    needs: [build, fmt, vectors-roundtrip]
     permissions:
       contents: write
     steps:

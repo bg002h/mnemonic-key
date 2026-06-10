@@ -47,7 +47,7 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 ## Where to start reading
 
 - **For format users / implementers**: [`bip/bip-mnemonic-key.mediawiki`](bip/bip-mnemonic-key.mediawiki) is the canonical (draft) spec.
-- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, v0.1.1 working encode/decode round-trip + 39-vector conformance corpus (17 clean + 22 negative) at [`crates/mk-codec/tests/vectors/v0.1.json`](crates/mk-codec/tests/vectors/v0.1.json).
+- **For the reference implementation**: [`crates/mk-codec/`](crates/mk-codec/) — Rust crate, v0.1.1 working encode/decode round-trip + 39-vector conformance corpus (17 clean + 22 negative) at [`crates/mk-codec/src/test_vectors/v0.1.json`](crates/mk-codec/src/test_vectors/v0.1.json).
 - **For why the design is the way it is**: [`design/DECISIONS.md`](design/DECISIONS.md) walks through D-1..D-15 (the 2026-04-29 design discussion plus closures of Q-1..Q-10). [`design/SPEC_mk_v0_1.md`](design/SPEC_mk_v0_1.md) is the post-closure wire-format spec.
 - **For deferred work**: [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md) — pre-BIP-submission audit gates and cross-repo coordination items.
 

@@ -14,8 +14,7 @@ use mk_codec::string_layer::bch::ALPHABET;
 
 /// Exact watch-only advisory line (em-dash U+2014). MUST be byte-identical to
 /// mnemonic-toolkit's secret_advisory.rs + ms-cli's advisory.rs.
-const WATCH_ONLY_LINE: &str =
-    "note: stdout is watch-only \u{2014} public keys only, cannot spend";
+const WATCH_ONLY_LINE: &str = "note: stdout is watch-only \u{2014} public keys only, cannot spend";
 
 const PRIVATE_KEY_LINE: &str = "warning: stdout carries private key material (can spend) \u{2014} redirect or encrypt (e.g. '> file.txt' or '| age -e ...')";
 const TEMPLATE_LINE: &str = "note: stdout is a keyless descriptor template (no keys)";
@@ -45,9 +44,18 @@ fn mk1_fixture() -> Vec<String> {
 
 #[test]
 fn byte_parity_advisory_lines() {
-    assert_eq!(PRIVATE_KEY_LINE, "warning: stdout carries private key material (can spend) \u{2014} redirect or encrypt (e.g. '> file.txt' or '| age -e ...')");
-    assert_eq!(WATCH_ONLY_LINE, "note: stdout is watch-only \u{2014} public keys only, cannot spend");
-    assert_eq!(TEMPLATE_LINE, "note: stdout is a keyless descriptor template (no keys)");
+    assert_eq!(
+        PRIVATE_KEY_LINE,
+        "warning: stdout carries private key material (can spend) \u{2014} redirect or encrypt (e.g. '> file.txt' or '| age -e ...')"
+    );
+    assert_eq!(
+        WATCH_ONLY_LINE,
+        "note: stdout is watch-only \u{2014} public keys only, cannot spend"
+    );
+    assert_eq!(
+        TEMPLATE_LINE,
+        "note: stdout is a keyless descriptor template (no keys)"
+    );
 }
 
 #[test]
