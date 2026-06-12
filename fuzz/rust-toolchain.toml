@@ -1,0 +1,23 @@
+# Pinned nightly for the mk-codec fuzz workspace (cargo-fuzz requires nightly
+# for -Zsanitizer / the libFuzzer runtime). This file is SCOPED to fuzz/ —
+# rustup resolves rust-toolchain.toml from the cwd UPWARD, so it only applies
+# when invoking cargo inside fuzz/ and does NOT affect the repo root.
+#
+# INTENTIONAL — and it does NOT violate mnemonic-key's no-root-toolchain rule:
+# the repo deliberately has no ROOT rust-toolchain.toml (the fmt job in
+# .github/workflows/ci.yml pins rustfmt to 1.95.0 via dtolnay/rust-toolchain
+# and its comment notes "A committed rust-toolchain.toml would override this
+# pin too (rustup file-beats-default precedence) — keep the repo free of
+# one."). A fuzz/-SCOPED pin is invisible to the root (rustup never walks
+# DOWN into fuzz/), so the fmt job at the repo root still sees no toolchain
+# file and uses its dtolnay-pinned 1.95.0. Do NOT "promote" this file to the
+# repo root.
+#
+# Pinned to a dated nightly per the R0 design (M5); the constellation-wide
+# FOLLOWUP `fuzz-nightly-quarterly-bump` (toolkit repo) tracks refreshing this
+# quarterly. CI pins the same date via dtolnay/rust-toolchain in
+# .github/workflows/fuzz-smoke.yml.
+[toolchain]
+channel = "nightly-2026-04-27"
+components = ["rust-src"]
+profile = "minimal"

@@ -1,0 +1,61 @@
+# libFuzzer dictionary for mk1 / bech32-family fuzz targets.
+# mk phase (the final phase) of the constellation stress-fuzz program
+# (Cycle C).
+#
+# The 32-char bech32 charset (qpzry9x8gf2tvdw0s3jn54khce6mua7l), the mk1 HRP,
+# the separator, and a few structural tokens. These bias libFuzzer's mutation
+# toward bytes that land inside the valid alphabet.
+
+# mk1 HRP + separator (the separator '1' is the last HRP char here).
+"mk1"
+
+# Bech32 separator on its own.
+"1"
+
+# The multi-chunk splitter sentinel (between-chunk newline for the
+# mk1_decode splitter target).
+"\x0a"
+
+# Common mk1 header tokens. Real mk1 chunks begin "mk1q..."; the first chunk
+# of a card commonly opens "mk1qp" (header-byte high nibble) and the
+# single-string vs chunked discriminator follows.
+"mk1qp"
+"mk1q"
+
+# Individual bech32 alphabet characters.
+"q"
+"p"
+"z"
+"r"
+"y"
+"9"
+"x"
+"8"
+"g"
+"f"
+"2"
+"t"
+"v"
+"d"
+"w"
+"0"
+"s"
+"3"
+"j"
+"n"
+"5"
+"4"
+"k"
+"h"
+"c"
+"e"
+"6"
+"m"
+"u"
+"a"
+"7"
+"l"
+
+# A short run of the alphabet (helps seed multi-symbol mutations).
+"qpzry9x8gf2tvdw0"
+"s3jn54khce6mua7l"

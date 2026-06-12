@@ -12,3 +12,10 @@
 
 # proptest shrink-regression corpora (per-test-file, nested under tests/)
 **/proptest-regressions/
+
+# cargo-fuzz transient output (mk phase, Cycle C). The fuzz workspace's
+# corpus/ and Cargo.lock ARE committed; build/artifacts/coverage are not.
+# (`**/target/` above already covers fuzz/target/; artifacts/ + coverage/ are
+# cargo-fuzz-specific and need their own lines.)
+fuzz/artifacts/
+fuzz/coverage/
