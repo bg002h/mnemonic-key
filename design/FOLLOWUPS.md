@@ -61,6 +61,16 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `display-grouping-render-strip-v1` — standardized mstring display-grouping (`mk` CLI flags + intake strip; companion)
+
+- **Surfaced:** 2026-06-15, the cross-constellation **mstring display-grouping** cycle (P3 = mnemonic-key). User-requested standardization of `ms1`/`mk1`/`md1` display output across all four CLIs (`mnemonic`/`md`/`ms`/`mk`).
+- **Where:** `crates/mk-cli/src/format.rs` (NEW — `render_grouped`, `strip_display_separators`, `is_display_separator`, `parse_separator`; kept LOCAL to mk-cli, bin-only); `cmd/encode.rs` (`--group-size`/`--separator`); `cmd/mod.rs::read_mk1_strings` (interior strip — covers all 6 mk1-intake subcommands: decode/inspect/verify/repair/derive/address); canonical vectors `design/display-grouping-vectors.tsv` (+ `.sha256`, CI-pinned in the fmt job).
+- **What (SHIPPED this cycle, mk-cli 0.9.0):** `mk encode` gains `--group-size <u16>` (default 5, `0`=unbroken) + `--separator <space|hyphen|comma>` (default space); text output is now **space/5 print-once** — a CORRECTIVE default-output change (`mk encode` emitted UNBROKEN before, diverging from the other CLIs). `--json` stays UNBROKEN. `read_mk1_strings` now strips ALL whitespace + `-` + `,` (was edge-only `.trim()`), so a grouped or unbroken card both re-ingest on every mk1-intake subcommand + the `-`→stdin path. **mk-codec UNCHANGED** (fns mk-cli-local; mk-codec tolerates no separators). Drift control = copy-with-checksum conformance vectors (canonical TSV authored in the toolkit; byte-identical copy + `.sha256` here; CI `sha256sum -c` + a bin-crate driver test).
+- **Why deferred / residual:** P4 (toolkit) pin-bumps + collapses `format.rs` + regenerates goldens + updates both manuals; P5 (`mnemonic-gui`) `schema_mirror` flags + separator keyword dropdown. The canonical-vector checksum is a lagging drift gate; the leading control is the paired-PR discipline.
+- **Status:** open (P3 shipped; P4–P5 pending).
+- **Tier:** `cross-repo`.
+- **Companion:** mnemonic-toolkit `design/SPEC_mstring_display_grouping.md` (canonical spec) + `design/FOLLOWUPS.md` (`display-grouping-render-strip-v1`, filed in P4) + descriptor-mnemonic + mnemonic-secret `design/FOLLOWUPS.md` (`display-grouping-render-strip-v1`, P1/P2).
+
 ### `mk-cli-repair-flag` — `mk repair` subcommand mirroring toolkit's `mnemonic repair`
 
 - **Surfaced:** 2026-05-17, mnemonic-toolkit v0.22.0 brainstorm.
