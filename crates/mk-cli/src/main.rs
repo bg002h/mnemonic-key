@@ -8,6 +8,7 @@
 
 mod cmd;
 mod error;
+mod format;
 mod output_advisory;
 mod process_hardening;
 mod slip132;
