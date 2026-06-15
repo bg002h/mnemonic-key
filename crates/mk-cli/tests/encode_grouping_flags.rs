@@ -36,11 +36,22 @@ fn first_line(out: &std::process::Output) -> String {
 #[test]
 fn encode_default_groups_space_5() {
     let out = encode(&[]);
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let line = first_line(&out);
-    assert_eq!(line.chars().nth(5), Some(' '), "default space/5; got {line:?}");
+    assert_eq!(
+        line.chars().nth(5),
+        Some(' '),
+        "default space/5; got {line:?}"
+    );
     let unbroken: String = line.chars().filter(|c| *c != ' ').collect();
-    assert!(unbroken.starts_with("mk1"), "space-stripped line starts with mk1; got {line:?}");
+    assert!(
+        unbroken.starts_with("mk1"),
+        "space-stripped line starts with mk1; got {line:?}"
+    );
 }
 
 #[test]
@@ -48,7 +59,10 @@ fn encode_unbroken_group_size_0() {
     let out = encode(&["--group-size", "0"]);
     assert!(out.status.success());
     let line = first_line(&out);
-    assert!(!line.contains(' ') && !line.contains('-') && !line.contains(','), "unbroken; got {line:?}");
+    assert!(
+        !line.contains(' ') && !line.contains('-') && !line.contains(','),
+        "unbroken; got {line:?}"
+    );
     assert!(line.starts_with("mk1"));
 }
 
@@ -57,7 +71,11 @@ fn encode_separator_hyphen() {
     let out = encode(&["--separator", "hyphen"]);
     assert!(out.status.success());
     let line = first_line(&out);
-    assert_eq!(line.chars().nth(5), Some('-'), "hyphen at idx 5; got {line:?}");
+    assert_eq!(
+        line.chars().nth(5),
+        Some('-'),
+        "hyphen at idx 5; got {line:?}"
+    );
 }
 
 #[test]
