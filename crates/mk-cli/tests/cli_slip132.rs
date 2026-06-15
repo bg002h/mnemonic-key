@@ -67,6 +67,10 @@ fn run_encode_decode(xpub_arg: &str) -> (std::process::Output, mk_codec::KeyCard
             "--policy-id-stub",
             "deadbeef",
             "--privacy-preserving",
+            // mstring-grouping P3: these stdout lines go straight to mk_codec::decode
+            // (bypassing the CLI intake strip) — keep them unbroken.
+            "--group-size",
+            "0",
         ])
         .output()
         .unwrap();

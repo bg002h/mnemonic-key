@@ -65,6 +65,10 @@ fn from_md1_derivation() {
             V1_PATH,
             "--from-md1",
             PKH_BASIC_MD1,
+            // mstring-grouping P3: keep stdout lines unbroken — they go straight to
+            // mk_codec::decode below, bypassing the CLI intake strip.
+            "--group-size",
+            "0",
         ])
         .output()
         .expect("invoke mk encode");

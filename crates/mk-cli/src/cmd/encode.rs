@@ -48,6 +48,15 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub force_long_code: bool,
 
+    /// Insert a separator every N characters in each emitted mk1 string
+    /// (0 = unbroken). SPEC §3. Display only; --json stays unbroken.
+    #[arg(long, default_value_t = 5)]
+    pub group_size: u16,
+
+    /// Separator: space|hyphen|comma (keyword) or the literal " "|-|, . SPEC §5.
+    #[arg(long, default_value = "space", value_parser = crate::format::parse_separator)]
+    pub separator: char,
+
     /// Emit a single JSON object on stdout instead of one mk1 string per line.
     #[arg(long)]
     pub json: bool,
@@ -91,7 +100,10 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         emit_json(&strings)?;
     } else {
         for s in &strings {
-            println!("{s}");
+            println!(
+                "{}",
+                crate::format::render_grouped(s, args.group_size as usize, args.separator)
+            );
         }
     }
     crate::output_advisory::emit_output_class_advisory(
