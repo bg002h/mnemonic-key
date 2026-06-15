@@ -7,6 +7,20 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-06-15
+
+**SemVer-MINOR — standardized mstring display-grouping; `mk encode` text output is now space/5 print-once (was unbroken — corrective alignment with the other CLIs). Part of the cross-constellation `display-grouping-render-strip-v1` cycle (P3).**
+
+### Added
+
+- **`mk encode --group-size <u16>`** (default `5`, `0` = unbroken) + **`--separator <space|hyphen|comma>`** (keyword or literal `" "|-|,`, default `space`) — insert a separator every N characters in each emitted mk1 string. SPEC §3/§5. The default `mk encode` text output is now **space/5, single line, print-once** (previously UNBROKEN — a corrective default-output change bringing `mk` into line with `ms`/`md`), hence MINOR. `--json` ALWAYS carries the canonical **unbroken** string(s).
+- **Separator-stripping intake on all six mk1-intake subcommands** (`decode`/`inspect`/`verify`/`repair`/`derive`/`address`) via the shared `read_mk1_strings`, on both the positional and `-`→stdin paths: a grouped or unbroken card both re-ingest. Strips ALL whitespace + `-` + `,` (SPEC §3.2) — previously `read_mk1_strings` only `.trim()`med edge whitespace, so interior separators were rejected. (mk-codec's decode tolerates no separators; this is a pure CLI-layer normalization.)
+- Conformance vectors `design/display-grouping-vectors.tsv` (byte-identical copy of the toolkit canonical) + `.sha256`, CI-pinned (`sha256sum -c` in the fmt job) + a bin-crate driver test over every row.
+
+### Notes
+
+stdout text was never a declared-stable interface and `--json` is unaffected. **`mk-codec` is UNCHANGED** (the pure fns `render_grouped`/`strip_display_separators`/`is_display_separator`/`parse_separator` are mk-cli-local — mk-cli is bin-only; the conformance test is a bin-crate `#[cfg(test)]`). The `mk-codec` dep pin stays `0.4.0`. Cross-repo lockstep (toolkit collapse + manuals; `mnemonic-gui` schema-mirror flags + separator dropdown) lands in later phases; FOLLOWUP `display-grouping-render-strip-v1`.
+
 ## [0.8.0] — 2026-06-10
 
 **SemVer-MINOR — `policy_id_stub` derivation aligned to the constellation's `WalletPolicyId`.** `mk encode --from-md1` and `mk verify --from-md1` now derive the 4-byte Policy ID stub from `md_codec::compute_wallet_policy_id(descriptor)` (md SPEC v0.13 §5.3 — the canonical-*expanded*, encoding-stable policy identity) instead of the md1 bytecode hash `SHA-256(canonical_bytecode)`. This matches `mnemonic-toolkit`'s `synthesize.rs` stub formula byte-for-byte, so a stub minted via `mk --from-md1` now agrees with toolkit-emitted bundle cards **and** survives a re-encode of the same logical wallet (origin/use-site elision, override-vs-baseline path placement) — which the bytecode hash did not. **Behavior change:** a stub a user previously stamped via the OLD `--from-md1` no longer matches. The bytecode-hash formula predated md-codec v0.13's WalletPolicyId and was stale; SPEC §3.3/§5/§9 + the BIP draft are updated in lockstep. No `mk-codec` change and no `md-codec` pin bump (`compute_wallet_policy_id` is present and byte-stable at the pinned `md-codec-v0.34.0`). Resolves `audit-2026-06-10-backlog` items `stub-formula-divergence` (I1) + `from-md1-test-tautology` (I2).
