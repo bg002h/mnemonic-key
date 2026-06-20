@@ -7,6 +7,55 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-06-19
+
+**SemVer-MINOR — `policy_id_stub` derivation is now FORM-AWARE: a keyless template md1 binds on `WalletDescriptorTemplateId`, a keyed wallet-policy md1 on `WalletPolicyId`. Aligns `mk --from-md1` with `mnemonic-toolkit` #28 (`bundle --md1-form=template`).**
+
+`mk encode --from-md1` and `mk verify --from-md1` previously derived the 4-byte
+stub from `md_codec::compute_wallet_policy_id` **unconditionally**. For a
+**keyless template** md1 (`!is_wallet_policy()` — e.g. a single-sig template
+bundle, or any plain `pkh`/`wsh(...)` template with no `Pubkeys` TLV) that
+computed the WRONG identity. `derive_stub_from_md1` now discriminates on
+`md_codec::Descriptor::is_wallet_policy()`, mirroring the toolkit's
+`bundle_binding_stub` (toolkit #28):
+
+- **keyless template** (`!is_wallet_policy()`) → top 4 bytes of
+  `md_codec::compute_wallet_descriptor_template_id` (md SPEC §8.1, key-stable
+  BIP-388 template identity);
+- **keyed wallet-policy** (`is_wallet_policy()`) → top 4 bytes of
+  `md_codec::compute_wallet_policy_id` (md SPEC v0.13 §5.3 — the pre-#28 path,
+  unchanged).
+
+So a stub minted via `mk --from-md1` from a toolkit-emitted **template** bundle
+now agrees byte-for-byte with the stub the toolkit stamped on the same card.
+
+**Behavior change:** a stub previously stamped via `--from-md1` from a *keyless
+template* md1 no longer matches (it now resolves to the template-id, not the
+policy-id) — hence MINOR. Keyed wallet-policy md1s are unaffected.
+
+No `mk-codec` change and **no `md-codec` pin bump** — both
+`compute_wallet_descriptor_template_id` and `is_wallet_policy()` are public and
+re-exported at the pinned `md-codec-v0.34.0`, and all stub goldens are
+byte-stable across `md-codec` 0.34.0 → 0.37.0.
+
+### Changed
+
+- `crates/mk-cli/src/cmd/mod.rs`: `derive_stub_from_md1` gains the
+  `!is_wallet_policy()` → `compute_wallet_descriptor_template_id` branch (form
+  dispatch); rustdoc updated.
+- `crates/mk-codec/src/key_card.rs`: `KeyCard::policy_id_stubs` field rustdoc
+  corrected — the stub is no longer "always the WalletPolicyId" but the
+  form-aware canonical identity.
+
+### Added
+
+- `crates/mk-cli/tests/template_id_stub.rs`: form-aware cells — keyless template
+  `mk encode`/`mk verify` use the template-id stub (RED before the fix), and a
+  keyed wallet-policy md1 still uses the policy-id stub (regression). Goldens
+  are frozen INDEPENDENT literals (audit-I1 discipline).
+- `crates/mk-cli/tests/round_trip.rs`: `from_md1_derivation` golden updated to
+  the template-id stub (`PKH_BASIC_MD1` is a keyless `pkh` template).
+
 ## [0.9.0] — 2026-06-15
 
 **SemVer-MINOR — standardized mstring display-grouping; `mk encode` text output is now space/5 print-once (was unbroken — corrective alignment with the other CLIs). Part of the cross-constellation `display-grouping-render-strip-v1` cycle (P3).**

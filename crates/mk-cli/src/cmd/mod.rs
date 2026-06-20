@@ -52,19 +52,32 @@ pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
     })
 }
 
-/// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.3.
+/// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.3,
+/// **FORM-AWARE** (matches the toolkit's `bundle_binding_stub`, #28):
 ///
-/// The stub is the top 4 bytes of the policy's **WalletPolicyId**
-/// (`md_codec::compute_wallet_policy_id`, md SPEC v0.13 §5.3 canonical-expanded,
-/// encoder-divergence-free) — NOT the md1 bytecode hash, which is
-/// encoding-sensitive and would not survive a re-encode of the same logical
-/// wallet. Matches the toolkit's `synthesize.rs` stub formula byte-for-byte
-/// (audit I1, 2026-06-10; see `design/PLAN_stub_formula_walletpolicyid.md`).
+/// - a **keyed wallet-policy** md1 (`is_wallet_policy()`) → top 4 bytes of the
+///   policy's **WalletPolicyId** (`md_codec::compute_wallet_policy_id`, md SPEC
+///   v0.13 §5.3 canonical-expanded, encoder-divergence-free);
+/// - a **keyless template** md1 (`!is_wallet_policy()`, e.g. a single-sig
+///   `--md1-form=template` bundle) → top 4 bytes of the key-stable
+///   **WalletDescriptorTemplateId** (`md_codec::compute_wallet_descriptor_template_id`,
+///   md SPEC §8.1, BIP-388 template-only identity).
+///
+/// In both cases the stub is rooted on a canonical, encoder-divergence-free
+/// identity — NOT the md1 bytecode hash, which is encoding-sensitive and would
+/// not survive a re-encode of the same logical wallet. Discriminating on
+/// `is_wallet_policy()` keeps a stub minted via `mk --from-md1` byte-for-byte
+/// in agreement with the toolkit-emitted bundle card for the SAME md1 form
+/// (audit I1, 2026-06-10; toolkit #28 `bundle --md1-form=template`).
 pub fn derive_stub_from_md1(md1_str: &str) -> Result<[u8; 4]> {
     let descriptor = md_codec::decode_md1_string(md1_str)?;
-    let id = md_codec::compute_wallet_policy_id(&descriptor)?;
+    let id_bytes = if descriptor.is_wallet_policy() {
+        *md_codec::compute_wallet_policy_id(&descriptor)?.as_bytes()
+    } else {
+        *md_codec::compute_wallet_descriptor_template_id(&descriptor)?.as_bytes()
+    };
     let mut stub = [0u8; 4];
-    stub.copy_from_slice(&id.as_bytes()[..4]);
+    stub.copy_from_slice(&id_bytes[..4]);
     Ok(stub)
 }
 

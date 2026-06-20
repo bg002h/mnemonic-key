@@ -38,20 +38,26 @@ fn encode_decode_round_trip() {
 }
 
 /// Confirm `mk encode --from-md1 <md1>` produces an mk1 string whose
-/// decoded `policy_id_stubs[0]` equals the top 4 bytes of the policy's
-/// **WalletPolicyId** (SPEC §3.3).
+/// decoded `policy_id_stubs[0]` equals the form-aware binding stub for that
+/// md1 (SPEC §3.3). `PKH_BASIC_MD1` is a KEYLESS template (`pkh(@0/**)` carries
+/// no `Pubkeys` TLV → `is_wallet_policy() == false`), so post-#28 the stub is
+/// the top 4 bytes of its **WalletDescriptorTemplateId** — NOT the
+/// **WalletPolicyId** (the pre-#28 unconditional value `3d190af3`, which was
+/// wrong for a template).
 ///
 /// This is an INDEPENDENT golden, not a recomputation: `EXPECTED_STUB` is a
 /// frozen literal computed ONCE, out-of-band, via
-///   `md_codec::compute_wallet_policy_id(
+///   `md_codec::compute_wallet_descriptor_template_id(
 ///        &md_codec::decode_md1_string(PKH_BASIC_MD1).unwrap()
 ///    ).unwrap().as_bytes()[..4]`
 /// Freezing it (rather than recomputing the impl's own chain at runtime) is
 /// what lets this test catch a future re-divergence of `derive_stub_from_md1`.
-/// The test body MUST NOT call `compute_wallet_policy_id` (audit I1, 2026-06-10).
+/// The test body MUST NOT call `compute_wallet_descriptor_template_id` (audit
+/// I1, 2026-06-10). See `tests/template_id_stub.rs` for the dedicated
+/// form-aware (template vs keyed wallet-policy) cells.
 #[test]
 fn from_md1_derivation() {
-    const EXPECTED_STUB: [u8; 4] = [0x3d, 0x19, 0x0a, 0xf3];
+    const EXPECTED_STUB: [u8; 4] = [0x55, 0x9e, 0x64, 0xb2];
 
     let mut cmd = Command::cargo_bin("mk").expect("mk binary");
     let out = cmd

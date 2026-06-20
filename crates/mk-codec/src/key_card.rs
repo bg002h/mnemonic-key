@@ -23,10 +23,14 @@ use crate::error::Result;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyCard {
     /// Policy ID stubs declaring which MD-encoded policy template(s)
-    /// this xpub is intended to serve. Each stub is the top 4 bytes
-    /// of the policy's `SHA-256(canonical_bytecode)`. The vector is
-    /// guaranteed non-empty after a successful `decode` (the decoder
-    /// rejects `count == 0` with `Error::InvalidPolicyIdStubCount`).
+    /// this xpub is intended to serve. Each stub is the top 4 bytes of a
+    /// canonical, encoder-divergence-free md1 identity, FORM-AWARE: the
+    /// **WalletPolicyId** for a keyed wallet-policy md1, or the key-stable
+    /// **WalletDescriptorTemplateId** for a keyless template md1 (matching
+    /// the toolkit's `bundle_binding_stub` / mk-cli's `derive_stub_from_md1`,
+    /// toolkit #28). The vector is guaranteed non-empty after a successful
+    /// `decode` (the decoder rejects `count == 0` with
+    /// `Error::InvalidPolicyIdStubCount`).
     pub policy_id_stubs: Vec<[u8; 4]>,
 
     /// Master-key fingerprint identifying the seed from which `xpub`
