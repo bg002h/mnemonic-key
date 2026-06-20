@@ -61,6 +61,17 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `mstar-prepolicy-key-backup` — no policy-independent (pre-wallet) public-key backup; mk1 always binds to a policy/template
+
+- **Surfaced:** 2026-06-20, design discussion (SeedHammer template-engraving thread — "what about generating + backing up keys *before* using them in a wallet?").
+- **Where:** `crates/mk-codec/src/key_card.rs:24-58` (`KeyCard.policy_id_stubs: Vec<[u8;4]>`, mandatory); `crates/mk-codec/src/bytecode/encode.rs:24` (empty stub set → `Error::InvalidPolicyIdStubCount`). Cross: `descriptor-mnemonic crates/md-codec/src/identity.rs:50-53` (`WalletDescriptorTemplateId` is key-independent + origin-path-invariant).
+- **What:** Every mk1 MUST declare ≥1 specific md1 policy/template (`policy_id_stubs` non-empty; the encoder rejects empty). So the constellation has NO artifact for backing up a *public* key (xpub) *before* any wallet/template exists. The canonical pre-wallet backup is the SEED (`ms1`/words/SeedQR) — but that is the SECRET, not a shareable/pre-engravable public key card. The "generate-and-back-up-keys-before-use" (key-first) workflow therefore cannot pre-mint or pre-engrave an mk1: the user must back up the seed, or wait until at least a template SHAPE is agreed (then bind to the key-independent `WalletDescriptorTemplateId` — partial: records the shape, not the `@N` slot→key assignment).
+- **Decision needed (design item, NO code pending):** either (a) support an "unbound" / template-agnostic public-key card and define how it later binds to a policy/template + how `verify-bundle` treats a card with no policy binding (an unbound card loses the integrity link that makes a bundle verify as a coherent whole), or (b) declare seed-only (`ms1`) the canonical pre-wallet backup and document it (wont-fix). Re-evaluate alongside the constellation template-engraving work.
+- **Why deferred:** open design question (not a defect); held pending the m* multisig-template upgrade per the user's standing hold.
+- **Status:** `open`.
+- **Tier:** `cross-repo`.
+- **Companion (LOCKSTEP — settling one MUST settle the other):** `mnemonic-toolkit/design/FOLLOWUPS.md` `mstar-prepolicy-key-backup`. This entry and its toolkit companion are a BOUND PAIR: any resolution (support an unbound card / wont-fix seed-only / re-scope) MUST update BOTH entries in the same change — neither may be closed alone. Related: `mnemonic-engrave/design/FOLLOWUPS.md` `seedhammer-template-engrave-key-search-time-estimate` (the key-first flow is its primary trigger) + `constellation-template-only-engraving`.
+
 ### `display-grouping-render-strip-v1` — standardized mstring display-grouping (`mk` CLI flags + intake strip; companion)
 
 - **Surfaced:** 2026-06-15, the cross-constellation **mstring display-grouping** cycle (P3 = mnemonic-key). User-requested standardization of `ms1`/`mk1`/`md1` display output across all four CLIs (`mnemonic`/`md`/`ms`/`mk`).
