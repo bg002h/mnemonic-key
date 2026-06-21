@@ -7,6 +7,13 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] — 2026-06-21
+
+**SemVer-PATCH — two bug fixes in `mk` output hygiene (constellation bug-hunt cycle-12). No new flags, no wire/format change, `mk-codec` untouched.**
+
+- **M12 — `mk repair` no longer emits invalid mixed-case `mk1` for all-uppercase input.** `reconstruct_corrected` (`src/cmd/repair.rs`) previously spliced the input's uppercase `MK1` prefix with lowercase bech32 data, producing a mixed-case string that `mk decode` rejects (`Error::MixedCase`, exit 2). The prefix is now lowercased so the emitted string is uniformly all-lowercase (codec canonical) and re-decodes to the same xpub. Lowercase input is unaffected (idempotent).
+- **L20 — `classify_code_variant` off-by-one corrected.** A 96-symbol data-part (total length 99) was mislabeled `"regular"` when the authoritative `bch_code_for_length` (mk-codec) puts the "long" band at 96..=108. The threshold is now `93 + "mk1".len()` (data-part ≤ 93 ⇒ regular; ≥ 96 ⇒ long). Affects the display-only `code_variant`/`chunk_variants` fields of `mk decode`/`encode`/`inspect`; no funds/wire impact.
+
 ## [0.10.0] — 2026-06-19
 
 **SemVer-MINOR — `policy_id_stub` derivation is now FORM-AWARE: a keyless template md1 binds on `WalletDescriptorTemplateId`, a keyed wallet-policy md1 on `WalletPolicyId`. Aligns `mk --from-md1` with `mnemonic-toolkit` #28 (`bundle --md1-form=template`).**
