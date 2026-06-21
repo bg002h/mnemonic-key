@@ -128,8 +128,17 @@ fn reconstruct_corrected(
     // mk1 string. Use `data_with_checksum` (already post-correction) to
     // ensure the emitted string is checksum-valid byte-exact with what
     // a re-encode of the underlying KeyCard would produce.
+    //
+    // M12: the `prefix` carries the input's original case (e.g. `MK` for the
+    // canonical QR-friendly all-uppercase card), but the data symbols come
+    // from the LOWERCASE `ALPHABET`. Splicing them verbatim would yield a
+    // mixed-case `MK1<lowercase-data>` string that `decode_string` rejects
+    // with `Error::MixedCase` — an un-ingestable repair artifact. mk-codec
+    // emits lowercase canonically and accepts all-uppercase input, so we
+    // normalize the prefix to lowercase here: the emitted string is then
+    // uniformly all-lowercase (codec canonical) and round-trips cleanly.
     let mut out = String::with_capacity(prefix.len() + 1 + decoded.data_with_checksum.len());
-    out.push_str(prefix);
+    out.push_str(&prefix.to_lowercase());
     out.push('1');
     for &v in &decoded.data_with_checksum {
         out.push(ALPHABET[v as usize] as char);

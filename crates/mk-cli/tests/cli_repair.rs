@@ -291,6 +291,122 @@ fn repair_stdin_input_via_dash() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// M12: all-uppercase input (the canonical QR-friendly `MK1…` form) must
+// re-emit a VALID, all-lowercase, re-ingestable mk1 — NOT a mixed-case
+// `MK1<lowercase-data>` string that fails re-decode with `Error::MixedCase`.
+//
+// mk-codec rejects mixed case and accepts all-uppercase; the repair re-emit
+// previously spliced the original-cased `MK` prefix with lowercase `ALPHABET`
+// data, producing an un-ingestable artifact even on the clean (exit-0) path.
+// ──────────────────────────────────────────────────────────────────────────
+#[test]
+fn repair_uppercase_input_emits_redecodeable_lowercase() {
+    let chunks = generate_valid_mk1_chunks();
+    // Uppercase BOTH chunks to the canonical QR-friendly `MK1…` form. The V1
+    // fixture emits a 2-chunk KeyCard, so a full re-decode needs both chunks.
+    let upper: Vec<String> = chunks.iter().map(|c| c.to_uppercase()).collect();
+    for u in &upper {
+        assert!(
+            u.starts_with("MK1"),
+            "fixture sanity: uppercased mk1 starts with MK1; got {u:?}"
+        );
+    }
+
+    // Repair the all-uppercase (clean) chunks via stdin (one per line) →
+    // exit 0, no corrections.
+    let stdin_body = format!("{}\n{}\n", upper[0], upper[1]);
+    let mut child = Command::cargo_bin("mk")
+        .expect("mk binary")
+        .args(["repair", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn mk repair -");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin pipe")
+        .write_all(stdin_body.as_bytes())
+        .expect("write stdin");
+    let out = child.wait_with_output().expect("wait mk repair -");
+    let code = out.status.code().expect("exited normally");
+    assert_eq!(
+        code,
+        0,
+        "expected exit 0 for clean uppercase input; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
+    // The emitted corrected chunks (non-comment stdout lines).
+    let emitted: Vec<String> = stdout
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(
+        emitted.len(),
+        2,
+        "two inputs → two emitted chunks; got {emitted:?}"
+    );
+
+    // (a) Each emitted string MUST NOT be mixed-case. Either all-lowercase
+    //     (codec canonical) or all-uppercase, but never `MK1<lowercase>`.
+    for e in &emitted {
+        let has_upper = e.chars().any(|c| c.is_ascii_uppercase());
+        let has_lower = e.chars().any(|c| c.is_ascii_lowercase());
+        assert!(
+            !(has_upper && has_lower),
+            "emitted mk1 must not be mixed-case; got {e:?}"
+        );
+    }
+
+    // (b) The emitted chunks MUST re-decode cleanly via `mk decode` — the
+    //     load-bearing round-trip assertion (mixed-case would exit 2).
+    let mut cmd2 = Command::cargo_bin("mk").expect("mk binary");
+    let out2 = cmd2
+        .args(["decode", "--json", &emitted[0], &emitted[1]])
+        .output()
+        .expect("invoke mk decode on repaired output");
+    let code2 = out2.status.code().expect("exited normally");
+    assert_eq!(
+        code2,
+        0,
+        "repaired output must re-decode cleanly (no MixedCase); emitted={emitted:?} stderr={}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
+
+    // (c) It must decode to the SAME KeyCard as the original lowercase chunks.
+    //     Compare the `xpub` field of both decodes.
+    let xpub_orig = decode_json_xpub(&[&chunks[0], &chunks[1]]);
+    let xpub_repaired = decode_json_xpub(&[&emitted[0], &emitted[1]]);
+    assert_eq!(
+        xpub_orig, xpub_repaired,
+        "repaired uppercase input must decode to the same xpub as the original"
+    );
+}
+
+/// Decode mk1 chunks via `mk decode --json` and return the `xpub` field.
+fn decode_json_xpub(chunks: &[&String]) -> String {
+    let mut cmd = Command::cargo_bin("mk").expect("mk binary");
+    cmd.arg("decode").arg("--json");
+    for c in chunks {
+        cmd.arg(c.as_str());
+    }
+    let out = cmd.output().expect("invoke mk decode --json");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "decode --json must succeed; stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
+    let v: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("decode --json output parses");
+    v["xpub"].as_str().expect("xpub field").to_string()
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Cell 7: JSON envelope shape — `--json <bad>` emits a `RepairJson`-shaped
 // envelope (schema_version=1, kind=mk1, corrected_chunks, repairs).
 // Schema byte-matches `mnemonic-toolkit/src/cmd/repair.rs::RepairJson`
