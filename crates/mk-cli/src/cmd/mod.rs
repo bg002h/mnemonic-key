@@ -124,15 +124,18 @@ pub fn read_mk1_strings(args: &[String]) -> Result<Vec<String>> {
     Ok(out)
 }
 
-/// Detect the BCH code variant for a single mk1 string. Lengths from
-/// `mk-codec::consts`: regular = 1+3+93 = 97 chars, long = 1+3+105 = 109.
-/// Approximated by the data-part length alone since the same fields apply
-/// to both single-string and chunked headers in v0.1.
+/// Detect the BCH code variant for a single mk1 string by its length.
+///
+/// Boundaries mirror the authoritative `mk_codec::string_layer::bch::
+/// bch_code_for_length` (BIP-93/codex32): a **regular** code `BCH(93,80,8)`
+/// has a data-part of 14..=93 symbols, and a **long** code `BCH(108,93,8)`
+/// has 96..=108 (94–95 are reserved-invalid and never reach a decoded string).
+/// An mk1 string adds the `mk1` HRP+separator (3 chars), so the total-length
+/// regular ceiling is `93 + "mk1".len()` = 96; anything longer is long.
 pub fn classify_code_variant(s: &str) -> &'static str {
-    // mk1 strings start with `mk1` (3 chars). The locked v0.1 lengths are
-    // 90 (regular fragment + header + bch) and 108 (long fragment + header + bch),
-    // but we only care about distinguishing the two variants for output.
-    if s.len() <= 96 + "mk1".len() {
+    // Regular data-part caps at 93 symbols ⇒ total length ≤ 96. A 96-symbol
+    // long-code data-part is total length 99 ⇒ correctly classified "long".
+    if s.len() <= 93 + "mk1".len() {
         "regular"
     } else {
         "long"
@@ -157,4 +160,62 @@ pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> R
         }
     }
     Ok(xpub)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_code_variant;
+
+    /// Build a synthetic `mk1<data>` string whose *data-part* (chars after the
+    /// `mk1` HRP+separator) has exactly `data_len` symbols. `classify_code_variant`
+    /// only looks at the total length, so the data content is irrelevant.
+    fn mk1_with_data_len(data_len: usize) -> String {
+        format!("mk1{}", "q".repeat(data_len))
+    }
+
+    /// L20 — authoritative `mk_codec::bch_code_for_length` boundaries
+    /// (`crates/mk-codec/src/string_layer/bch.rs`): regular = 14..=93,
+    /// 94..=95 reserved-invalid, long = 96..=108.
+    ///
+    /// A 96-symbol data-part is `BchCode::Long`, but the pre-fix threshold
+    /// (`s.len() <= 96 + "mk1".len()` ⇒ ≤99) mislabeled it "regular".
+    #[test]
+    fn classify_96_symbol_data_part_is_long() {
+        // 96 data symbols → total length 99. Authoritative: Long.
+        let s = mk1_with_data_len(96);
+        assert_eq!(
+            s.len(),
+            99,
+            "fixture: total length 99 (96 data + 3 hrp/sep)"
+        );
+        assert_eq!(
+            classify_code_variant(&s),
+            "long",
+            "96-symbol data-part is BCH(108,93,8) long, not regular"
+        );
+    }
+
+    /// The upper edge of the regular band: a 93-symbol data-part (total 96)
+    /// is `BchCode::Regular`.
+    #[test]
+    fn classify_93_symbol_data_part_is_regular() {
+        let s = mk1_with_data_len(93);
+        assert_eq!(
+            s.len(),
+            96,
+            "fixture: total length 96 (93 data + 3 hrp/sep)"
+        );
+        assert_eq!(
+            classify_code_variant(&s),
+            "regular",
+            "93-symbol data-part is BCH(93,80,8) regular"
+        );
+    }
+
+    /// The maximum long-code data-part (108 symbols, total 111) classifies long.
+    #[test]
+    fn classify_108_symbol_data_part_is_long() {
+        let s = mk1_with_data_len(108);
+        assert_eq!(classify_code_variant(&s), "long");
+    }
 }
