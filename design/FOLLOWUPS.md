@@ -80,13 +80,13 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Tier:** `cross-repo`.
 - **Companion (LOCKSTEP — settling one MUST settle the other):** `mnemonic-toolkit/design/FOLLOWUPS.md` `mstar-prepolicy-key-backup`. This entry and its toolkit companion are a BOUND PAIR: any resolution (support an unbound card / wont-fix seed-only / re-scope) MUST update BOTH entries in the same change — neither may be closed alone. Related: `mnemonic-engrave/design/FOLLOWUPS.md` `seedhammer-template-engrave-key-search-time-estimate` (the key-first flow is its primary trigger) + `constellation-template-only-engraving`.
 
-### `display-grouping-render-strip-v1` — standardized mstring display-grouping (`mk` CLI flags + intake strip; companion)
+### `display-grouping-render-strip-v1` — ✓ RESOLVED (full cycle shipped; reconciled 2026-06-22) — standardized mstring display-grouping (`mk` CLI flags + intake strip; companion)
 
 - **Surfaced:** 2026-06-15, the cross-constellation **mstring display-grouping** cycle (P3 = mnemonic-key). User-requested standardization of `ms1`/`mk1`/`md1` display output across all four CLIs (`mnemonic`/`md`/`ms`/`mk`).
 - **Where:** `crates/mk-cli/src/format.rs` (NEW — `render_grouped`, `strip_display_separators`, `is_display_separator`, `parse_separator`; kept LOCAL to mk-cli, bin-only); `cmd/encode.rs` (`--group-size`/`--separator`); `cmd/mod.rs::read_mk1_strings` (interior strip — covers all 6 mk1-intake subcommands: decode/inspect/verify/repair/derive/address); canonical vectors `design/display-grouping-vectors.tsv` (+ `.sha256`, CI-pinned in the fmt job).
 - **What (SHIPPED this cycle, mk-cli 0.9.0):** `mk encode` gains `--group-size <u16>` (default 5, `0`=unbroken) + `--separator <space|hyphen|comma>` (default space); text output is now **space/5 print-once** — a CORRECTIVE default-output change (`mk encode` emitted UNBROKEN before, diverging from the other CLIs). `--json` stays UNBROKEN. `read_mk1_strings` now strips ALL whitespace + `-` + `,` (was edge-only `.trim()`), so a grouped or unbroken card both re-ingest on every mk1-intake subcommand + the `-`→stdin path. **mk-codec UNCHANGED** (fns mk-cli-local; mk-codec tolerates no separators). Drift control = copy-with-checksum conformance vectors (canonical TSV authored in the toolkit; byte-identical copy + `.sha256` here; CI `sha256sum -c` + a bin-crate driver test).
 - **Why deferred / residual:** P4 (toolkit) pin-bumps + collapses `format.rs` + regenerates goldens + updates both manuals; P5 (`mnemonic-gui`) `schema_mirror` flags + separator keyword dropdown. The canonical-vector checksum is a lagging drift gate; the leading control is the paired-PR discipline.
-- **Status:** open (P3 shipped; P4–P5 pending).
+- **Status:** ✓ RESOLVED (reconciled 2026-06-22) — full cross-repo cycle shipped: P3 mk-cli 0.9.0 (this repo), P1 md-cli 0.7.0, P2 ms-cli 0.8.0, P4 toolkit v0.56.0, P5 mnemonic-gui v0.41.0. Verified at reconcile: `mk encode --group-size/--separator` live; vectors + `.sha256` present. Canonical record: `../../mnemonic-toolkit/design/FOLLOWUPS.md` (`display-grouping-render-strip-v1`).
 - **Tier:** `cross-repo`.
 - **Companion:** mnemonic-toolkit `design/SPEC_mstring_display_grouping.md` (canonical spec) + `design/FOLLOWUPS.md` (`display-grouping-render-strip-v1`, filed in P4) + descriptor-mnemonic + mnemonic-secret `design/FOLLOWUPS.md` (`display-grouping-render-strip-v1`, P1/P2).
 
@@ -146,13 +146,13 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open` (mirror invariant active for the lifetime of `mnemonic-toolkit/docs/manual/`)
 - **Tier:** `cross-repo`
 
-### `mk-cli-v0_2-toolkit-docs-mirror` — toolkit-side docs mirror for mk-cli v0.2 (companion)
+### `mk-cli-v0_2-toolkit-docs-mirror` — ✓ RESOLVED (toolkit PR 2 landed; reconciled 2026-06-22) — toolkit-side docs mirror for mk-cli v0.2 (companion)
 
 - **Surfaced:** 2026-05-08, mk-cli v0.2 cycle (this repo's branch `mk-cli/v0_2`, plan `concurrent-cooking-scone`).
 - **Where:** `mnemonic-toolkit` repo branch `mk-cli/docs-v0_2`. Toolkit PR 2 lands the manual chapter `docs/manual/src/40-cli-reference/44-mk-cli.md` (~600 lines), deletes `44-mk-codec-rust.md` (archived in this repo at `docs/MK_CODEC_RUST_API.md` in commit `1c74c70`), extends `tests/lint.sh` + `Makefile` for the 4-CLI shape, and rebuilds the manual / quickstart / ultraquickstart PDFs. Toolkit PR 2 → manual-v0.1.7 + quickstart-v0.1.4 + ultraquickstart-v0.1.2 patch-tag releases.
 - **What:** This repo's PR 1 (commit `77bdb2f` adds the binary; commit `1c74c70` archives the Rust API doc; commit on this entry pins the v0.2 manual-mirror language in `CLAUDE.md`). The companion toolkit PR 2 lands the user-facing chapter and the lint-gate update so the four-CLI parity invariant holds end-to-end. **Companion:** primary entry `mk-cli` resolution in `mnemonic-toolkit/design/FOLLOWUPS.md` (moves from "Open" → "Resolved/Closed" with citation `Resolved by mk-cli-v0.2.0`).
 - **Why filed:** Same lockstep-pattern as ms1-v01-payload-bracket-overflow-prefix-byte-incompatibility. Filing here makes it discoverable from this repo's tracker; closes when toolkit PR 2 merges.
-- **Status:** `open` (closes when toolkit PR 2 lands)
+- **Status:** ✓ RESOLVED (reconciled 2026-06-22) — toolkit PR 2 landed: the manual chapter `docs/manual/src/40-cli-reference/44-mk-cli.md` exists in the toolkit (18 KB), and mk-cli is at v0.10.1 (far past v0.2.0). The 4-CLI manual/lint parity invariant holds end-to-end. Status had lagged since the chapter shipped.
 - **Tier:** `cross-repo`
 
 ### `ms1-v01-payload-bracket-overflow-prefix-byte-incompatibility` — ms1 v0.1 wire-format plan needs revision (BIP-93 codex32 length-bracket conflict with locked `0x00` prefix byte)
