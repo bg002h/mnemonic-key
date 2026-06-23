@@ -19,7 +19,8 @@ const VECTORS_V0_1_JSON: &str = mk_codec::test_vectors::V0_1_JSON;
 /// `mk vectors` arguments.
 #[derive(Args, Debug)]
 pub struct VectorsArgs {
-    /// Indent the JSON output for human readability. Ignored when `--out` is supplied.
+    /// Indent the JSON output for human readability. Also applies to each
+    /// per-fixture file when `--out` is supplied.
     #[arg(long)]
     pub pretty: bool,
 

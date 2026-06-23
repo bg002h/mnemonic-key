@@ -393,3 +393,12 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 - **Status:** `open`
 - **Tier:** `hardening`
 - **Severity:** Low
+
+### `mk-vectors-pretty-out-help-mismatch` — `mk vectors --pretty` help text wrongly claimed it was "Ignored when `--out` is supplied" (RESOLVED mk-cli v0.10.2)
+
+- **Surfaced:** Wave-3 constellation help-text-correction cycle (W3-3). Canonical entry lives in the toolkit `design/FOLLOWUPS.md` (slug `mk-vectors-pretty-out-help-mismatch`); this is the mk-cli companion record.
+- **What:** The clap doc-comment on `--pretty` (`crates/mk-cli/src/cmd/vectors.rs:22` — the `mk vectors --help` text) read "Indent the JSON output for human readability. Ignored when `--out` is supplied." This was WRONG: `write_per_fixture_files` (`vectors.rs:53-83`) branches on `pretty` and pretty-prints each per-fixture file written under `--out`, so `--pretty` IS honored. The help now states `--pretty` "Also applies to each per-fixture file when `--out` is supplied." Pure help-text/doc-comment correction — no flag, no API, no wire/behavior change; the code was already correct.
+- **Fix:** reword the `--pretty` doc-comment; pin the corrected contract with a new `vectors_pretty_out_writes_indented_files` integration test (`crates/mk-cli/tests/round_trip.rs`) that asserts `mk vectors --pretty --out <DIR>` writes indented per-fixture files. `mk-codec` untouched; no flag-NAME change, so the GUI `schema_mirror` / `gui-schema` gates are unaffected (gui-schema emits no help text).
+- **Status:** `resolved` — mk-cli **v0.10.2** (SemVer-PATCH, help-text-only). Spec `design/SPEC_wave3_mk_vectors_help.md`; R0 review `design/agent-reports/wave3-mk-cli-r0-review.md` (GREEN 0C/0I).
+- **Tier:** `ci-hygiene`
+- **Companion:** toolkit `design/FOLLOWUPS.md` slug `mk-vectors-pretty-out-help-mismatch` (canonical; flips `open → resolved` in the toolkit doc lane). GUI prose-mirror of the `--pretty` help string (`mnemonic-gui` `VECTORS_FLAGS`) handled in its own decoupled GUI lane — no CI gate compares help prose across repos.

@@ -152,3 +152,44 @@ fn verify_content_mismatch_exits_4() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// `mk vectors --pretty --out <DIR>` must pretty-print each per-fixture file
+/// (proving --pretty IS honored under --out; the help text documents this).
+#[test]
+fn vectors_pretty_out_writes_indented_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut cmd = Command::cargo_bin("mk").expect("mk binary");
+    let out = cmd
+        .args(["vectors", "--pretty", "--out"])
+        .arg(dir.path())
+        .output()
+        .expect("invoke mk vectors --pretty --out");
+    assert!(
+        out.status.success(),
+        "mk vectors --pretty --out failed: {:?}",
+        out
+    );
+
+    let json_files: Vec<_> = std::fs::read_dir(dir.path())
+        .expect("read tempdir")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("json"))
+        .collect();
+    assert!(!json_files.is_empty(), "expected ≥1 fixture file");
+
+    // Pretty output for any object/array fixture contains a newline + indent.
+    let mut saw_indented = false;
+    for entry in &json_files {
+        let body = std::fs::read_to_string(entry.path()).unwrap();
+        // valid JSON
+        let _: serde_json::Value = serde_json::from_str(&body).expect("valid json");
+        if body.contains("\n  ") {
+            saw_indented = true;
+        }
+    }
+    assert!(
+        saw_indented,
+        "expected at least one --pretty --out file to be indented (newline + 2-space); \
+         --pretty must be honored under --out"
+    );
+}

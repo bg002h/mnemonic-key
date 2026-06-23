@@ -7,6 +7,18 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] — 2026-06-22
+
+**SemVer-PATCH — help-text correction only. No flag, no API, no wire/behavior change; `mk-codec` untouched.**
+
+- **`mk vectors --pretty` help text corrected.** The clap doc-comment on `--pretty`
+  (`src/cmd/vectors.rs`) previously claimed it was "Ignored when `--out` is supplied".
+  That was wrong: `write_per_fixture_files` honors `--pretty`, pretty-printing each
+  per-fixture file written under `--out`. The help text now states `--pretty` applies
+  to the per-fixture files as well. Behavior is unchanged (the code was already correct);
+  this fixes the documented contract. A new `vectors_pretty_out_writes_indented_files`
+  test pins it. Closes FOLLOWUP `mk-vectors-pretty-out-help-mismatch`.
+
 ## [0.10.1] — 2026-06-21
 
 **SemVer-PATCH — two bug fixes in `mk` output hygiene (constellation bug-hunt cycle-12). No new flags, no wire/format change, `mk-codec` untouched.**
