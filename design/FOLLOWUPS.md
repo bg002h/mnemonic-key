@@ -61,6 +61,18 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 
 ## Open items
 
+### `bsd-process-hardening-parity-procctl-rlimit-core` — `mk`'s `set_non_dumpable()` was a silent no-op on the BSDs (companion)
+
+- **Surfaced:** 2026-06-23, the constellation-wide musl/BSD secret-hygiene recon (toolkit `design/SPEC_bsd_hygiene_and_freebsd_gate.md`, Cycle A). `mk`'s `set_non_dumpable()` in `crates/mk-cli/src/process_hardening.rs` was fenced `#[cfg(target_os = "linux")]` and a silent no-op on FreeBSD/OpenBSD/NetBSD — the anti-core-dump + anti-ptrace-introspection protection did not run, so an `mk` process on a BSD could be ptrace/ktrace-introspected and could drop a core file a secret (passed inline on argv/heap) spills into.
+- **Status:** ✓ **RESOLVED (`mk-cli` 0.11.1, 2026-06-23).** Added a BYTE-IDENTICAL (across all four CLI crates) BSD cfg arm: `#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]` doing (i) FreeBSD-only `procctl(P_PID, 0, PROC_TRACE_CTL, PROC_TRACE_CTL_DISABLE)` and (ii) all-three-BSD `setrlimit(RLIMIT_CORE, {0, 0})`. Best-effort. macOS/Windows remain a documented no-op. No `libc` bump. `mk-codec` NO-BUMP. No CLI flag / subcommand / output-shape change. Linux behavior unchanged.
+- **Tier:** `cross-repo`. **Companion:** `mnemonic-toolkit` (primary spec author) + `descriptor-mnemonic` + `mnemonic-secret` `design/FOLLOWUPS.md` `bsd-process-hardening-parity-procctl-rlimit-core`.
+
+### `freebsd-compile-gate-ci` — no CI leg compile-checked `mk`'s FreeBSD build / BSD hardening arm (companion)
+
+- **Surfaced:** 2026-06-23, the BSD recon (Cycle C). Nothing in `mk`'s CI caught a Linux-only syscall/cfg/crate breaking the `cargo install`-on-FreeBSD path or the new BSD hardening arm.
+- **Status:** ✓ **RESOLVED (NO-BUMP CI infra, 2026-06-23).** Added a `freebsd-compile-gate` job to `.github/workflows/ci.yml` running WHOLE-CRATE `cargo check --target x86_64-unknown-freebsd -p mk-cli` (NEVER `--lib` — `mk-cli` is bin-only with no `src/lib.rs`; `process_hardening` lives in the bin target, so `--lib` would be silent false-green). `x86_64-unknown-freebsd` is Tier 2 with Host Tools; bare `rustup target add` validated locally (the cross-rs fallback was not needed).
+- **Tier:** `cross-repo` / `infra`. **Companion:** `mnemonic-toolkit` (toolkit-primary, `--lib`-correct) + `descriptor-mnemonic` + `mnemonic-secret` `design/FOLLOWUPS.md` `freebsd-compile-gate-ci`.
+
 ### `mstar-prepolicy-key-backup` — no policy-independent (pre-wallet) public-key backup; mk1 always binds to a policy/template
 
 - **Surfaced:** 2026-06-20, design discussion (SeedHammer template-engraving thread — "what about generating + backing up keys *before* using them in a wallet?").
