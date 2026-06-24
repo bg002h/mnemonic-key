@@ -7,6 +7,15 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] — 2026-06-23
+
+**SemVer-PATCH — musl static-binary release asset + musl build/test CI leg. Ships the first fully-static, dependency-free `mk` Linux binaries (`x86_64-unknown-linux-musl` + `aarch64-unknown-linux-musl`) as GitHub-release tarballs on the `mk-cli-v*` tag, each with a per-arch `SHA256SUMS.<arch>` for offline / air-gapped verification. Also adds a musl compile/test CI leg to `ci.yml` (a separate `musl-check` job) and a dedicated `musl-binaries.yml` workflow triggered ONLY on `mk-cli-v*` (NOT the `mk-codec-v*` codec tag, so a pure codec tag does not build a CLI binary). `mk-codec` UNTOUCHED. No crate source / API / CLI-flag / subcommand change. NOT published to crates.io (binary-asset-only PATCH; the tag ships the binary). The shipped guarantee is *static + checksummed*, not bit-for-bit reproducible.**
+
+### Added
+
+- **musl static-binary release-asset workflow** (`.github/workflows/musl-binaries.yml`, NEW — standalone, fires ONLY on `mk-cli-v*`). Builds `mk` for `x86_64-unknown-linux-musl` (natively with `musl-tools` + `CC_x86_64_unknown_linux_musl=musl-gcc`) and `aarch64-unknown-linux-musl` (via `cross`), tarballs each as `mk-<version>-<arch>-linux-musl.tar.gz`, emits a per-arch `SHA256SUMS.<arch>`, and attaches them to the `mk-cli-v*` release via `gh release upload --clobber` (alongside the `mk-man.tar.gz` the existing `ci.yml` release-on-tag job attaches). Standalone (not folded into `ci.yml`) because `ci.yml` also fires on the `mk-codec-v*` codec tag, which must NOT build a CLI binary. `crt-static` left at its musl default (ON); `-Ctarget-feature=-crt-static` never set (per `rust#135244`). Toolchain pinned `@1.85.0`. The only C dep is the vendored libsecp256k1 in `secp256k1-sys`.
+- **musl compile/test CI leg** (`.github/workflows/ci.yml`, new `musl-check` job). `cargo test -p mk-cli --target x86_64-unknown-linux-musl` (native, `musl-tools` + `CC_*=musl-gcc`) + `cross build` for aarch64-musl (build-only). Pinned `@1.85.0` (constellation parity).
+
 ## [0.11.1] — 2026-06-23
 
 **SemVer-PATCH — BSD secret-hygiene parity + FreeBSD compile-gate. `set_non_dumpable()` (in `crates/mk-cli/src/process_hardening.rs`) was fenced `#[cfg(target_os = "linux")]` and a silent no-op on the BSDs, so an `mk` process on FreeBSD/OpenBSD/NetBSD could be ptrace/ktrace-introspected and could drop a core file a secret (passed inline on argv/heap) spills into. A second cfg arm restores parity. No new CLI flag / subcommand / output-shape. Linux behavior unchanged (the new arm is cfg-gated off everywhere but the BSDs). `mk-codec` UNTOUCHED. Shipped in lockstep with `mnemonic-toolkit` 0.73.1 / `md-cli` 0.11.1 / `ms-cli` 0.13.1 (byte-identical executable arm in all four CLI crates).**
