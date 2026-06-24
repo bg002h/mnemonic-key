@@ -78,7 +78,7 @@ jobs:
             -C "target/${{ matrix.target }}/release" mk
           sha256sum "mk-${VER}-${{ matrix.arch }}-linux-musl.tar.gz" > "SHA256SUMS.${{ matrix.arch }}"
       - name: ensure-release
-        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes
+        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes || true
       - name: upload
         run: |
           gh release upload "$REF_NAME" mk-*-${{ matrix.arch }}-linux-musl.tar.gz --clobber

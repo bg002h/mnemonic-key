@@ -230,7 +230,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG already exists; nothing to do"
           else
-            gh release create "$TAG" --generate-notes
+            gh release create "$TAG" --generate-notes || true
           fi
 
       - name: Install Rust (stable) for man-tarball build
