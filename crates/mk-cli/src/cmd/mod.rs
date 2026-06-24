@@ -6,6 +6,7 @@ pub mod decode;
 pub mod derive;
 pub mod derive_support;
 pub mod encode;
+pub mod gen_man;
 pub mod gui_schema;
 pub mod inspect;
 pub mod repair;

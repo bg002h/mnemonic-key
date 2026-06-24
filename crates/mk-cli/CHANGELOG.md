@@ -7,6 +7,23 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-06-23
+
+**SemVer-MINOR — new `mk gen-man` subcommand (man-page self-emission). No wire/format change; `mk-codec` untouched.**
+
+- **`mk gen-man --out <DIR>`** generates roff man pages for the whole `mk`
+  CLI tree (`mk.1` + one `mk-<sub>.1` per subcommand) into `<DIR>`,
+  creating it if absent. Pages are clap-generated via
+  `clap_mangen::generate_to(Cli::command(), &dir)` — the bare, naive call
+  with NO pre-`.build()` — so they are binary-faithful by construction and
+  carry zero `*-help*.1` shadow pages. Part of the constellation-wide
+  man-page rollout (`mnemonic`/`md`/`ms`/`mk` all gain `gen-man`).
+- New dependency `clap_mangen = "0.3"` (requires clap `^4.0`; no clap bump —
+  already on 4.6.1).
+- `install.sh` drops these into the user manpath post-install
+  (`~/.local/share/man/man1`), and the `mk-cli-v*` tag attaches an
+  `mk-man.tar.gz` release asset.
+
 ## [0.10.2] — 2026-06-22
 
 **SemVer-PATCH — help-text correction only. No flag, no API, no wire/behavior change; `mk-codec` untouched.**

@@ -52,6 +52,8 @@ enum Command {
     Address(cmd::address::AddressArgs),
     /// Derive a child xpub at a relative unhardened path from a card (read-only).
     Derive(cmd::derive::DeriveArgs),
+    /// Generate roff man pages for the CLI into a directory (`--out <DIR>`).
+    GenMan(cmd::gen_man::GenManArgs),
 }
 
 fn main() -> ExitCode {
@@ -87,6 +89,7 @@ fn main() -> ExitCode {
         Command::Repair(a) => cmd::repair::run(a),
         Command::Address(a) => cmd::address::run(a),
         Command::Derive(a) => cmd::derive::run(a),
+        Command::GenMan(a) => cmd::gen_man::run(a),
     };
 
     match result {
@@ -109,6 +112,7 @@ fn is_json_mode(cmd: &Command) -> bool {
         Command::Repair(a) => a.json,
         Command::Address(a) => a.json,
         Command::Derive(a) => a.json,
+        Command::GenMan(_) => false,
     }
 }
 

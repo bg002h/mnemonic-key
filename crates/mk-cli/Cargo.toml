@@ -1,6 +1,6 @@
 [package]
 name = "mk-cli"
-version = "0.10.2"
+version = "0.11.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -23,6 +23,7 @@ mk-codec = { path = "../mk-codec", version = "0.4.0" }
 # regenerated against v0.34.0's canonical pkh_basic.phrase.txt.
 md-codec = "0.34.0"
 clap = { version = "4", features = ["derive"] }
+clap_mangen = "0.3"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
