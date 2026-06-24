@@ -161,5 +161,10 @@ jobs:
           cargo build --release -p mk-cli
           rm -rf man && mkdir man
           ./target/release/mk gen-man --out man
-          tar czf mk-man.tar.gz man
+          # Negative canary: zero help-shadow pages (tripwire for an accidental pre-build).
+          if ls man/*-help*.1 >/dev/null 2>&1; then
+            echo "error: gen-man emitted *-help*.1 shadow pages" >&2
+            exit 1
+          fi
+          tar -czf mk-man.tar.gz -C man .
           gh release upload "$TAG" mk-man.tar.gz --clobber
