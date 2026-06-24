@@ -19,3 +19,16 @@
 # cargo-fuzz-specific and need their own lines.)
 fuzz/artifacts/
 fuzz/coverage/
+
+# Committed `cargo vendor` tree (reproducible-builds-musl cycle, P3b) — the
+# offline reproducible build needs EVERY vendored file. The unanchored rules
+# above (`**/target/`, `**/proptest-regressions/`) would otherwise SILENTLY
+# exclude real vendored SOURCE files whose SHA-256 is pinned in each crate's
+# `.cargo-checksum.json`: `vendor/cc/src/target/*.rs` (the cc crate's target
+# DB — a build dep of secp256k1-sys) + `vendor/proptest/proptest-regressions/*`.
+# A clean checkout missing them FAILS the `--locked --offline` build (empirically:
+# `failed to open file vendor/cc/src/target/generated.rs`). Re-include the whole
+# vendor tree so the committed checksums resolve. (md uses anchored `/target/`
+# patterns that don't reach into vendor/, so it needed no negation; mk's
+# `**/target/` does — this is mk-SPECIFIC.) MUST sort AFTER the rules it negates.
+!vendor/**
