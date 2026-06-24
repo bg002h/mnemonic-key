@@ -51,6 +51,28 @@ MK fills that gap with separate per-cosigner cards. Each cosigner backs up their
 - **For why the design is the way it is**: [`design/DECISIONS.md`](design/DECISIONS.md) walks through D-1..D-15 (the 2026-04-29 design discussion plus closures of Q-1..Q-10). [`design/SPEC_mk_v0_1.md`](design/SPEC_mk_v0_1.md) is the post-closure wire-format spec.
 - **For deferred work**: [`design/FOLLOWUPS.md`](design/FOLLOWUPS.md) — pre-BIP-submission audit gates and cross-repo coordination items.
 
+## Man pages
+
+`mk` ships man pages generated from its own clap definition — the same source as `--help` — so they cannot drift from the binary. Three ways to install them:
+
+1. **Automatic (default).** The [constellation installer](https://github.com/bg002h/mnemonic-toolkit) installs them alongside the binary into `~/.local/share/man/man1` — no sudo, no system files:
+
+   ```sh
+   sh -c "$(curl -fsSL https://raw.githubusercontent.com/bg002h/mnemonic-toolkit/master/scripts/install.sh)"
+   ```
+
+   Then `man mk` works (and `man mk-<subcommand>` for each subcommand). Pass `--no-man` to skip, or `--man-dir <dir>` to relocate.
+
+2. **By hand.** If you installed the binary directly (`cargo install`), emit them yourself:
+
+   ```sh
+   mk gen-man --out ~/.local/share/man/man1
+   ```
+
+3. **Download.** Each release attaches a `mk-man.tar.gz` asset — extract it into your manpath.
+
+If `man mk` can't find them (older `man-db`, or macOS/BSD `man` that doesn't auto-read `~/.local/share/man`): `man -M ~/.local/share/man mk`.
+
 ## What's covered in v0.1
 
 - **Foreign-xpub multisig recovery**: each cosigner backs up their xpub on its own MK card. Recovery: assemble policy card (MD) + cosigner key cards (MK) → reconstruct full descriptor → verify Wallet Instance ID matches.
