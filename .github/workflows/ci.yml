@@ -168,8 +168,14 @@ jobs:
     #     `musl-tools` (`musl-gcc`) + `CC_x86_64_unknown_linux_musl=musl-gcc` so
     #     cc-rs builds the ONLY C dep (the vendored libsecp256k1 in
     #     `secp256k1-sys`) against musl.
-    #   * aarch64-musl — `cross build`-only (cross bundles the musl cross C
-    #     toolchain; build coverage, no emulated test run).
+    #   * aarch64-musl — `cross test` under QEMU user-mode emulation (cross
+    #     bundles the musl cross C toolchain AND the qemu-aarch64 runner). This
+    #     RUNS the package test suite on aarch64-Linux so the mk1/xpub golden
+    #     vectors are output-verified for the shipped aarch64 binary, not merely
+    #     compiled. No `--skip` filter is needed: mk-cli has NO `mlock` module
+    #     (only `process_hardening`, whose sole Linux test exercises
+    #     `prctl(PR_SET_DUMPABLE)` — a per-task flag qemu-user forwards to the
+    #     host kernel; the BSD test arms are `#[cfg]`-gated off on Linux).
     #
     # crt-static left at its musl default (ON). NEVER pass
     # `-Ctarget-feature=-crt-static` (rust#135244 silently links host glibc).
@@ -206,9 +212,12 @@ jobs:
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
         run: cargo test -p mk-cli --target ${{ matrix.target }}
-      - name: cross build -p mk-cli --target aarch64-musl (build-only)
+      # Run the package test suite on aarch64-Linux under QEMU user-mode so the
+      # mk1/xpub golden vectors are OUTPUT-verified for the shipped aarch64
+      # binary, not merely compiled. No `--skip` needed (no `mlock` module).
+      - name: cross test -p mk-cli --target aarch64-musl (QEMU; output goldens)
         if: ${{ matrix.cross }}
-        run: cross build --release -p mk-cli --target ${{ matrix.target }}
+        run: cross test --release -p mk-cli --target ${{ matrix.target }}
 
   release-on-tag:
     name: release-on-tag
