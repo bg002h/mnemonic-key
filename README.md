@@ -85,6 +85,31 @@ If `man mk` can't find them (older `man-db`, or macOS/BSD `man` that doesn't aut
 - **MuSig2 aggregate keys (BIP 327)**: future milestone, possibly its own format.
 - **Embedded wallet-policy fragments**: the policy lives on the MD card; MK is key-only.
 
+## Verifying your download
+
+The release `mk-<version>-x86_64-linux-musl.tar.gz` and `…-aarch64-linux-musl.tar.gz`
+binaries are **reproducible** — bit-for-bit rebuildable from source. Each release
+attaches `SHA256SUMS.x86_64`, `SHA256SUMS.aarch64`, and `PROVENANCE.<arch>.txt`.
+
+**Integrity** (did my download arrive intact?):
+
+```sh
+sha256sum -c SHA256SUMS.x86_64      # or SHA256SUMS.aarch64
+```
+
+**Provenance** (was it really built from this source — no hidden changes?):
+independently rebuild and confirm you get the *same* hash. See
+[`docs/verify-reproducibility.md`](docs/verify-reproducibility.md) for the exact
+steps — in brief: `git checkout` the release commit (from `PROVENANCE.<arch>.txt`),
+`docker pull ghcr.io/bg002h/repro-musl-mnemonic-key@sha256:<digest>` (the pinned,
+public build image), rebuild offline, and compare to `SHA256SUMS.<arch>`. A match
+proves the published binary came from this source.
+
+**Scope:** the static-musl Linux **x86_64** and **aarch64** `mk` binaries.
+(gnu, macOS/Windows, and the GUI are not yet reproducible.) Note: a local
+`cargo install` / `install.sh` build is *not* bit-for-bit reproducible — the
+guarantee is for the published container-built release tarballs.
+
 ## License
 
 The specification text in this repository and the reference implementation in `crates/mk-codec/` are dual-licensed, at your option, under either the [MIT License](LICENSE) or the [Unlicense](UNLICENSE) public-domain dedication — SPDX `MIT OR Unlicense`.
