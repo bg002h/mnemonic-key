@@ -94,6 +94,45 @@ impl KeyCard {
             xpub,
         }
     }
+
+    /// Serialize this card to its canonical pre-chunking bytecode.
+    ///
+    /// Deterministic pre-chunking bytecode; independent of the per-encode
+    /// random `chunk_set_id` (which lives in the string layer). This is the
+    /// same byte payload that [`crate::bytecode::encode_bytecode`] produces
+    /// and that the conformance corpus pins as `canonical_bytecode_hex`; it
+    /// is exposed here so a downstream consumer can obtain a stable,
+    /// round-trippable identity for the card without reaching into the
+    /// `bytecode` module or the random string framing.
+    ///
+    /// Reverse with [`KeyCard::from_canonical_payload_bytes`].
+    ///
+    /// # Errors
+    ///
+    /// Surfaces the encoder-side invariants of
+    /// [`crate::bytecode::encode_bytecode`] (e.g.
+    /// [`crate::Error::InvalidPolicyIdStubCount`],
+    /// [`crate::Error::XpubOriginPathMismatch`]).
+    pub fn canonical_payload_bytes(&self) -> Result<Vec<u8>> {
+        crate::bytecode::encode_bytecode(self)
+    }
+
+    /// Reconstruct a `KeyCard` from its canonical pre-chunking bytecode.
+    ///
+    /// Inverse of [`KeyCard::canonical_payload_bytes`]; accepts exactly the
+    /// byte payload that method emits (and that
+    /// [`crate::bytecode::decode_bytecode`] consumes). Empty or malformed
+    /// input is rejected cleanly with an [`crate::Error`] — never a panic.
+    ///
+    /// # Errors
+    ///
+    /// Surfaces the bytecode-layer validity rules of
+    /// [`crate::bytecode::decode_bytecode`] (e.g.
+    /// [`crate::Error::UnexpectedEnd`], [`crate::Error::TrailingBytes`],
+    /// [`crate::Error::UnsupportedVersion`]).
+    pub fn from_canonical_payload_bytes(bytes: &[u8]) -> Result<KeyCard> {
+        crate::bytecode::decode_bytecode(bytes)
+    }
 }
 
 /// Encode a `KeyCard` into one or more `mk1`-prefixed strings.
