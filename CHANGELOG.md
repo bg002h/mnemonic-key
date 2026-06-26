@@ -5,6 +5,21 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-06-26
+
+**SemVer-PATCH — purely additive.** Adds two `pub fn`s on `KeyCard` for downstream
+consumers (the `mnemonic-toolkit` Word-Card BIP-39-word re-encoding): wire format,
+corpus, and all existing APIs are byte-identical to 0.4.0.
+
+### Added
+
+- `KeyCard::canonical_payload_bytes(&self) -> Result<Vec<u8>>` — the deterministic
+  pre-chunking bytecode (independent of the per-encode random `chunk_set_id`, which lives
+  in the string layer), and the inverse `KeyCard::from_canonical_payload_bytes(&[u8]) ->
+  Result<KeyCard>`. Thin facades over the existing `bytecode::encode_bytecode` /
+  `decode_bytecode`; no visibility widening, no behavior change. New KATs in
+  `tests/canonical_payload.rs` (incl. cross-`chunk_set_id` bytecode-determinism).
+
 ## [0.2.2] — 2026-05-07
 
 Documentation-only patch. Closes the v0.7.1 BIP test-vector audit cycle
