@@ -49,7 +49,7 @@ const SECOND_CHUNK1: &str =
 /// (`mnemonic-toolkit/tests/cli_mk1_repair_reverify.rs`) and copying the new
 /// pinned string here too.
 const CORRUPTED_MK1_CHUNK1: &str =
-    "mk1qprsqhpp0f3kmtxzd65mvwcvr9usdatwxqvq6z70rgnwrgkyxndl8gy6nwa2n977sw6zh34rma0nh";
+    "mk1qprsqhpp0f3kmtxzd65mvwcvr9usdatwxqvq6z70rgnwrgk6xndl8gy6nwa2n977sw6zh34rma0nh";
 
 /// The pinned funds-anchor set: chunk 0 unmodified + the corrupted chunk 1.
 const CORRUPTED_SET: [&str; 2] = [CHUNK0, CORRUPTED_MK1_CHUNK1];
