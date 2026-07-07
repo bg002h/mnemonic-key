@@ -44,6 +44,22 @@ pub enum CliError {
     UsageError(String),
     /// I/O error (stdin read failed, output file write failed). Exit 1.
     IoError(std::io::Error),
+    /// Cycle E (`mk1-repair-set-level-reverify`, F4) — THE FUNDS FIX. `mk
+    /// repair` per-string-corrected a `chunk_set_id` group that is
+    /// complete-and-consistent (every index `0..total_chunks` present
+    /// exactly once), but the corrected group does NOT reassemble through
+    /// `mk_codec::decode` — the per-chunk BCH correction(s) aliased to a
+    /// DIFFERENT valid codeword, not the original card. Exit 2. Mirrors the
+    /// toolkit's `RepairError::SetReassemblyMismatch`.
+    SetReassemblyMismatch {
+        /// Human-readable identifier of the failing group (e.g.
+        /// `"chunk_set_id 0x12345"` or `"single-string chunk 2"`), so a
+        /// batch invocation containing multiple groups tells the user WHICH
+        /// one failed and lets them re-run the good group alone.
+        group: String,
+        /// The underlying `mk_codec::decode` error's `Display` text.
+        detail: String,
+    },
 }
 
 impl CliError {
@@ -56,6 +72,7 @@ impl CliError {
             CliError::ContentMismatch { .. } => "ContentMismatch",
             CliError::UsageError(_) => "UsageError",
             CliError::IoError(_) => "IoError",
+            CliError::SetReassemblyMismatch { .. } => "SetReassemblyMismatch",
         }
     }
 
@@ -72,6 +89,11 @@ impl CliError {
             } => format!("verify mismatch on {field}: expected {expected}, got {actual}"),
             CliError::UsageError(m) => m.clone(),
             CliError::IoError(e) => format!("io error: {e}"),
+            CliError::SetReassemblyMismatch { group, detail } => format!(
+                "each chunk corrected individually, but the set does not reassemble ({group}): \
+                {detail} — the correction(s) may have aliased to a DIFFERENT valid card; this \
+                output is NOT trustworthy"
+            ),
         }
     }
 
@@ -84,6 +106,7 @@ impl CliError {
             CliError::ContentMismatch { .. } => 4,
             CliError::UsageError(_) => 64,
             CliError::IoError(_) => 1,
+            CliError::SetReassemblyMismatch { .. } => 2,
         }
     }
 
@@ -100,6 +123,10 @@ impl CliError {
                 "actual": actual,
             })),
             CliError::FutureFormat(m) => Some(json!({ "message": m })),
+            CliError::SetReassemblyMismatch { group, detail } => Some(json!({
+                "group": group,
+                "detail": detail,
+            })),
             _ => None,
         }
     }
