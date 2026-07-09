@@ -149,9 +149,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust 1.85 + freebsd target
-        uses: dtolnay/rust-toolchain@master
+        # Pin the action ref to `@1.85.0` (the version tag carries the
+        # toolchain) rather than `@master`: the floating `@master` drifted and
+        # stopped provisioning the `x86_64-unknown-freebsd` rust-std, failing
+        # this gate with E0463 (target-not-installed) even though the crate
+        # compiles clean for freebsd. Mirrors the sibling `mnemonic-toolkit`
+        # freebsd gate (`rust.yml`), which uses `@1.85.0` and stays green.
+        uses: dtolnay/rust-toolchain@1.85.0
         with:
-          toolchain: '1.85'
           targets: x86_64-unknown-freebsd
       - uses: Swatinem/rust-cache@v2
         with:
