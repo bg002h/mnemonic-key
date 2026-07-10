@@ -26,7 +26,7 @@ Existing wallet formats (Coldcard <code>.txt</code> multisig configs, Sparrow <c
 * '''Reusability.''' One cosigner's xpub backed up on one MK card serves every wallet that cosigner participates in. No re-engraving when joining a new multisig.
 * '''Trust boundary alignment.''' A cosigner can hand their MK card to the wallet creator without revealing other cosigners' xpubs.
 
-MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same chunking infrastructure as codex32 and MD), with HRP-mixing and a per-format target residue providing domain separation. The cryptographic guarantees of codex32 — error correction up to 4 character substitutions for the regular code, 8 for the long code — apply to MK without modification.
+MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same chunking infrastructure as codex32 and MD), with HRP-mixing and a per-format target residue providing domain separation. The cryptographic guarantees of codex32 — error correction of up to 4 character substitutions for '''both''' the regular and long codes — apply to MK without modification. (8 is the long code's error-''detection'' radius, not its correction radius; both codes correct up to <code>t = 4</code>.)
 
 ==Definitions and notation==
 
@@ -65,13 +65,13 @@ The data section, after chunk-header reassembly, is a payload encoding (per clos
   [stub_count        : 1 byte; MUST be ≥ 1]
   [policy_id_stub_1 ... policy_id_stub_N : 4 × N bytes]
   [origin_fingerprint: 4 bytes]   ← present iff bytecode_header bit 2 set
-  [origin_path       : variable; 1 byte std-table indicator OR 3..=52 B explicit-path escape]
+  [origin_path       : variable; 1 byte std-table indicator OR 2..=52 B explicit-path escape]
   [xpub_compact      : 73 bytes]
 </pre>
 
 Total bytes for a typical 1-stub mainnet card with std-table indicator and fingerprint present: <code>1 + 1 + 4 + 4 + 1 + 73 = 84 B</code>.
 
-The single-string capacity of long-code codex32 is 56 bytes payload (per the chunk-length envelope below). The smallest valid v0.1 mk1 bytecode (1-byte header + 1-byte stub_count + 4-byte single stub + std-table path indicator + 73-byte compact xpub, fingerprint omitted) is <code>1 + 1 + 4 + 1 + 73 = 80</code> bytes — already above the 56-byte cap. '''Every conforming v0.1 mk1 KeyCard therefore encodes as a chunked card''' (typical 1-stub-with-fingerprint case is 84 bytes, lands in 2 long-code chunks). The <code>SingleString</code> chunk-type variant is reserved for future format extensions whose bytecode could shrink below 56 bytes; it is wire-defined for forward compatibility but unreachable for v0.1 encoders.
+The single-string capacity of long-code codex32 is 56 bytes payload (per the chunk-length envelope below). The smallest valid v0.1 mk1 bytecode (1-byte header + 1-byte stub_count + 4-byte single stub + std-table path indicator + 73-byte compact xpub, fingerprint omitted) is <code>1 + 1 + 4 + 1 + 73 = 80</code> bytes — already above the 56-byte cap. '''Every conforming v0.1 mk1 KeyCard therefore encodes as a chunked card''' (the typical 1-stub-with-fingerprint case is 84 bytes; with the 4-byte cross-chunk hash appended, the 88-byte stream splits into '''2 chunks — chunk 0 long-code, chunk 1 regular-code'''; a mixed-code chunk set is the normal shape, see §"Chunking (fragment split)"). The <code>SingleString</code> chunk-type variant is reserved for future format extensions whose bytecode could shrink below 56 bytes; it is wire-defined for forward compatibility but unreachable for v0.1 encoders.
 
 ==Specification==
 
@@ -109,11 +109,145 @@ MK_REGULAR_CONST = int.from_bytes(h, 'big') >> (256 - 65)  # = 0x1062435f91072fa
 MK_LONG_CONST    = int.from_bytes(h, 'big') >> (256 - 75)  # = 0x41890d7e441cbe97273
 </source>
 
-Cross-check: applying the same procedure to <code>b"shibbolethnums"</code> reproduces MD's published <code>T_REGULAR = 0x0815c07747a3392e7</code> and <code>T_LONG = 0x205701dd1e8ce4b9f47</code>, confirming derivation correctness.
+Cross-check: applying the same procedure to <code>b"shibbolethnums"</code> reproduces MD's published <code>T_REGULAR = 0x0815c07747a3392e7</code> and the long-generator target <code>0x205701dd1e8ce4b9f47</code> (the latter was MD's <code>T_LONG</code> before MD retired its long code; MK retains a long code and derives its own <code>MK_LONG_CONST</code> by this same procedure with HRP <code>"mk"</code>), confirming derivation correctness.
 
 We chose new constants rather than reusing BIP 93's <code>MS32_CONST</code> values for two reasons. First, although HRP-mixing produces residues that differ between any two HRPs sharing this polynomial, picking distinct target constants provides residue-level separation as well: damage that maps an MK string toward codex32-style validity is statistically prevented by the combination. Second, signaling matters — reusing codex32's specific target constant verbatim would invite the misreading that MK is "codex32 with a different HRP" rather than a distinct format that borrows codex32's polynomial.
 
-A pre-submission '''structural-relationship audit''' of these constants against the BIP 93 BCH polynomial — verifying weight-distribution properties under the new target and confirming no accidental codeword-space intersection with MD or codex32 — is required before formal BIP submission. This audit is not a v0.1 release blocker.
+The reproducible NUMS derivation above, together with the embedded conformance vectors (§"Test Vectors") — real MK cards that decode '''only''' under the specified target constants — provides the structural-relationship evidence at the same reproducer-in-BIP bar the sibling [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD] BIP adopted. A formal '''structural-relationship audit''' of these constants against the BIP 93 BCH polynomial — machine-verifying weight-distribution properties under the new target and confirming no accidental codeword-space intersection with MD or codex32 — remains a documented, non-blocking pre-submission item; it is not a v0.1 release blocker.
+
+====Checksum====
+
+MK's checksum is a BCH error-correcting code with BIP 173-style HRP-mixing. It is '''init- and algorithm-identical to [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD]'s §"Checksum"''': MK shares MD's polymod initial state and BIP 93's generator polynomials verbatim; only the HRP (<code>"mk"</code>), the per-format target constants (<code>MK_REGULAR_CONST</code> / <code>MK_LONG_CONST</code>, above), and code-variant availability differ (MK retains both a regular and a long code; MD has only the regular code). The polymod is BIP 93's <code>ms32_polymod</code> (regular code) or <code>ms32_long_polymod</code> (long code). This section is fully normative: an independent implementation MUST reproduce it byte-for-byte, or it will reject every real MK card.
+
+=====Polymod initial state=====
+
+The polymod is seeded with the constellation-shared initial residue
+
+<pre>
+  POLYMOD_INIT = 0x23181b3
+</pre>
+
+'''before''' processing any input symbol. This is '''not''' <code>1</code> — the generic BIP 173 <code>bech32_polymod</code> start state, and the seed the <code>ms1</code> reference uses (with an <code>hrp_expand("ms")</code> prepend) to stay bit-compatible with the external <code>rust-codex32</code> engine. It '''is''' the exact initial residue of BIP 93's published <code>ms32_polymod</code>/<code>ms32_long_polymod</code> (<code>residue = 0x23181b3</code>, which pre-folds codex32's fixed HRP <code>"ms"</code>; BIP 93's caller prepends no HRP expansion). MK and MD share this seed verbatim. The choice is safe because each code (regular and long) is self-contained: the same init seeds both checksum '''creation''' and '''verification''', so its contribution cancels and a valid codeword's residue equals its per-HRP target at every length, for any fixed init. Domain separation between MK, MD, and codex32 is carried entirely by the per-HRP target constants and the HRP expansion — never by this init.
+
+Equivalence note (for readers cross-checking against codex32): <code>0x23181b3</code> is itself the residue obtained by folding <code>hrp_expand("ms")</code> into an init of <code>1</code>. MK's checksum input is therefore equivalent to <code>hrp_expand("ms") || hrp_expand("mk") || data</code> processed from an init of <code>1</code> — but a conforming implementation MUST simply seed <code>0x23181b3</code> and prepend <code>hrp_expand("mk")</code>, exactly as specified here. Do '''not''' seed from <code>1</code>, and do '''not''' seed from the fold of <code>hrp_expand("mk")</code> alone: both readings reject every real MK card (see the worked example below).
+
+=====HRP expansion=====
+
+<code>hrp_expand("mk")</code> is computed exactly as in BIP 173 §"Bech32": for each HRP character <code>c</code> emit <code>ord(c) >> 5</code>; emit a single zero; then for each HRP character emit <code>ord(c) & 31</code>. For the lowercase HRP <code>"mk"</code> this yields the five 5-bit values:
+
+<pre>
+  hrp_expand("mk") = [3, 3, 0, 13, 11]
+</pre>
+
+Derivation: <code>ord('m') = 109 = 0x6d</code>, so <code>109 >> 5 = 3</code> and <code>109 & 31 = 13</code>. <code>ord('k') = 107 = 0x6b</code>, so <code>107 >> 5 = 3</code> and <code>107 & 31 = 11</code>. The separator zero falls between the high-half list <code>[3, 3]</code> and the low-half list <code>[13, 11]</code>. (Length = 2 × len(HRP) + 1 = 5.)
+
+=====Generator polynomials=====
+
+The five per-step feedback constants are BIP 93's, verbatim. The regular code carries a 65-bit residue (top 5 bits select the feedback terms; the low 60 bits are the running state); the long code carries a 75-bit residue (top 5 bits select; low 70 bits state):
+
+<pre>
+  # Regular code — shift = 60, mask = 0x0fffffffffffffff
+  GEN_REGULAR = [
+    0x19dc500ce73fde210,
+    0x1bfae00def77fe529,
+    0x1fbd920fffe7bee52,
+    0x1739640bdeee3fdad,
+    0x07729a039cfc75f5a,
+  ]
+
+  # Long code — shift = 70, mask = 0x3fffffffffffffffff
+  GEN_LONG = [
+    0x3d59d273535ea62d897,
+    0x7a9becb6361c6c51507,
+    0x543f9b7e6c38d8a2a0e,
+    0x0c577eaeccf1990d13c,
+    0x1887f74f8dc71b10651,
+  ]
+</pre>
+
+=====Algorithm=====
+
+<source lang="python">
+POLYMOD_INIT = 0x23181b3
+
+def polymod(values, gen, shift, mask):
+    # values: the full sequence of 5-bit symbols to fold in.
+    residue = POLYMOD_INIT
+    for v in values:
+        b = residue >> shift
+        residue = ((residue & mask) << 5) ^ v
+        for i in range(5):
+            if (b >> i) & 1:
+                residue ^= gen[i]
+    return residue
+
+def hrp_expand(hrp):
+    return [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp]
+</source>
+
+Let <code>(GEN, SHIFT, MASK, TARGET, k)</code> be <code>(GEN_REGULAR, 60, 0x0fffffffffffffff, MK_REGULAR_CONST, 13)</code> for the regular code or <code>(GEN_LONG, 70, 0x3fffffffffffffffff, MK_LONG_CONST, 15)</code> for the long code.
+
+To '''create''' a checksum for a data part <code>data</code> (the sequence of 5-bit header + payload symbols, without a checksum):
+
+# Choose the code by length (see "Code selection", below).
+# Compute <code>P = polymod(hrp_expand("mk") || data || [0]*k, GEN, SHIFT, MASK) XOR TARGET</code>.
+# Extract the <code>k</code> checksum symbols from <code>P</code> in big-endian 5-bit order: symbol <code>i</code> (for <code>i = 0 .. k−1</code>) is <code>(P >> (5 * (k − 1 − i))) & 0x1F</code>. The '''first''' checksum symbol is the top 5 bits of the XORed residue <code>P</code>; the last is its low 5 bits.
+# Append the <code>k</code> symbols to <code>data</code> to form the full data part.
+
+To '''verify''' a full data part <code>data_with_checksum</code> (header + payload + the trailing 13/15 checksum symbols), the string is valid iff
+
+<pre>
+  polymod(hrp_expand("mk") || data_with_checksum, GEN, SHIFT, MASK) == TARGET
+</pre>
+
+Error correction operates on the same residue: <code>polymod(hrp_expand("mk") || data_with_checksum) XOR TARGET</code> is congruent to the error polynomial modulo the generator, and is fed to the syndrome-based decoder (§"Error-correction guarantees").
+
+=====Code selection (length thresholds)=====
+
+The regular and long codes are selected by data-part length; the encoder and decoder sides MUST agree. A "≤ 93 → regular, else long" shortcut is '''wrong''' (vector V1's chunk 0 has a 93-symbol pre-checksum data part that takes the '''long''' code — <code>93 + 15 = 108</code> — not the regular code):
+
+* '''Encoder.''' Given a pre-checksum data part of <code>d</code> 5-bit symbols: if <code>d + 13</code> lies in <code>14..=93</code>, use the regular code (append 13 checksum symbols); else if <code>d + 15</code> lies in <code>96..=108</code>, use the long code (append 15); otherwise the data part is unencodable — too short, in the reserved 94–95 gap, or too long for v0.1 (<code>Error::InvalidStringLength</code>). Equivalently: pre-checksum data of 1–80 symbols → regular, 81–93 → long, > 93 invalid.
+* '''Decoder.''' Given a received data part (payload + checksum) of total length <code>L</code>: <code>L</code> in <code>14..=93</code> → regular code; <code>L</code> in <code>94..=95</code> → '''reserved-invalid''' (<code>Error::InvalidStringLength</code>); <code>L</code> in <code>96..=108</code> → long code; any other <code>L</code> → invalid (<code>Error::InvalidStringLength</code>). The minimum valid data-part length is 14 symbols; there is no <code>L < 14</code> valid string.
+
+=====Worked example (vector V1)=====
+
+Vector <code>V1_bip48_mainnet_1_stub_with_fp</code> (§"Test Vectors") is a 1-stub mainnet BIP 48 segwit-v0 multisig card with the fingerprint present. Its 84-byte canonical bytecode is:
+
+<pre>
+  040111223344aabbccdd050488b21e10203001
+  abababababababababababababababababababababababababababababababab
+  031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f
+</pre>
+
+decomposing (per §"Payload field order") as:
+
+<pre>
+  04                                 bytecode header (v0, fingerprint flag set)
+  01                                 stub_count = 1
+  11223344                           policy_id_stub_1
+  aabbccdd                           origin_fingerprint
+  05                                 origin_path indicator (m/48'/0'/0'/2')
+  0488b21e                           xpub.version (mainnet)
+  10203001                           xpub.parent_fingerprint
+  abab..ab  (32 bytes)               xpub.chain_code
+  03 1b84..078f (33 bytes)           xpub.public_key (compressed)
+</pre>
+
+'''Chunking.''' <code>cross_chunk_hash = SHA-256(bytecode)[0..4] = 83bb262d</code>; the split stream is <code>bytecode || 83bb262d</code> = 88 bytes. With a 53-byte fragment target this splits into two fragments: chunk 0 = bytes 0..53 (53 bytes) → long code; chunk 1 = bytes 53..88 (35 bytes) → regular code. The per-encoding <code>chunk_set_id = 0x12345</code> (74565).
+
+'''Chunk 0 (long code).''' The 8-symbol chunked header is <code>[0, 1, 2, 8, 26, 5, 1, 0]</code> = <code>version 0</code>, <code>type 1</code> (Chunked), <code>chunk_set_id 0x12345</code> as four big-endian 5-bit symbols <code>[2, 8, 26, 5]</code>, <code>total_chunks−1 = 1</code>, <code>chunk_index 0</code> — bech32 <code>"qpzg69pq"</code>. The 53 fragment bytes convert (8→5-bit, MSB-first, zero-padded) to 85 symbols, giving a 93-symbol pre-checksum data part; <code>93 + 15 = 108</code> → long code. The 15 checksum symbols computed by the algorithm above are <code>[6, 5, 7, 18, 30, 26, 27, 21, 27, 18, 31, 14, 1, 23, 9]</code> = bech32 <code>"x98j76m4mjlwphf"</code>, and <code>polymod(hrp_expand("mk") || data_with_checksum, GEN_LONG, 70, 0x3fffffffffffffffff) == MK_LONG_CONST</code>. The full string is:
+
+<pre>
+  mk1qpzg69pqqsq3zg3ngj4thnxaq5zg3vs7zqsrqqdt4w46h2at4w46h2at4w46h2at4w46h2at4w46h2at4w46h2at4vp3kx98j76m4mjlwphf
+</pre>
+
+'''Chunk 1 (regular code).''' The 8-symbol chunked header is <code>[0, 1, 2, 8, 26, 5, 1, 1]</code> (same as chunk 0 but <code>chunk_index 1</code>) — bech32 <code>"qpzg69pp"</code>. The 35 fragment bytes convert to exactly 56 symbols (280 bits, no padding), giving a 64-symbol pre-checksum data part; <code>64 + 13 = 77</code> → regular code. The 13 checksum symbols are <code>[1, 28, 8, 10, 27, 27, 18, 11, 9, 25, 31, 26, 6]</code> = bech32 <code>"pug2mmjtfel6x"</code>, and <code>polymod(hrp_expand("mk") || data_with_checksum, GEN_REGULAR, 60, 0x0fffffffffffffff) == MK_REGULAR_CONST</code>. The full string is:
+
+<pre>
+  mk1qpzg69ppsnz4v7cjv3qfjhf76k4t5pt96u0psdrqfqvll8qh7h5athg837pmkf3dpug2mmjtfel6x
+</pre>
+
+Both strings above are the exact published V1 strings. A mixed-code chunk set (chunk 0 long, chunk 1 regular) is the '''normal''' shape for a v0.1 MK card — see §"Chunking (fragment split)".
 
 ====Alphabet====
 
@@ -138,16 +272,18 @@ Maximum 32 chunks per MK card. With long-code chunked encoding plus the 4-byte c
 
 ====Error-correction guarantees====
 
-Both codes guarantee:
+Both codes are BCH codes of minimum distance 8. The normative correction guarantee is:
 
-* Detection of any error pattern affecting up to 8 characters within a single string.
-* Correction of up to 4 character substitutions.
-* Correction of up to 8 erasures (positions known to be damaged).
-* Correction of up to 13 (regular) or 15 (long) consecutive erasures (burst damage to a contiguous range of characters).
+* '''Correction of up to 4 character substitutions''' (both codes; the full <code>t = 4</code> capacity of BCH(93,80,8) and BCH(108,93,8)). Conformant decoders MUST correct any received string within Hamming distance 4 of a valid codeword.
+
+Detection and erasure behaviour follow from the minimum distance and are informative code-capability notes, '''not''' v0.1 conformance requirements:
+
+* Detection of any error pattern affecting up to 8 characters within a single string (a distance-8 property).
+* The code distance would in principle permit correction of up to 8 erasures (positions known to be damaged), or up to 13 (regular) / 15 (long) consecutive erasures (burst damage), if an erasure-aware decoder were implemented. '''The mk-codec reference implements no erasure decoding''': <code>decode_string</code> rejects any non-alphabet character (<code>Error::InvalidChar</code>), so an erasure position cannot even be marked on input. Erasure and burst correction are therefore capabilities of the code, not guarantees of any conforming v0.1 decoder. See FOLLOWUP <code>impl-bch-erasure-decoding-md-mk</code>.
 
 Detection of error patterns affecting more than 8 characters is probabilistic. The expected probability that a randomly damaged string of more than 8 errors decodes to a valid codeword is bounded by approximately 2<sup>−65</sup> (regular code) or 2<sup>−75</sup> (long code).
 
-Conformant decoders MUST report which correction was applied (clean / N substitutions corrected / N erasures corrected / structure-aided / failed) per [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD §"Decoder reporting"]. MK inherits this conformance pattern via the BCH-layer fork from md-codec.
+Decoders SHOULD report which correction was applied. The reference decoder reports one of <code>clean</code> / <code>N substitutions corrected</code> / <code>failed</code> (<code>Error::BchUncorrectable</code>); the richer states named in the sibling [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD §"Decoder reporting"] — <code>N erasures corrected</code>, <code>structure-aided</code> / guided recovery, and confidence-tier reporting — are '''informative and unimplemented in mk-codec v0.1'''; they are not conformance requirements. See FOLLOWUPs <code>impl-guided-recovery-md-mk</code> and <code>impl-confidence-tier-reporting-md-mk</code>. This downgrade is symmetric with the sibling MD BIP.
 
 ====String-layer header====
 
@@ -184,6 +320,8 @@ Encoders generating fresh cards MAY draw <code>chunk_set_id</code> from a crypto
 
 Either choice is interop-equivalent — the field is opaque — and the deterministic option lets downstream toolkits SHA-pin their fixture corpora.
 
+Note (toolkit slot-XOR): the reference bundling toolkit derives per-card <code>chunk_set_id</code> values by XORing the cosigner '''slot index''' into the derivation, so that distinct cosigner cards in one bundle get distinct <code>chunk_set_id</code>s. The plain formula above therefore reproduces the toolkit's value only for '''slot 0'''; for slot <code>s</code> the toolkit's value is the formula XOR a slot-derived term. This does not affect interop (the field is opaque and only mismatch-checked within a single card's chunk set), but a reader reproducing a specific toolkit-emitted card byte-for-byte must apply the same slot XOR.
+
 Chunk-type byte assignments:
 
 {| class="wikitable"
@@ -209,6 +347,21 @@ For chunked cards, the canonical bytecode is followed by a 4-byte cross-chunk in
 The hash is the first 4 bytes of the SHA-256 of the canonical bytecode (everything from the bytecode header through the end of the xpub_compact field). The hash is appended to the canonical bytecode, and the resulting byte stream is split into chunk fragments.
 
 Decoders compute the hash over the reassembled bytecode (excluding the trailing 4 hash bytes) and verify it matches the trailing bytes. Mismatch MUST cause the decode to fail with an error specifically identifying the cross-chunk integrity check (<code>CrossChunkHashMismatch</code>).
+
+====Chunking (fragment split)====
+
+Because the smallest conforming v0.1 mk1 bytecode (80 bytes) already exceeds the 56-byte single-string capacity (§"Format overview"), every v0.1 card is chunked. The split below is '''normative for byte-identical reproduction'''; decoders MUST accept any valid division that reassembles to the same stream (see below).
+
+Encoder procedure:
+
+# Form the stream <code>bytecode || cross_chunk_hash</code> (the 4-byte cross-chunk hash appended, above).
+# Split the stream into successive '''53-byte''' fragments (<code>CHUNKED_FRAGMENT_LONG_BYTES</code>). Every fragment but the last is exactly 53 bytes; the last fragment is the remainder (1..=53 bytes). The number of chunks is <code>ceil(stream_len / 53)</code>, capped at 32 (bytecodes above <code>32 × 53 − 4 = 1692</code> bytes are rejected with <code>Error::CardPayloadTooLarge</code>).
+# For each fragment, build the chunk's data part as the 8-symbol chunked header (§"String-layer header") followed by the fragment's bytes repacked 8→5-bit (MSB-first, with the final 5-bit symbol zero-padded if the fragment's bit count is not a multiple of 5).
+# BCH-checksum each chunk's data part with the code variant '''auto-selected by that chunk's data-part length''' (§"Checksum", code selection). A full 53-byte fragment yields a 93-symbol data part → long code; a shorter final fragment may yield a regular-code data part. '''Mixed-code chunk sets (some long, some regular) are the normal shape''' — do not assume all chunks share a code variant.
+
+Decoders MUST accept '''any''' byte-level fragment division that reassembles — concatenating the per-fragment bytes in <code>chunk_index</code> order — to the same <code>bytecode || cross_chunk_hash</code> stream, then re-verifies the cross-chunk hash. The 53-byte fragment size is the encoder's emit policy, not a decode-time constraint.
+
+'''Contrast with MD (do not cross-import).''' MK and MD both frame chunks at '''byte''' boundaries — neither uses sub-byte / bit-boundary framing. They differ in the '''encoder emit policy''': MK emits a '''fixed 53-byte''' fragment per chunk (one xpub-sized record, each independently 8→5-bit repacked and checksummed), whereas MD emits '''variable, near-equal whole-byte slices''' sized from the assembled payload and a per-chunk bit budget (MD BIP §"Chunking"; MD's split is deterministic, not encoder-chosen, and is '''not''' a fixed 53-byte size). An MK implementation MUST use the fixed 53-byte emit policy; applying MD's variable near-equal-slice sizing to MK (or MK's fixed 53-byte size to MD) produces non-reproducible strings.
 
 ====Payload byte-alignment====
 
@@ -253,7 +406,7 @@ After the bytecode header, the payload encodes fields in the order:
   [stub_count        : 1 byte; MUST be ≥ 1]
   [policy_id_stub_1 ... policy_id_stub_N : 4 × N bytes]
   [origin_fingerprint: 4 bytes]   ← present iff bytecode_header bit 2 set
-  [origin_path       : 1 B std-table indicator OR 3..=52 B explicit-path escape]
+  [origin_path       : 1 B std-table indicator OR 2..=52 B explicit-path escape]
   [xpub_compact      : 73 bytes]
 </pre>
 
@@ -329,11 +482,13 @@ Note on indicator <code>0x16</code> (history): mk1 v0.1.x reserved <code>0x16</c
 
 <pre>
   [0xFE]
-  [component_count: 1 byte; MUST be in 1..=10]
+  [component_count: 1 byte; MUST be in 0..=10]
   [component_1 ... component_N: each LEB128-encoded u32, hardened-bit in MSB per BIP 32]
 </pre>
 
-Path-component cap: '''10''' (closure Q-3 lock). BIP 32 itself allows depth ≤ 255; real wallets use ≤ 6. The 10-component cap bounds chunk-size attacks without rejecting any plausibly real path. Decoders MUST reject <code>component_count > 10</code> with <code>Error::PathTooDeep</code>.
+Path-component cap: '''10''' (closure Q-3 lock). BIP 32 itself allows depth ≤ 255; real wallets use ≤ 6. The 10-component cap bounds chunk-size attacks without rejecting any plausibly real path. Decoders MUST reject <code>component_count > 10</code> with <code>Error::PathTooDeep</code>; they MUST '''accept''' <code>component_count == 0</code>.
+
+<code>component_count == 0</code> is the '''no-path / depth-0''' case: a root or non-HD key that has no derivation path (e.g. an xpub built from a raw WIF, or a master key). As of mk-codec v0.4.0 this is a valid card. An empty path carries zero on-wire component bytes (the escape is exactly the two bytes <code>0xFE 0x00</code>), and the decoder reconstructs <code>depth = 0</code> and <code>child_number = Normal{0}</code> (the BIP 32 master convention) — see §"xpub encoding (compact-73)". A card whose <code>origin_path</code> maps to a standard-table indicator never uses the escape at all, so <code>component_count == 0</code> only ever arises via the <code>0xFE</code> explicit form.
 
 LEB128 of a u32 takes 1–5 bytes. Any u32 with bit 28 or higher set (which includes every hardened component, since the hardened-marker is bit 31) requires the full 5 bytes; non-hardened components < 2²⁸ take 1–4 bytes. For typical BIP-style paths (which are mostly hardened), 5 bytes per component is the typical case as well as the worst-case bound.
 
@@ -344,7 +499,7 @@ Indicators <code>0x00</code>, <code>0x08</code>–<code>0x10</code>, <code>0x18<
 MK v0.1 encodes xpubs in a 73-byte compact form:
 
 <pre>
-  [xpub.version          : 4 bytes]   — network-specific (mainnet xpub = 0x0488B21E)
+  [xpub.version          : 4 bytes]   — 0x0488B21E (mainnet xpub) or 0x043587CF (testnet tpub)
   [xpub.parent_fingerprint: 4 bytes]
   [xpub.chain_code       : 32 bytes]
   [xpub.public_key       : 33 bytes] — compressed secp256k1
@@ -352,16 +507,21 @@ MK v0.1 encodes xpubs in a 73-byte compact form:
                             73 bytes
 </pre>
 
+'''Accepted wire version bytes.''' The 4-byte <code>xpub.version</code> field on the wire MUST be one of exactly two values: <code>0x0488B21E</code> (mainnet <code>xpub</code>) or <code>0x043587CF</code> (testnet <code>tpub</code>). Any other value MUST be rejected with <code>Error::InvalidXpubVersion</code>. Note: this constrains the '''wire''' only. The reference <code>mk-cli</code> ''normalizes'' SLIP-0132 prefixes (<code>ypub</code>/<code>zpub</code>/<code>upub</code>/<code>vpub</code>/…) to the canonical BIP 32 prefix on '''input''' (FOLLOWUP <code>mk-slip0132-prefix-acceptance</code>); the wire itself never carries a SLIP-0132 version, so this is not an "encoders reject all others" rule at the CLI surface — it is a wire-format constraint.
+
 The fields <code>xpub.depth</code> and <code>xpub.child_number</code> are absent from the wire and reconstructed at decode time from <code>origin_path</code>:
 
 <pre>
   depth        := component_count(origin_path)
-  child_number := last_component(origin_path) including hardened-bit encoding
+  child_number := last_component(origin_path) including hardened-bit encoding,
+                  or Normal{0} when origin_path is empty (depth-0 / no-path key)
 </pre>
 
-For a standard-table indicator, both come from the dictionary entry. For the explicit-path escape hatch, both come from the on-wire components.
+For a standard-table indicator, both come from the dictionary entry. For the explicit-path escape hatch, both come from the on-wire components. For the '''empty path''' (the <code>0xFE 0x00</code> no-path / depth-0 case, e.g. a WIF), <code>depth = 0</code> and <code>child_number</code> defaults to the BIP 32 master convention <code>Normal{0}</code>; this reconstruction is the exact inverse of the encoder-side invariant below.
 
-'''Why compact-73:''' the dropped fields (<code>depth</code>, <code>child_number</code>) are redundant with <code>origin_path</code>; carrying them on-wire risks drift detected by md1-style depth-mismatch logic. Compact-73 is ''lossless'' — both fields are reconstructible from the path — and saves 5 bytes per card (~one row of typical hand-engraving). The drift class is impossible by construction.
+'''Why compact-73:''' the dropped fields (<code>depth</code>, <code>child_number</code>) are redundant with <code>origin_path</code>; carrying them on-wire risks drift detected by md1-style depth-mismatch logic. Compact-73 is ''lossless'' — both fields are reconstructible from the path — and saves 5 bytes per card (~one row of typical hand-engraving). Because <code>depth</code> and <code>child_number</code> are not carried on the wire, ''on-wire'' drift (a card that decodes to two different depth/child readings) is impossible by construction. Drift between the '''supplied xpub''' and the '''origin path''' is a different, real hazard, closed by an encoder-side invariant:
+
+'''Encoder-side invariant (compact-73 consistency).''' Because the decoder reconstructs <code>depth</code>/<code>child_number</code> solely from <code>origin_path</code>, an encoder MUST reject any card whose supplied <code>xpub.depth</code> or <code>xpub.child_number</code> disagrees with <code>origin_path</code>. Concretely, let <code>path_depth = component_count(origin_path)</code> and <code>expected_child = last_component(origin_path)</code>, or <code>Normal{0}</code> when <code>origin_path</code> is empty (the depth-0 / no-path case). The encoder MUST reject with <code>Error::XpubOriginPathMismatch</code> unless <code>xpub.depth == path_depth</code> '''and''' <code>xpub.child_number == expected_child</code>. Equivalently: a card encodes iff it survives the compact-drop and reconstruction unchanged. This check is '''not''' a decoder rule — the disagreement is structurally undetectable at decode time (no on-wire depth to compare against) — so it is an encoder contract. A hand-crafted bytecode that violates it decodes to a wrong-but-internally-consistent xpub whose reconstructed 78-byte serialization then fails the Wallet Instance ID check at recovery (§"Linkage to MD and recovery flow"), or silently imports wrong metadata where no external anchor exists.
 
 '''Limit-of-detection note (carries into §"Privacy considerations"):''' under compact-73, an operator who picks the wrong standard-table path indicator while engraving the right xpub bytes produces a card that decodes without error and reconstructs an xpub claiming the wrong derivation path. The card's <code>chain_code</code> and <code>public_key</code> are correct (addresses derive correctly), but the path embedded in the reconstructed BIP 32 serialization is wrong. Detection of this class of error happens at the §"Linkage to MD and recovery flow" Wallet Instance ID check — only when the user has an externally-anchored expected wallet identity to compare against. The §"Privacy considerations" section recommends out-of-band first-address verification as a mitigation.
 
@@ -375,14 +535,24 @@ A conformant MK decoder MUST reject input that:
 # Has any reserved bit set in the bytecode header in v0.1 (<code>Error::ReservedBitsSet</code>).
 # Has <code>stub_count == 0</code> (<code>Error::InvalidPolicyIdStubCount</code>).
 # Has an origin path indicator outside the defined table or in the reserved ranges (<code>Error::InvalidPathIndicator</code>).
-# Has an explicit path with <code>component_count > 10</code> or <code>== 0</code> (<code>Error::PathTooDeep</code>).
+# Has an explicit path with <code>component_count > 10</code> (<code>Error::PathTooDeep</code>). <code>component_count == 0</code> is '''valid''' (the no-path / depth-0 case, mk-codec v0.4.0+); only <code>> 10</code> is rejected.
 # Has any path component with the BIP 32 child-number high bits set in invalid ways, or LEB128 overflow (<code>Error::InvalidPathComponent</code>).
-# Has xpub version bytes that don't match a known network's xpub prefix (<code>Error::InvalidXpubVersion</code>).
+# Has xpub version bytes outside the accepted wire set <code>{0x0488B21E (mainnet xpub), 0x043587CF (testnet tpub)}</code> (<code>Error::InvalidXpubVersion</code>). SLIP-0132 prefixes (ypub/zpub/…) never appear on the wire; the reference mk-cli normalizes them to the canonical BIP 32 prefix on input (see §"xpub encoding (compact-73)").
 # Has xpub <code>public_key</code> bytes that do not parse as a valid compressed secp256k1 point (<code>Error::InvalidXpubPublicKey</code>). Unreachable for inputs that pass BCH verification, but required for hand-constructed inputs fed directly to the bytecode decoder.
 # Truncates anywhere mid-field (<code>Error::UnexpectedEnd</code>).
 # Has trailing bytes after the xpub (<code>Error::TrailingBytes</code>).
 
 Encoder-side invariant (not a decoder rule): encoders MUST set the bytecode-header fingerprint flag (bit 2) if and only if <code>origin_fingerprint</code> is present in the payload. The invariant is structurally undetectable at decode time (no length prefix distinguishes "flag set, fp present" from "flag unset, fp omitted"); decoders follow the flag verbatim. A hand-crafted bytecode that violates the invariant decodes to a wrong-but-internally-consistent <code>KeyCard</code>; detection happens at the §"Linkage to MD and recovery flow" Wallet Instance ID check. (No dedicated <code>Error</code> variant: this rule is an encoder contract, not a decoder reject path.)
+
+Per-string BCH / string-layer decoder rules (applied to each input string before reassembly):
+
+# Missing HRP, or an HRP other than <code>mk</code> (<code>Error::InvalidHrp</code>).
+# Mixed upper/lower case within a single string (<code>Error::MixedCase</code>); the HRP case MUST match the data-part case.
+# A data-part character outside the bech32 alphabet (<code>Error::InvalidChar</code>).
+# A data-part length outside the valid BCH envelope — below '''14''', in the reserved '''94–95''' gap, or above 108 (<code>Error::InvalidStringLength</code>). The minimum valid data-part length is 14 symbols; totals 94–95 are reserved-invalid to keep code-variant selection unambiguous (§"Checksum", code selection).
+# A checksum that cannot be repaired within the BCH <code>t = 4</code> substitution radius (<code>Error::BchUncorrectable</code>).
+# Empty input, or a declared-chunked string too short to carry its 8-symbol header (<code>Error::ChunkedHeaderMalformed</code>).
+# An assembled bytecode exceeding the chunk-capacity bound <code>32 × 53 − 4 = 1692</code> bytes (<code>Error::CardPayloadTooLarge</code>).
 
 Additional decoder rules at the string/chunking layer:
 
@@ -393,15 +563,20 @@ Additional decoder rules at the string/chunking layer:
 # For chunked input: reassembled bytecode's trailing <code>cross_chunk_hash</code> MUST equal <code>SHA-256(canonical_bytecode)[0..4]</code> (<code>Error::CrossChunkHashMismatch</code>).
 # 5-bit payload symbols, after BCH verification, MUST byte-align (<code>Error::MalformedPayloadPadding</code>).
 
-Note: an earlier draft had a rule rejecting <code>xpub.depth</code>-vs-path drift. Under the locked compact-73 form, <code>xpub.depth</code> is not carried on the wire; drift is impossible by construction.
+Note: an earlier draft had a decoder rule rejecting <code>xpub.depth</code>-vs-path drift. Under the locked compact-73 form, <code>xpub.depth</code> and <code>xpub.child_number</code> are not carried on the wire, so a decoder has nothing to compare and ''on-wire'' drift is impossible by construction — hence no decoder rule. The related hazard — a supplied xpub whose depth/child disagrees with <code>origin_path</code> — is closed at encode time by the '''encoder-side invariant''' in §"xpub encoding (compact-73)" (<code>Error::XpubOriginPathMismatch</code>), not by a decoder reject path.
 
 ===Linkage to MD and recovery flow===
 
-An MK card with policy-ID stubs <code>[stub_1, ..., stub_N]</code> declares: "this xpub is intended to serve any MD-encoded policy whose canonical-bytecode SHA-256 prefix matches one of these stubs."
+An MK card with policy-ID stubs <code>[stub_1, ..., stub_N]</code> declares: "this xpub is intended to serve any MD-encoded policy whose Policy ID stub matches one of these stubs." Each stub is the top 4 bytes of a '''form-aware''' md1 identity — '''not''' the encoding-sensitive md1 bytecode hash <code>SHA-256(canonical_bytecode)</code> (superseded; see the naming note, audit I1):
+
+* For a '''keyed''' wallet-policy md1 card, the stub is the top 4 bytes of the '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id(descriptor)</code>, md SPEC v0.13 §5.3).
+* For a '''keyless template''' md1 card (the <code>@N</code>-placeholder template form, no concrete cosigner keys), the stub is the top 4 bytes of the '''WalletDescriptorTemplateId''' — the key-stable template identity.
+
+The orchestrator computes the candidate stub from whichever md1 form it decoded (matching the reference <code>mk-cli</code> <code>derive_stub_from_md1</code> / the toolkit's <code>bundle_binding_stub</code>, toolkit #28) and compares it against the MK card's stubs.
 
 Recovery flow (the canonical sequence wallet software SHOULD follow):
 
-# Decode the MD policy card. Compute its full 16-byte Policy ID = the '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id(descriptor)</code>). Take the top 4 bytes as <code>policy_stub</code>.
+# Decode the MD policy card. Compute its full 16-byte identity — the '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id(descriptor)</code>) for a keyed wallet-policy card, or the '''WalletDescriptorTemplateId''' for a keyless template card. Take the top 4 bytes as <code>policy_stub</code>.
 # For each candidate MK card:
 ## Decode and extract its Policy ID stubs.
 ## Reject the card unless <code>policy_stub</code> matches one of its stubs.
@@ -477,7 +652,7 @@ The fingerprint reveals master-seed identity, which links the xpub on this card 
 
 ===Why not just use a Coldcard <code>.txt</code> multisig config?===
 
-Coldcard's multisig config is ASCII text, not BCH-checksummed. Engraving it on steel is feasible but the recovery story is "transcribe by hand and hope you got every character right." MK gives you BCH error-correction guarantees: up to 4 character substitutions per card recoverable in the regular code, 8 in the long code. For durable physical media that may degrade or be partially obscured, that's a meaningful difference.
+Coldcard's multisig config is ASCII text, not BCH-checksummed. Engraving it on steel is feasible but the recovery story is "transcribe by hand and hope you got every character right." MK gives you BCH error-correction guarantees: up to 4 character substitutions per string recoverable in '''both''' the regular and long codes (8 is the long code's error-detection radius, not correction). For durable physical media that may degrade or be partially obscured, that's a meaningful difference.
 
 ===Why not embed xpubs in the MD policy card?===
 
@@ -501,7 +676,7 @@ Yes — that's a primary design goal. A single cosigner's xpub backed up on one 
 
 ===Why not just engrave the BIP 32 xpub Base58Check string directly?===
 
-A Base58Check xpub is ~111 ASCII characters, with no error correction. MK's codex32-derived encoding is similar length but adds BCH error correction (4–8 character substitutions recoverable depending on code variant), HRP-mixed domain separation against accidental cross-format validation, and a structured payload that includes origin metadata and Policy ID stubs without a separate label.
+A Base58Check xpub is ~111 ASCII characters, with no error correction. MK's codex32-derived encoding is similar length but adds BCH error correction (up to 4 character substitutions recoverable, for both the regular and long code variants), HRP-mixed domain separation against accidental cross-format validation, and a structured payload that includes origin metadata and Policy ID stubs without a separate label.
 
 ==Backwards Compatibility==
 
@@ -511,7 +686,18 @@ MK is designed to coexist with MD: the two formats share the codex32 BCH plumbin
 
 ==Test Vectors==
 
-To be written alongside the v0.1 reference implementation. Vectors will follow the schema convention used by MD: a JSON file listing positive vectors (canonical encode/decode round-trips) and negative vectors (one per <code>Error</code> variant the decoder can produce), with family-stable SHA-256 anchoring under the token <code>mk-codec X.Y</code>. Patch-version bumps preserve byte-stable SHAs; minor-version bumps roll the token.
+The conformance corpus ships with the v0.1 reference implementation at <code>crates/mk-codec/src/test_vectors/v0.1.json</code> (surfaced by <code>mk vectors</code>). It follows the schema convention used by MD: a JSON file listing '''positive''' vectors (canonical encode/decode round-trips) and '''negative''' vectors (one per <code>Error</code> variant the decoder can produce).
+
+Each positive vector pins, at minimum:
+
+* the per-chunk <code>mk1</code> strings, in <code>chunk_index</code> order;
+* the <code>canonical_bytecode_hex</code> (the deterministic pre-chunking payload);
+* the deterministic <code>chunk_set_id</code> and <code>total_chunks</code>;
+* the decoder correction state (e.g. <code>clean</code>).
+
+The corpus covers 1-stub and multi-stub cards, mainnet and testnet (<code>tpub</code>), fingerprint-present and privacy (no-fingerprint) modes, standard-table and explicit-path origins, multi-chunk cards (including 3-chunk cards), and — added in this cycle — a '''depth-0 / no-path''' card exercising the <code>component_count == 0</code> rule (§"Origin path encoding"). Vector <code>V1_bip48_mainnet_1_stub_with_fp</code> is the card walked through in §"Checksum" above. The negative table pins one reject per decoder-reachable <code>Error</code> variant.
+
+The corpus is anchored by a family-stable SHA-256 under a token of the form <code>mk-codec X.Y</code>. '''Patch'''-version bumps preserve the byte-stable SHA; '''minor'''-version bumps roll the token. (Honesty note: the token tracks the decode-family, not the crate patch level. The v0.3 and v0.4 minor bumps '''missed''' their token rolls; this cycle corrects the token to <code>mk-codec 0.4</code> in the same regeneration that adds the depth-0 vector — that card decodes only under mk-codec v0.4.0+, so the corpus must not carry an older family token.) The exact pinned SHA-256 and the embedded per-vector values are those of the reference corpus as regenerated in this cycle.
 
 A pre-submission '''Error-variant ↔ negative-vector parity audit''' is required before formal BIP submission: every reject case in §"Decoder validity rules" MUST map to a uniquely-named <code>Error</code> variant in the reference crate, and every variant MUST have at least one planned negative test vector. This mirrors md-codec's 30-negative-vectors-one-per-Error-variant conformance contract.
 
