@@ -437,3 +437,37 @@ The `<short-id>` is a stable handle (e.g., `chunk-set-id-rename`, `nums-structur
 This repo commits a `vendor/` tree consumed by the `--offline --locked` reproducible build, but has NO leading PR-time check that it stays in sync with `Cargo.lock` — the same latent bug that broke `mnemonic-toolkit` **v0.74.0**'s reproducible release (a codec dep bump without `cargo vendor` → the tag-triggered repro build could not resolve, caught only at the release tag).
 
 - **Status:** ✓ **RESOLVED (2026-06-28)** — ported `ci/repro/vendor-freshness.sh` + `.github/workflows/vendor-freshness.yml` (TWO-block fork-free form; defensive git-source tripwire added so a future git dep fails closed rather than silently mis-resolving). Empirically verified FRESH→exit 0, STALE→exit 1 (vendor restored byte-clean); workflow runs on PR + push to the default branch, path-filtered. **Tier:** `ci`. **Companion:** `mnemonic-toolkit` `design/FOLLOWUPS.md::vendor-freshness-pr-gate` (RESOLVED there 2026-06-26) + `docs/verify-reproducibility.md`.
+
+### `impl-bch-erasure-decoding-md-mk` — port erasure-aware BCH decoding to mk1 (+ md1 companion), then re-upgrade the BIP MUST
+
+- **Surfaced:** 2026-07-10, cross-repo BIP-alignment cycle. Consolidated bug list `mnemonic-toolkit/design/BUGLIST_bip_alignment_cycle_2026-07-10.md` (downgrade-ledger DG-1); mk1 SPEC `design/SPEC_mk1_bip_alignment.md` §Part-2 C-I3. The mk1 BIP specified erasure-aware BCH decoding as MUST/REQUIRED (lines 145-146). Ground-truth check (this cycle): mk-codec does NOT implement it — `mk repair` (`bch.rs`) performs BCH **substitution**-error correction only (t=4, regular and long code). Erasure decoding exists ONLY in the separate `wc-codec` word-card RS layer, a different codec entirely. This cycle downgraded the BIP MUST → SHOULD/informative rather than ship a normative claim the reference decoder doesn't meet.
+- **Why:** shared `POLYMOD_INIT 0x23181b3` BCH construction (algorithm-identical to md1, HRP/target differ) means the code distance supports erasure correction in principle; the decoder just doesn't implement it. Port erasure-marking + erasure-aware decoding to mk-codec's `bch.rs`, then re-upgrade the BIP §Checksum text back to MUST. Fix in lockstep with the md1 companion leg (algorithm parity).
+- **Status:** OPEN.
+- **Tier:** `feature` / cross-repo.
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `impl-bch-erasure-decoding-md-mk` (md1 leg).
+
+### `impl-guided-recovery-md-mk` — implement guided/constrained-radius recovery search for mk1 (+ md1 companion), then re-upgrade the BIP
+
+- **Surfaced:** 2026-07-10, cross-repo BIP-alignment cycle (`mnemonic-toolkit/design/BUGLIST_bip_alignment_cycle_2026-07-10.md` DG-2; mk1 SPEC `design/SPEC_mk1_bip_alignment.md` §Part-2 C-I3, lines 145/150). The mk1 BIP specified guided/constrained-radius recovery search as REQUIRED/SHOULD-adjacent; ground truth: `mk repair` performs BCH substitution-correction only, no structure-elicited candidate search. Downgraded REQUIRED → SHOULD this cycle.
+- **Why:** mirrors the md1 companion gap exactly (`repair` does BCH correction, not guided search); `wc-codec`'s single-deletion candidate search (word-card feature) is the nearest prior art to adapt.
+- **Status:** OPEN.
+- **Tier:** `feature` / cross-repo.
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `impl-guided-recovery-md-mk` (md1 leg).
+
+### `impl-confidence-tier-reporting-md-mk` — implement 4-tier confidence/outcome/method reporting for mk1 repair (+ md1 companion), then re-upgrade the BIP
+
+- **Surfaced:** 2026-07-10, cross-repo BIP-alignment cycle (`mnemonic-toolkit/design/BUGLIST_bip_alignment_cycle_2026-07-10.md` DG-3; mk1 SPEC `design/SPEC_mk1_bip_alignment.md` §Part-2 C-I3). The mk1 BIP specified the same 4-tier confidence/outcome/method reporting ladder as MUST; ground truth: `mk repair` reports corrections but no tiers. Downgraded MUST → SHOULD this cycle.
+- **Why:** mirrors the md1 companion gap exactly; keep the honest substitution-correction reporting `mk repair` already does, ledger the tier ladder as future work.
+- **Status:** OPEN.
+- **Tier:** `feature` / cross-repo.
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `impl-confidence-tier-reporting-md-mk` (md1 leg).
+
+### `mk1-bip-presubmission-nits` — pre-submission nits for the mk1 BIP (V19 parent-fingerprint, pinned-SHA embedding, BCH notation sweep)
+
+- **Surfaced:** 2026-07-10, cross-repo BIP-alignment cycle (`mnemonic-toolkit/design/BUGLIST_bip_alignment_cycle_2026-07-10.md`; SPEC `design/SPEC_mk1_bip_alignment.md`). Three items deferred as pre-BIP-submission nits, not part of this cycle's alignment/honesty scope:
+  - **(a) V19 depth-0 vector's xpub carries a nonzero parent fingerprint** (`0x10203013`) at depth 0. BIP-32 mandates `0x00000000` for master (depth-0) key serializations. Fix: regenerate V19 with `parent_fp = 0` — this churns the V19 fixture AND the pinned corpus SHA-256 (`tests/vectors.rs V0_1_SHA256`, already re-pinned once this cycle for the C-C2 depth-0 vector addition — this nit would require a SECOND re-pin, so batch it into the same regeneration pass if possible).
+  - **(b) Embed the literal pinned corpus SHA-256 in the BIP §Test Vectors.** Currently the BIP references the corpus SHA as a floating pointer (cite the value, not just "see `tests/vectors.rs`") — an implementer verifying conformance should be able to check the corpus hash against a value printed IN the BIP text itself, not just in the source tree.
+  - **(c) Sweep `BCH(n,k,8)` notation to `BCH(n,k)`** across ~20 mk-codec source-comment / design-doc sites. The BIP's own normative text was already corrected this cycle (minimum distance d≥9; "8" is the *detection* radius, not a code parameter) — see F-A6/MK1-I2 (`error.rs:57`, lines 29/480/504 of the BIP). This item is the mechanical sweep of the STALE `BCH(n,k,8)` shorthand across the remaining source-comment and design-doc sites that weren't touched by this cycle's targeted fixes.
+- **Why deferred:** (a) and (b) are pre-BIP-submission polish, not correctness bugs in shipped code (V19 decodes fine; it's a documentation/test-vector-hygiene nit against BIP-32's own MUST). (c) is pure notation cleanup, batchable with any future doc pass rather than urgent.
+- **Status:** OPEN. Tier `pre-bip-submission` per this repo's existing tier convention — MUST be resolved before formal BIP submission, not blocking any release.
+- **Tier:** `pre-bip-submission`.
