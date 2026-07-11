@@ -331,3 +331,55 @@ fn encode_emits_both_slip132_note_and_watchonly_advisory() {
         "SLIP-0132 note (offset {slip_offset}) must precede watch-only advisory (offset {watch_offset})"
     );
 }
+
+// ── T4-c: closes FOLLOWUP `mk-slip0132-byte-parity-test-self-referential` ────
+//
+// `slip132_version_bytes_match_slip0132` (in-crate `src/slip132.rs` unit test)
+// self-referentially builds its own SLIP-0132 byte string by re-versioning a
+// corpus xpub with a LOCAL constant, then checks `detect_and_normalize`
+// against that SAME local constant — a coordinated edit to both the test's
+// byte array and the production match arm would stay green (FOLLOWUP option
+// (b) concern). Option (a)'s remedy: anchor on a PUBLISHED extended-key
+// string whose version bytes are fixed by the real SLIP-0132/BIP-84 spec,
+// not by any constant in this repo, so a coordinated edit cannot fake it.
+//
+// mk-cli is bin-only (no lib target) — `detect_and_normalize` cannot be
+// called directly from an external integration test. This test instead
+// observes equivalent behavior through the CLI: normalizing the PUBLISHED
+// BIP-84 zpub via `mk encode --xpub` must agree, field-for-field, with
+// independently re-versioning that SAME published string's own base58check
+// payload to canonical xpub bytes (`to_slip132`, run in the opposite
+// direction) — a check tied to the published string's own bytes, not to a
+// separately-sourced corpus xpub.
+
+/// Published BIP-84 account zpub (m/84'/0'/0'), mnemonic `abandon ... about`.
+/// Source: https://raw.githubusercontent.com/bitcoin/bips/master/bip-0084.mediawiki
+/// "Test vectors". Re-verified character-for-character against the live BIP
+/// text 2026-07-10.
+const BIP84_PUBLISHED_ZPUB: &str = "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs";
+/// BIP-32 mainnet xpub version prefix (`0x0488B21E`, "xpub").
+const XPUB_MAINNET_V: [u8; 4] = [0x04, 0x88, 0xB2, 0x1E];
+
+#[test]
+fn published_bip84_zpub_normalizes_and_matches_own_version_swap() {
+    // Independently byte-swap the PUBLISHED zpub's own payload to canonical
+    // xpub version bytes — not a re-versioned corpus xpub, so this cannot
+    // "cancel" against a coordinated edit to detect_and_normalize's table
+    // the way the in-crate self-referential test's local-constant pair can.
+    let canonical_via_manual_swap = to_slip132(BIP84_PUBLISHED_ZPUB, XPUB_MAINNET_V);
+
+    let (encoded_out, from_zpub_card) = run_encode_decode(BIP84_PUBLISHED_ZPUB);
+    let stderr = String::from_utf8(encoded_out.stderr).unwrap();
+    assert!(
+        stderr.contains(NOTE_ZPUB),
+        "missing SLIP-0132 note for the published zpub; stderr={stderr}"
+    );
+
+    let (_, from_manual_card) = run_encode_decode(&canonical_via_manual_swap);
+    assert_eq!(
+        from_zpub_card.xpub, from_manual_card.xpub,
+        "mk-cli's SLIP-0132 zpub normalization of the PUBLISHED BIP-84 zpub must \
+         agree with an independently byte-swapped canonical form of that SAME \
+         published key"
+    );
+}
