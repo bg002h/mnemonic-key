@@ -1,5 +1,5 @@
 {
-  "family_token": "mk-codec 0.2",
+  "family_token": "mk-codec 0.4",
   "schema": 2,
   "vectors": [
     {
@@ -437,6 +437,30 @@
         "xpub": "tpubDE2Qenr6qBXK1se4WMS4kLWYdagfrVNReHcQYttb83tubmckiGFfWqFD7HMUQn7BsBzMozYvq32AQaEbUzf9W7V4QcafQszJxt2WHWawg73"
       },
       "name": "V18_bip48_nested_segwit_testnet_1_stub_with_fp"
+    },
+    {
+      "description": "1-stub mainnet, depth-0 / no-path root key (empty origin path, e.g. an xpub built from a raw WIF or a master key), fingerprint present. Exercises the component_count == 0 rule (mk-codec v0.4.0+): encodes via the 0xFE explicit escape with count 0 and reconstructs depth=0, child_number=Normal{0}.",
+      "expected": {
+        "canonical_bytecode_hex": "0401d00d0000d00dcafefe000488b21e10203013b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9031d16453b3ab3132acb0a5bc16cc49690d819a585267a15cd5a064e2a0ad40599",
+        "decoder_correction": "clean",
+        "strings": [
+          "mk1qpxj4upqqsqaqrgqqrgqmjh7lcqqfz9jrcgzqvqnhxumnwdehxumnwdehxumnwdehxumnwdehxumnwdehxumnwdehxusxmhwmsfgvuych885",
+          "mk1qpxj4uppr5ty2we6kvfj4jc2t0qke3ykjrvpnfv9yeaptn26qe8z5zk5qkvemxlyyvf30q3eq7yx5nv"
+        ],
+        "total_chunks": 2
+      },
+      "expected_error": null,
+      "input": {
+        "chunk_set_id": 215740,
+        "network": "mainnet",
+        "origin_fingerprint": "d00dcafe",
+        "origin_path": "m/",
+        "policy_id_stubs": [
+          "d00d0000"
+        ],
+        "xpub": "xpub668EhQxUcMQqSjymSuhyZyXcFCMpr8GkVFJfnQPsNE3qTbmTpGe6Ao2YpyK3xsssmhcSAi7STG9oSpxU22ZVYLFT4tf7PcrGAFwisxJtFoZ"
+      },
+      "name": "V19_depth0_no_path_mainnet_1_stub_with_fp"
     },
     {
       "description": "HRP `bt` is not the locked `mk` HRP; decoder rejects before any data-part processing.",

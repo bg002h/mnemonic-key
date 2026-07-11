@@ -365,6 +365,29 @@ fn fixtures() -> Vec<FixtureSpec> {
             seed_byte: 0x12,
             chunk_set_id: 0x239AB,
         },
+        // V19 — depth-0 / no-path card (F-V-mk). Added this cycle to exercise
+        // the `component_count == 0` rule (mk-codec v0.4.0+): an empty origin
+        // path (a root / non-HD key, e.g. an xpub built from a raw WIF or a
+        // master key) encodes via the 0xFE explicit escape with count 0 (the
+        // two bytes 0xFE 0x00) and reconstructs `depth = 0`,
+        // `child_number = Normal{0}`. Older decoders rejected `count == 0` as
+        // PathTooDeep(0). This is the vector the BIP §"Test Vectors" references;
+        // its addition rolled the family token to "mk-codec 0.4" in the same
+        // regeneration (the card decodes only under v0.4.0+).
+        clean_fixture! {
+            name: "V19_depth0_no_path_mainnet_1_stub_with_fp",
+            description: "1-stub mainnet, depth-0 / no-path root key (empty origin \
+                 path, e.g. an xpub built from a raw WIF or a master key), \
+                 fingerprint present. Exercises the component_count == 0 rule \
+                 (mk-codec v0.4.0+): encodes via the 0xFE explicit escape with \
+                 count 0 and reconstructs depth=0, child_number=Normal{0}.",
+            policy_id_stubs: vec![[0xD0, 0x0D, 0x00, 0x00]],
+            origin_fingerprint: Some([0xD0, 0x0D, 0xCA, 0xFE]),
+            origin_path: "",
+            network: NetworkKind::Main,
+            seed_byte: 0x13,
+            chunk_set_id: 0x34ABC,
+        },
         // ── Negative vectors N1..N23 (closing decoder-error-variant-parity) ──
         //
         // One per `Error` variant reachable from `mk_codec::decode`'s

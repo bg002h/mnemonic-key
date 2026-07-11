@@ -182,15 +182,24 @@ pub const GEN_REGULAR: [u128; 5] = [
 /// `ms32_long_polymod` seed before processing any input — shared byte-for-byte
 /// with md1 (`md-codec`'s `bch::POLYMOD_INIT`).
 ///
-/// It is deliberately **NOT** codex32/BIP-93's initial residue: the BIP-93
-/// reference `ms32_polymod` starts from `1`, not `0x23181b3`. Only `ms1` uses
-/// `1`, because its checksum must agree with the *external* rust-codex32
-/// engine. Sharing a non-`1` init with md1 is harmless: each of mk1's regular +
-/// long codes is self-contained (the same init seeds both checksum-create and
-/// verify), so the init's contribution cancels and a valid codeword's residue
-/// equals its per-HRP target at every length, for any fixed init. Domain
-/// separation is carried by the per-HRP target constants (`MK_REGULAR_CONST` /
-/// `MK_LONG_CONST`) + the HRP — never by this init. The reverted ms-codec
+/// This value (`0x23181b3`) **IS** codex32/BIP-93's published `ms32_polymod`
+/// initial residue verbatim: the reference `ms32_polymod` seeds its accumulator
+/// with exactly this constant, and [`GEN_REGULAR`] / [`GEN_LONG`] are BIP-93's
+/// `ms32` / `ms32_long` generators term for term. (It is **not** bech32/BIP-173's
+/// init `1`; that init belongs to a different code. An earlier note here
+/// claiming this was "deliberately NOT codex32's init" and that "the BIP-93
+/// reference `ms32_polymod` starts from `1`, not `0x23181b3`" was wrong.)
+/// md1 and mk1 seed this init literally. `ms1` (`ms-codec`) uses the
+/// mathematically **equivalent** formulation — codex32's literal `1` init with
+/// an `hrp_expand("ms")` prepend — because `0x23181b3` is exactly the fold of
+/// `hrp_expand("ms")` from `1`; a raw constant-diff against `ms-codec`'s
+/// `POLYMOD_INIT = 0x1` is therefore NOT a discrepancy. Sharing this init with
+/// md1 is harmless: each of mk1's regular + long codes is self-contained (the
+/// same init seeds both checksum-create and verify), so the init's contribution
+/// cancels and a valid codeword's residue equals its per-HRP target at every
+/// length, for any fixed init. Domain separation is carried by the per-HRP
+/// target constants (`MK_REGULAR_CONST` / `MK_LONG_CONST`) + the HRP — never by
+/// this init. The reverted ms-codec
 /// v0.2.1 bug was a non-codex32 init *paired with* an empirically-miscalibrated
 /// target diverging from codex32 across lengths, not this value being
 /// intrinsically length-variant; see

@@ -46,8 +46,12 @@ pub const CROSS_CHUNK_HASH_BYTES: usize = 4;
 
 /// Family-stable generator string (closure Q-10) for vector-corpus
 /// SHA-256 anchoring. Patch-version bumps don't roll the token; minor-
-/// or major-version bumps do.
-pub const GENERATOR_FAMILY: &str = "mk-codec 0.2";
+/// or major-version bumps do. (Honesty note: the v0.3 and v0.4 minor
+/// bumps missed their token rolls; this token was corrected to
+/// `"mk-codec 0.4"` in the same regeneration that added the depth-0
+/// vector — that vector decodes only under mk-codec v0.4.0+, so the
+/// corpus must not carry an older family token.)
+pub const GENERATOR_FAMILY: &str = "mk-codec 0.4";
 
 /// Compact-73 xpub byte size (closure Q-7).
 pub const XPUB_COMPACT_BYTES: usize = 73;

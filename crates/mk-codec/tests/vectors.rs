@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e67f120d78ff";
+const V0_1_SHA256: &str = "31159c165c57f01d6c404e5f74505519a43aedb9ae555c37720379815e6a8169";
 
 /// On-disk path to the canonical mk-codec vector corpus.
 ///
@@ -48,10 +48,12 @@ const V0_1_SHA256: &str = "ebd8f34d8d52896e07e1faef995f18ffa61d42e2a048fb2a8c11e
 /// the token; patches don't), but the on-disk filename stays
 /// `v0.1.json` to keep cross-repo / cross-implementation tooling
 /// pointing at a single artifact location regardless of which family
-/// the token has rolled to. mk-codec v0.2+ corpora carry
-/// `family_token: "mk-codec 0.2"` while still living at this path;
-/// v0.1.x corpora carried `"mk-codec 0.1"` at the same path. md-codec
-/// follows the same convention for its own vector file.
+/// the token has rolled to. This cycle's corpus carries
+/// `family_token: "mk-codec 0.4"` (the v0.3/v0.4 minor bumps missed their
+/// token rolls; corrected here in the same regeneration that added the
+/// depth-0 vector) while still living at this path; earlier corpora
+/// carried `"mk-codec 0.2"` (v0.2.x) and `"mk-codec 0.1"` (v0.1.x) at the
+/// same path. md-codec follows the same convention for its own vector file.
 const VECTOR_FILE: &str = "src/test_vectors/v0.1.json";
 
 fn vector_file_path() -> PathBuf {
@@ -128,7 +130,7 @@ fn schema_metadata_pinned() {
     assert_eq!(doc["schema"], Value::from(2u64), "schema version drift");
     assert_eq!(
         doc["family_token"].as_str().unwrap_or(""),
-        "mk-codec 0.2",
+        "mk-codec 0.4",
         "family_token drift — see consts.rs::GENERATOR_FAMILY"
     );
 }
@@ -161,7 +163,7 @@ fn every_vector_round_trips() {
         }
     }
 
-    // Pin v0.1.1's vector counts as floors (17 clean + 22 negative = 39).
+    // Pin v0.1.1's vector counts as floors (19 clean + 22 negative = 41).
     // The `>=` form lets v0.1.x patch releases add vectors without
     // breaking the harness; tightening to `==` is a v0.2-grade decision.
     assert!(clean_count >= 18, "clean-vector count regressed");

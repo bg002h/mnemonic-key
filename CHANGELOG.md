@@ -5,6 +5,14 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-07-10
+
+**SemVer-patch — BIP-alignment cycle: docs + one new test vector. No wire or runtime-behavior change.**
+
+- Added a depth-0 / no-path test vector (V19); `GENERATOR_FAMILY` rolled to `mk-codec 0.4` (completing v0.4.0's missed roll). V1–V18 byte-identical.
+- Comment corrections: `bch.rs` POLYMOD_INIT narrative (`0x23181b3` IS BIP-93's `ms32_polymod` init verbatim); correction capacity is `t=4` for both codes (8 is the detection radius, minimum distance ≥ 9); 0x16 tag-status note.
+- mk1 BIP (`bip/bip-mnemonic-key.mediawiki`) aligned: added the previously-absent normative §Checksum (with a worked V1 example), the depth-0 `0..=10` rule, the embedded corpus, and honest erasure/guided-recovery/confidence downgrades.
+
 ## [0.4.1] — 2026-06-26
 
 **SemVer-PATCH — purely additive.** Adds two `pub fn`s on `KeyCard` for downstream

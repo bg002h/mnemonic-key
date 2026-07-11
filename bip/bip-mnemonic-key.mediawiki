@@ -263,8 +263,8 @@ The alphabet excludes <code>1</code>, <code>b</code>, <code>i</code>, <code>o</c
 
 Same chunk-length conventions as MD (mirroring [https://github.com/bg002h/descriptor-mnemonic/blob/main/bip/bip-mnemonic-descriptor.mediawiki MD §"Length envelope"]):
 
-* '''Regular code''' (BCH(93, 80, 8)): total data lengths up to and including 93 characters; 13-character checksum. Capacity: 48 bytes single-string payload, 45 bytes per chunked fragment.
-* '''Long code''' (BCH(108, 93, 8)): total data lengths from 96 through 108 characters; 15-character checksum. Capacity: 56 bytes single-string payload, 53 bytes per chunked fragment.
+* '''Regular code''' (BCH(93, 80)): total data lengths up to and including 93 characters; 13-character checksum. Capacity: 48 bytes single-string payload, 45 bytes per chunked fragment.
+* '''Long code''' (BCH(108, 93)): total data lengths from 96 through 108 characters; 15-character checksum. Capacity: 56 bytes single-string payload, 53 bytes per chunked fragment.
 
 Total data length 94–95 is invalid and MUST be rejected.
 
@@ -272,13 +272,13 @@ Maximum 32 chunks per MK card. With long-code chunked encoding plus the 4-byte c
 
 ====Error-correction guarantees====
 
-Both codes are BCH codes of minimum distance 8. The normative correction guarantee is:
+Both codes are BCH codes with minimum distance ≥ 9 (which is what permits both t = 4 substitution correction and detection of any error pattern affecting up to 8 characters; "8" is the detection radius, '''not''' the minimum distance). The normative correction guarantee is:
 
-* '''Correction of up to 4 character substitutions''' (both codes; the full <code>t = 4</code> capacity of BCH(93,80,8) and BCH(108,93,8)). Conformant decoders MUST correct any received string within Hamming distance 4 of a valid codeword.
+* '''Correction of up to 4 character substitutions''' (both codes; the full <code>t = 4</code> capacity of BCH(93,80) and BCH(108,93)). Conformant decoders MUST correct any received string within Hamming distance 4 of a valid codeword.
 
 Detection and erasure behaviour follow from the minimum distance and are informative code-capability notes, '''not''' v0.1 conformance requirements:
 
-* Detection of any error pattern affecting up to 8 characters within a single string (a distance-8 property).
+* Detection of any error pattern affecting up to 8 characters within a single string (a detection radius of 8, following from the minimum distance ≥ 9).
 * The code distance would in principle permit correction of up to 8 erasures (positions known to be damaged), or up to 13 (regular) / 15 (long) consecutive erasures (burst damage), if an erasure-aware decoder were implemented. '''The mk-codec reference implements no erasure decoding''': <code>decode_string</code> rejects any non-alphabet character (<code>Error::InvalidChar</code>), so an erasure position cannot even be marked on input. Erasure and burst correction are therefore capabilities of the code, not guarantees of any conforming v0.1 decoder. See FOLLOWUP <code>impl-bch-erasure-decoding-md-mk</code>.
 
 Detection of error patterns affecting more than 8 characters is probabilistic. The expected probability that a randomly damaged string of more than 8 errors decodes to a valid codeword is bounded by approximately 2<sup>−65</sup> (regular code) or 2<sup>−75</sup> (long code).

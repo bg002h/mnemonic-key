@@ -54,7 +54,12 @@ pub enum Error {
     },
 
     /// BCH checksum could not be corrected within the per-code-variant
-    /// substitution capacity (4 for regular, 8 for long).
+    /// substitution-correction capacity: 4 substitutions for both the
+    /// regular and the long code (`t = 4`). The `8` is the *detection*
+    /// radius (the codes' minimum distance is ≥ 9 — which is what permits
+    /// t = 4 correction AND detection of up to 8 substitutions), not a
+    /// correction capacity; an earlier note saying "8 for the long code"
+    /// conflated detection with correction.
     #[error("BCH uncorrectable: {0}")]
     BchUncorrectable(String),
 
@@ -112,9 +117,13 @@ pub enum Error {
     InvalidPolicyIdStubCount,
 
     /// Origin-path indicator byte is outside the standard table or in the
-    /// reserved range. (Per SPEC §3.5: 0x00, 0x08-0x10, 0x16, 0x18-0xFD,
-    /// 0xFF are reserved; 0x16 is reserved pending md1 dictionary update,
-    /// see FOLLOWUPS `md-path-dictionary-0x16-gap`.)
+    /// reserved range. (Per SPEC §3.5 the reserved indicators are 0x00,
+    /// 0x08-0x10, 0x18-0xFD, and 0xFF. 0x16 — BIP 48 testnet nested-segwit
+    /// multisig, `m/48'/1'/0'/1'` — was reserved-pending an md1 dictionary
+    /// update in v0.1.x but has been ASSIGNED since v0.2.0; see
+    /// `bytecode::path::STANDARD_PATHS` and FOLLOWUPS
+    /// `md-path-dictionary-0x16-gap` (resolved by md-codec-v0.9.0 +
+    /// mk-codec-v0.2.0).)
     #[error("invalid path indicator byte: 0x{0:02x}")]
     InvalidPathIndicator(u8),
 

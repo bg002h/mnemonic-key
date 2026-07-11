@@ -7,6 +7,8 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] — 2026-07-10 — SemVer-patch; consumes mk-codec 0.4.2 (docs + depth-0 vector; no wire/behavior change).
+
 ## [0.11.2] — 2026-06-23
 
 **SemVer-PATCH — musl static-binary release asset + musl build/test CI leg. Ships the first fully-static, dependency-free `mk` Linux binaries (`x86_64-unknown-linux-musl` + `aarch64-unknown-linux-musl`) as GitHub-release tarballs on the `mk-cli-v*` tag, each with a per-arch `SHA256SUMS.<arch>` for offline / air-gapped verification. Also adds a musl compile/test CI leg to `ci.yml` (a separate `musl-check` job) and a dedicated `musl-binaries.yml` workflow triggered ONLY on `mk-cli-v*` (NOT the `mk-codec-v*` codec tag, so a pure codec tag does not build a CLI binary). `mk-codec` UNTOUCHED. No crate source / API / CLI-flag / subcommand change. NOT published to crates.io (binary-asset-only PATCH; the tag ships the binary). The shipped guarantee is *static + checksummed*, not bit-for-bit reproducible.**
