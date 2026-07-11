@@ -79,14 +79,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Both mk targets join the daily smoke: local bring-up (>=60s each,
-        # seeded) found NO crash on either, so neither stands red. (If a future
+        # All three mk targets join the daily smoke: local bring-up (>=60s
+        # each, seeded) found NO crash on any, so none stands red. (If a future
         # finding lands, hold the crashing target out of THIS matrix while
         # keeping it in the `build` compile gate above, and cite the FOLLOWUP —
         # the treatment the ms phase used for ms1_decode.)
         target:
           - mk1_decode
           - mk1_decode_single
+          - mk1_bch_correct_never_invalid
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned nightly

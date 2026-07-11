@@ -53,3 +53,10 @@ path = "fuzz_targets/mk1_decode_single.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "mk1_bch_correct_never_invalid"
+path = "fuzz_targets/mk1_bch_correct_never_invalid.rs"
+test = false
+doc = false
+bench = false
