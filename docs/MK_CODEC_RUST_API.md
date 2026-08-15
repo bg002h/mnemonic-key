@@ -29,7 +29,14 @@ pub use consts::{
 };
 pub use error::{Error, Result};
 pub use key_card::{KeyCard, decode, encode, encode_with_chunk_set_id};
+pub use string_layer::derive_chunk_set_id;
 ```
+
+`derive_chunk_set_id(canonical_bytecode: &[u8]) -> u32` (new in 0.5.0) is the
+rule `encode` applies by default: the top 20 bits of
+`SHA-256(canonical_bytecode)`, MSB-first. It is exposed so a caller can predict
+or reproduce an encoding's `chunk_set_id` without re-encoding. See DECISIONS
+D-16 for why the default is derived rather than drawn from entropy.
 
 ## Encoding an mk1 card from a `KeyCard`
 

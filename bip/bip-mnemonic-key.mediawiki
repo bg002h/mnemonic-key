@@ -37,7 +37,7 @@ MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same
 * '''Policy ID''' (a.k.a. '''WalletPolicyId'''): the 16-byte canonical-''expanded'' policy identity <code>md_codec::compute_wallet_policy_id(descriptor)</code> (md SPEC v0.13 §5.3), an encoder-divergence-free hash of an MD-encoded policy ''template'' — placeholders + shared path, not the concrete cosigner xpubs (a one-to-many relationship to actual wallets, not a wallet instance). It '''supersedes''' the earlier v0.8.0 "Policy ID" = <code>SHA-256(canonical_bytecode)[0..16]</code> (the encoding-sensitive md1 bytecode hash <code>Md1EncodingId</code>, itself renamed from "wallet ID" in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]); the bytecode hash predated WalletPolicyId and is not stable under re-encoding the same logical wallet. See the naming note below (audit I1, 2026-06-10).
 * '''Policy ID stub''': the top 4 bytes of a Policy ID. Carried by MK cards as an indexing aid.
 * '''Wallet Instance ID''': the derived 16-byte value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]'s BIP for cross-tool consistency. Recovery tools compute it on demand from policy + assembled xpubs.
-* '''<code>chunk_set_id</code>''': a 20-bit per-encoding random tag carried in the chunked-string header, used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec v0.8.x originally called this field "wallet identifier"; [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0 md-codec v0.9.0] renamed it to <code>chunk_set_id</code> across both the BIP draft and the reference implementation. Wire format unchanged.)
+* '''<code>chunk_set_id</code>''': a 20-bit per-encoding tag carried in the chunked-string header, derived from the payload (see below), used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec v0.8.x originally called this field "wallet identifier"; [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0 md-codec v0.9.0] renamed it to <code>chunk_set_id</code> across both the BIP draft and the reference implementation. Wire format unchanged.)
 
 ===Naming note (Policy ID vs Wallet Instance ID, and <code>chunk_set_id</code>)===
 
@@ -301,7 +301,7 @@ Mirrors MD exactly. Two variants:
 <pre>
   char 0:    version          (5 bits)
   char 1:    type = 0x01      (5 bits)   — Chunked
-  chars 2-5: chunk_set_id     (20 bits, random per-encoding)
+  chars 2-5: chunk_set_id     (20 bits, derived per-encoding)
   char 6:    total_chunks     (5 bits, semantic range 1..=32, encoded as count − 1)
   char 7:    chunk_index      (5 bits, range 0..total_chunks)
 </pre>
@@ -312,15 +312,17 @@ Mirrors MD exactly. Two variants:
 
 <code>chunk_set_id</code> is opaque to the format; its only purpose is mismatch detection during reassembly within a single chunk set. Decoders MUST accept any 20-bit value; the field is not subject to interop validation beyond the within-set mismatch check.
 
-Encoders generating fresh cards MAY draw <code>chunk_set_id</code> from a cryptographically secure random source. Encoders producing reproducible output across cold runs (engraving toolkits, regression-pinned vector corpora, deterministic test fixtures) SHOULD instead derive <code>chunk_set_id</code> from a stable cross-card binding identifier — for example, the leading 20 bits of the first <code>policy_id_stub</code>:
+Encoders MUST reuse the same <code>chunk_set_id</code> for every re-encoding of the same card. Re-encoding a card is not a new card, and output that changes under a repeat encode cannot be compared against an independent implementation, SHA-pinned as a fixture, or re-derived years later from the same inputs.
+
+The conforming ''stateless'' way to satisfy that is to derive the value from the payload, since a stateless encoder has nowhere to keep a value chosen at some earlier "first" encoding. The reference implementation takes the '''top 20 bits of <code>SHA-256(canonical_bytecode)</code>''', MSB-first — the hash the chunk layer already computes for the cross-chunk integrity suffix, so the derivation costs nothing:
 
 <pre>
-  chunk_set_id = (stub[0] << 12) | (stub[1] << 4) | (stub[2] >> 4)
+  chunk_set_id = (h[0] << 12) | (h[1] << 4) | (h[2] >> 4)     where h = SHA-256(canonical_bytecode)
 </pre>
 
-Either choice is interop-equivalent — the field is opaque — and the deterministic option lets downstream toolkits SHA-pin their fixture corpora.
+Deriving from the '''whole payload''' is what gives distinct cards distinct <code>chunk_set_id</code>s with no further help. A formula reading only one field — say the leading bits of the first <code>policy_id_stub</code> — collides across every card sharing that field, which in a multisig bundle is typically all of them.
 
-Note (toolkit slot-XOR): the reference bundling toolkit derives per-card <code>chunk_set_id</code> values by XORing the cosigner '''slot index''' into the derivation, so that distinct cosigner cards in one bundle get distinct <code>chunk_set_id</code>s. The plain formula above therefore reproduces the toolkit's value only for '''slot 0'''; for slot <code>s</code> the toolkit's value is the formula XOR a slot-derived term. This does not affect interop (the field is opaque and only mismatch-checked within a single card's chunk set), but a reader reproducing a specific toolkit-emitted card byte-for-byte must apply the same slot XOR.
+An encoder MAY carry a value chosen some other way, including one drawn from a cryptographically secure random source, provided it then reuses that value for every re-encoding of the card. Any choice is interop-equivalent: the field is opaque, decoders MUST accept any 20-bit value, and it is mismatch-checked only within a single card's chunk set.
 
 Chunk-type byte assignments:
 

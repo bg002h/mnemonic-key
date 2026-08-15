@@ -5,6 +5,36 @@ All notable changes to `mk-codec` will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-14
+
+**SemVer-minor — `encode()` output for chunked cards changes. Wire LAYOUT is untouched and interop is unaffected; what changes is which 20-bit value lands in the opaque `chunk_set_id` field.**
+
+### Changed
+
+- **`chunk_set_id` is now DERIVED from the payload instead of drawn from entropy.** `encode()` takes the top 20 bits of `SHA-256(canonical_bytecode)`, MSB-first — the hash the chunk layer already computes for its cross-chunk integrity suffix. Encoding the same card twice now produces byte-identical strings.
+
+  SPEC §2.5 already required an encoder to "reuse the same value for all subsequent re-encodings of the same card", and a *stateless* encoder cannot honour that by drawing fresh entropy per call — it has nowhere to keep the value chosen at first encoding. Measured 2026-08-14: three `mk encode` invocations on identical inputs emitted three different cards. The BIP draft had already blessed derivation for "engraving toolkits, regression-pinned vector corpora, deterministic test fixtures"; the reference implementation simply never did it. See DECISIONS **D-16**.
+
+  The rule matches the sibling format — md-codec's `derive_chunk_set_id` extracts the top 20 bits of its payload hash by the same MSB-first rule — and deriving from the *whole* payload (rather than from one field such as the first `policy_id_stub`) is what gives distinct cards distinct ids with no slot-XOR patch on top.
+
+- `GENERATOR_FAMILY` rolled to `mk-codec 0.5`; the corpus `family_token` follows and `V0_1_SHA256` is re-pinned. **All 41 vectors are byte-identical** — the corpus diff is that one metadata line — because every chunked vector already pins its `chunk_set_id` explicitly through `encode_with_chunk_set_id`.
+
+### Added
+
+- `mk_codec::derive_chunk_set_id(canonical_bytecode: &[u8]) -> u32`, re-exported at the crate root.
+- `mk encode --chunk-set-id <HEX>` (`0x` prefix optional) pins the value explicitly; a value over 20 bits is refused rather than truncated.
+
+### Removed
+
+- The `getrandom` dependency. mk-codec no longer links a randomness source, and `encode()` can no longer panic on an unavailable OS CSPRNG.
+
+### Compatibility
+
+- **Decoders: unaffected.** The field is opaque, any 20-bit value MUST be accepted, and it is mismatch-checked only within one card's chunk set.
+- **`encode_with_chunk_set_id`: unchanged**, and still overrides the derived default.
+- **`mnemonic-toolkit`: output unaffected** — it pins ids explicitly via `derive_mk1_chunk_set_id_for_slot`.
+- **Cross-implementation byte-identity is now achievable**, which is what motivated the change: the SeedHammer II fork's independent Go port has always derived `top20(sha256(bytecode))`, and `tests/chunk_set_id_determinism.rs` pins two of its engraved chunks as a conformance vector.
+
 ## [0.4.2] — 2026-07-10
 
 **SemVer-patch — BIP-alignment cycle: docs + one new test vector. No wire or runtime-behavior change.**

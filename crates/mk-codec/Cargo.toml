@@ -1,6 +1,6 @@
 [package]
 name = "mk-codec"
-version = "0.4.2"
+version = "0.5.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -30,7 +30,6 @@ required-features = ["gen-vectors"]
 [dependencies]
 bitcoin = "0.32"
 bech32 = "0.11"
-getrandom = "0.2"
 thiserror = "2.0"
 # Optional — only present when the `gen-vectors` feature is enabled.
 serde_json = { version = "1", optional = true }

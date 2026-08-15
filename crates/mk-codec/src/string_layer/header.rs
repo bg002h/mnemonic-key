@@ -45,8 +45,9 @@ pub enum StringLayerHeader {
     Chunked {
         /// 5-bit format version (`0` in v0.1).
         version: u8,
-        /// 20-bit per-encoding random tag for reassembly mismatch
-        /// detection. Decoders compare across chunks; mismatch is
+        /// 20-bit per-encoding tag for reassembly mismatch detection,
+        /// derived from the payload by
+        /// [`derive_chunk_set_id`][crate::derive_chunk_set_id]. Decoders compare across chunks; mismatch is
         /// rejected with [`Error::ChunkSetIdMismatch`].
         chunk_set_id: u32,
         /// Total number of chunks in this set, in `1..=MAX_CHUNKS`.

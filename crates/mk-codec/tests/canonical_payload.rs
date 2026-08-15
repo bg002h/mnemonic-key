@@ -6,7 +6,7 @@
 //!
 //! - [`KeyCard::canonical_payload_bytes`] — the canonical bytecode, byte-
 //!   for-byte equal to the corpus's `expected.canonical_bytecode_hex` and
-//!   independent of the per-encode random `chunk_set_id` (string layer).
+//!   independent of the `chunk_set_id` framing (string layer).
 //! - [`KeyCard::from_canonical_payload_bytes`] — reverses it.
 //!
 //! These mirror the lower-level `bytecode::encode_bytecode` /
@@ -186,7 +186,7 @@ fn canonical_payload_is_chunk_set_id_invariant() {
 
     assert_eq!(
         payload_a, payload_b,
-        "canonical payload must be invariant to the random chunk_set_id framing"
+        "canonical payload must be invariant to the chunk_set_id framing"
     );
 }
 

@@ -49,3 +49,4 @@ pub use consts::{
 };
 pub use error::{Error, Result};
 pub use key_card::{KeyCard, decode, encode, encode_with_chunk_set_id};
+pub use string_layer::derive_chunk_set_id;

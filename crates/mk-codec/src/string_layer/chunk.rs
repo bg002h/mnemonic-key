@@ -21,6 +21,95 @@ use crate::string_layer::header::{MAX_CHUNK_SET_ID, StringLayerHeader, VERSION_V
 pub const MAX_CHUNKABLE_BYTECODE: usize =
     (MAX_CHUNKS as usize) * CHUNKED_FRAGMENT_LONG_BYTES - CROSS_CHUNK_HASH_BYTES;
 
+/// Derive the 20-bit `chunk_set_id` deterministically from canonical bytecode.
+///
+/// Takes the top 20 bits of `SHA-256(canonical_bytecode)`, MSB-first — the same
+/// hash [`split_into_chunks`] already computes for the cross-chunk integrity
+/// suffix, so this introduces no new hashing.
+///
+/// # Why derive rather than randomise
+///
+/// SPEC §2.5 requires an encoder to "reuse the same value for all subsequent
+/// re-encodings of the same card". A stateless encoder has nowhere to keep the
+/// value chosen at first encoding, so drawing fresh entropy per call cannot
+/// satisfy that clause — it produces a different card on the wire every time.
+/// Deriving from the payload satisfies it exactly and statelessly.
+///
+/// The bit-extraction mirrors the sibling format: `md-codec`'s
+/// `derive_chunk_set_id` takes the top 20 bits of its payload hash MSB-first,
+/// and so does this. Two formats that engrave together should not disagree
+/// about how an opaque grouping tag is chosen.
+///
+/// Callers needing a specific value keep
+/// [`encode_with_chunk_set_id`][crate::encode_with_chunk_set_id].
+pub fn derive_chunk_set_id(canonical_bytecode: &[u8]) -> u32 {
+    let hash = sha256::Hash::hash(canonical_bytecode).to_byte_array();
+    top20(&hash)
+}
+
+/// Top 20 bits of a hash, MSB-first. Split out so the bit-extraction is
+/// testable against a chosen hash rather than one that must be searched for.
+fn top20(hash: &[u8]) -> u32 {
+    ((hash[0] as u32) << 12) | ((hash[1] as u32) << 4) | ((hash[2] as u32) >> 4)
+}
+
+#[cfg(test)]
+mod chunk_set_id_tests {
+    use super::*;
+
+    /// The extraction rule, on a chosen hash. Mirrors `md-codec`'s
+    /// `derive_chunk_set_id_msb_first_extraction` so a reader can compare the
+    /// two formats' rules side by side.
+    #[test]
+    fn top20_takes_the_leading_20_bits_msb_first() {
+        // bytes[0]=0xAB, [1]=0xCD, [2]=0xEF: top 20 bits = 0xABCDE.
+        let hash = [0xAB, 0xCD, 0xEF, 0x12];
+        assert_eq!(top20(&hash), 0xABCDE);
+    }
+
+    /// The low nibble of byte 2 is BELOW the 20-bit window and must not leak in.
+    /// Without the `>> 4` this test is the one that fails.
+    #[test]
+    fn top20_ignores_bits_past_the_twentieth() {
+        assert_eq!(top20(&[0xAB, 0xCD, 0xE0, 0xFF]), 0xABCDE);
+        assert_eq!(top20(&[0xAB, 0xCD, 0xEF, 0x00]), 0xABCDE);
+    }
+
+    /// Whatever the payload, the result must fit the wire field. A value over
+    /// 20 bits is rejected by `split_into_chunks`, so a derivation that could
+    /// overflow would turn a valid card into an encode error.
+    #[test]
+    fn derived_ids_always_fit_the_20_bit_field() {
+        for len in 0..64usize {
+            let payload: Vec<u8> = (0..len).map(|i| (i as u8).wrapping_mul(31)).collect();
+            let id = derive_chunk_set_id(&payload);
+            assert!(
+                id <= MAX_CHUNK_SET_ID,
+                "payload of {len} byte(s) derived {id:#x}, over the 20-bit field"
+            );
+        }
+    }
+
+    /// Same bytecode in, same id out — the property the encoder's determinism
+    /// rests on.
+    #[test]
+    fn derivation_is_stable_for_one_payload() {
+        let payload = b"mk1 canonical bytecode stand-in";
+        assert_eq!(derive_chunk_set_id(payload), derive_chunk_set_id(payload));
+    }
+
+    /// Different payloads should not collapse onto one id. Not a collision
+    /// bound — 20 bits cannot offer one — just proof the payload is actually an
+    /// input rather than being ignored.
+    #[test]
+    fn different_payloads_derive_different_ids() {
+        assert_ne!(
+            derive_chunk_set_id(b"card A"),
+            derive_chunk_set_id(b"card B")
+        );
+    }
+}
+
 /// One chunk's worth of split output: a parsed header + its fragment bytes.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]

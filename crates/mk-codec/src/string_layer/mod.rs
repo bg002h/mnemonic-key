@@ -35,6 +35,6 @@ pub use bch::{
     bch_verify_regular, bytes_to_5bit, case_check, decode_string, encode_5bit_to_string,
     five_bit_to_bytes, hrp_expand,
 };
-pub use chunk::{reassemble_from_chunks, split_into_chunks};
+pub use chunk::{derive_chunk_set_id, reassemble_from_chunks, split_into_chunks};
 pub use header::StringLayerHeader;
 pub use pipeline::{decode, encode, encode_with_chunk_set_id};

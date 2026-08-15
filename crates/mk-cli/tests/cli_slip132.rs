@@ -101,8 +101,8 @@ fn encode_accepts_zpub_with_matching_path() {
     );
 
     // The decoded xpub must equal the canonical xpub.
-    // (mk encode is non-deterministic due to random chunk_set_id; we compare
-    // decoded card fields, not raw mk1 byte strings.)
+    // (compared as decoded card fields rather than raw mk1 strings: this test
+    // is about SLIP-0132 xpub normalisation, not string framing.)
     let (_, canon_card) = run_encode_decode(V2_84_MAIN);
     assert_eq!(
         zpub_card.xpub, canon_card.xpub,

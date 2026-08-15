@@ -197,6 +197,30 @@ For wallets where the user holds every seed, MD's omission is fine — the seeds
 
 **Surfaced:** 2026-04-29 closure-design pass during cross-format wire-format review.
 
+**Amended by D-16 (2026-08-14):** the phrase "per-encoding random tag" above describes what the field is *not* — not per-wallet — and that reading stands. The value is no longer drawn from entropy; it is derived from the payload. Read "per-encoding" as "per encoding, not per wallet", which is what this decision was about.
+
+### D-16. `chunk_set_id` is DERIVED from the payload, not drawn from entropy
+
+**Decision.** `mk_codec::encode` derives `chunk_set_id` as the top 20 bits of `SHA-256(canonical_bytecode)`, MSB-first. `encode_with_chunk_set_id` and the new `mk encode --chunk-set-id <HEX>` remain available to pin a specific value. The `getrandom` dependency is dropped; mk-codec no longer links a randomness source.
+
+**Reasoning.**
+
+- **SPEC §2.5 already required re-encode stability** — "reuse the same value for all subsequent re-encodings of the same card" — and a *stateless* encoder cannot honour it by drawing fresh entropy per call. It has nowhere to keep the value chosen at first encoding. Measured 2026-08-14: three `mk encode` invocations on identical inputs produced three different cards on the wire.
+- **The BIP draft already blessed derivation** for exactly this class of caller: "Encoders producing reproducible output across cold runs (engraving toolkits, regression-pinned vector corpora, deterministic test fixtures) SHOULD instead derive `chunk_set_id` from a stable cross-card binding identifier." The reference CLI simply never did.
+- **Deriving from the whole payload beats deriving from one field.** The BIP's illustrative formula used the leading bits of the first `policy_id_stub`; cards sharing a stub then collide, which is why that passage needed a "toolkit slot-XOR" patch on top. A payload hash distinguishes distinct cards with no such patch.
+- **It matches the sibling format.** md-codec's `derive_chunk_set_id` already takes the top 20 bits of its payload hash, MSB-first. Two formats that engrave together should not disagree about how an opaque grouping tag is chosen.
+- **It costs nothing.** The chunk layer already computes `SHA-256(canonical_bytecode)` for the cross-chunk integrity suffix.
+
+**Interop impact: none.** The field is opaque and decoders MUST accept any 20-bit value; only the within-set mismatch check reads it. Wire *layout* is untouched.
+
+**Corpus impact: none.** Every chunked vector in `test_vectors/v0.1.json` already pins its `chunk_set_id` explicitly through `encode_with_chunk_set_id` (`gen_mk_vectors.rs`), so the SHA pin is unchanged — verified by `vector_file_sha256_matches_pin`.
+
+**Downstream impact: none by behavior.** `mnemonic-toolkit` pins ids explicitly via `derive_mk1_chunk_set_id_for_slot` + `encode_with_chunk_set_id`, so its output is unaffected; only stale comments there need correcting.
+
+**What this unblocks.** Cross-implementation byte-identity. The SeedHammer II fork's independent Go port (`mk/encode.go`) has always derived `top20(sha256(bytecode))`, so it and mk-codec now emit identical strings for identical cards — proven by `device_card_a0_matches_the_independent_go_implementation`, which pins two chunks engraved on steel in that fork's committed gate record. Every byte-comparison gate downstream rests on this.
+
+**Surfaced:** 2026-08-14, building the SeedHammer II multisig-build-repair walk gates, on first attempt to compare device output against the primary toolchain.
+
 ## Closures (2026-04-29)
 
 All ten v0.1 open questions are closed. See [`docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md`](../docs/superpowers/specs/2026-04-29-mk1-open-questions-closure-design.md) for fresh-eyes rationale and the locks.

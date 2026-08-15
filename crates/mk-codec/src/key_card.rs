@@ -97,8 +97,9 @@ impl KeyCard {
 
     /// Serialize this card to its canonical pre-chunking bytecode.
     ///
-    /// Deterministic pre-chunking bytecode; independent of the per-encode
-    /// random `chunk_set_id` (which lives in the string layer). This is the
+    /// Deterministic pre-chunking bytecode; independent of the
+    /// `chunk_set_id` framing (which lives in the string layer, and is
+    /// derived FROM this payload — see `derive_chunk_set_id`). This is the
     /// same byte payload that [`crate::bytecode::encode_bytecode`] produces
     /// and that the conformance corpus pins as `canonical_bytecode_hex`; it
     /// is exposed here so a downstream consumer can obtain a stable,

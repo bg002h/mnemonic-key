@@ -4,6 +4,7 @@
 
 use clap::Args;
 use mk_codec::KeyCard;
+use mk_codec::string_layer::header::MAX_CHUNK_SET_ID;
 use serde_json::json;
 
 use crate::cmd::{
@@ -47,6 +48,14 @@ pub struct EncodeArgs {
     /// Force long-code BCH variant. (Reserved for v0.2; mk-codec auto-dispatches today.)
     #[arg(long)]
     pub force_long_code: bool,
+
+    /// Pin the 20-bit `chunk_set_id` (hex, `0x` prefix optional) instead of
+    /// deriving it from the payload. Chunked output only — single-string
+    /// encodings carry no such field. For vector regeneration and conformance
+    /// fixtures; the derived default is already deterministic, so ordinary
+    /// encoding never needs this.
+    #[arg(long)]
+    pub chunk_set_id: Option<String>,
 
     /// Insert a separator every N characters in each emitted mk1 string
     /// (0 = unbroken). SPEC §3. Display only; --json stays unbroken.
@@ -94,7 +103,10 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     let xpub = parse_xpub_normalized(&args.xpub, Some(&path))?;
 
     let card = KeyCard::new(stubs, fingerprint, path, xpub);
-    let strings = mk_codec::encode(&card)?;
+    let strings = match &args.chunk_set_id {
+        Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?)?,
+        None => mk_codec::encode(&card)?,
+    };
 
     if args.json {
         emit_json(&strings)?;
@@ -111,6 +123,26 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         &mut std::io::stderr(),
     );
     Ok(0)
+}
+
+/// Parse `--chunk-set-id`: hex, `0x` prefix optional, and it must FIT.
+///
+/// A value over 20 bits is refused here rather than masked. Silently truncating
+/// would emit a card under an id the caller did not ask for, and the caller's
+/// whole reason for pinning is that the exact value matters.
+fn parse_chunk_set_id(s: &str) -> Result<u32> {
+    let body = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
+    let v = u32::from_str_radix(body, 16)
+        .map_err(|e| CliError::UsageError(format!("--chunk-set-id: invalid hex {s:?}: {e}")))?;
+    if v > MAX_CHUNK_SET_ID {
+        return Err(CliError::UsageError(format!(
+            "--chunk-set-id: {s:?} exceeds the 20-bit field (max 0x{MAX_CHUNK_SET_ID:05x})"
+        )));
+    }
+    Ok(v)
 }
 
 fn emit_json(strings: &[String]) -> Result<()> {

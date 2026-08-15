@@ -102,7 +102,7 @@ char 1:  type = 0x00   (5 bits)   — SingleString
 ```text
 char 0:    version          (5 bits)
 char 1:    type = 0x01      (5 bits)   — Chunked
-chars 2-5: chunk_set_id     (20 bits, random per-encoding)
+chars 2-5: chunk_set_id     (20 bits, derived per-encoding)
 char 6:    total_chunks     (5 bits, semantic range 1..=32, encoded as count − 1)
 char 7:    chunk_index      (5 bits, range 0..total_chunks)
 ```
@@ -111,7 +111,21 @@ char 7:    chunk_index      (5 bits, range 0..total_chunks)
 
 **Wire encoding for `chunk_set_id`:** the 20-bit value is packed into chars 2–5 in big-endian 5-bit-symbol order — bits 19..15 in char 2, 14..10 in char 3, 9..5 in char 4, 4..0 in char 5. Decoders reconstruct the value via `(char2 << 15) | (char3 << 10) | (char4 << 5) | char5`.
 
-`chunk_set_id` is opaque to the format; its only purpose is mismatch detection during reassembly. Encoders SHOULD generate it from a cryptographically secure random source at first encoding and reuse the same value for all subsequent re-encodings of the same card.
+`chunk_set_id` is opaque to the format; its only purpose is mismatch detection during reassembly. Decoders MUST accept any 20-bit value.
+
+**Encoders MUST reuse the same value for all re-encodings of the same card.** Re-encoding a card is not a new card, and a backup format whose output changes under a repeat encode cannot be compared against a reference implementation, SHA-pinned as a fixture, or re-derived years later from the same inputs.
+
+The conforming stateless way to satisfy that is to derive the value from the payload. mk-codec takes the **top 20 bits of `SHA-256(canonical_bytecode)`, MSB-first** — the hash the chunk layer already computes for the cross-chunk integrity suffix:
+
+```text
+chunk_set_id = (h[0] << 12) | (h[1] << 4) | (h[2] >> 4)   where h = SHA-256(canonical_bytecode)
+```
+
+This mirrors the sibling format: md-codec's `derive_chunk_set_id` takes the top 20 bits of its payload hash by the same MSB-first rule. Deriving from the *whole* payload rather than from one field means two distinct cards get distinct ids without further help — cards sharing a `policy_id_stub` do not collide.
+
+An encoder MAY instead carry a value chosen some other way (mk-codec exposes `encode_with_chunk_set_id`, and `mk encode --chunk-set-id`), provided it still reuses that value across re-encodings of the same card. Any choice is interop-equivalent; the field is opaque.
+
+> **History.** v0.1 originally said encoders SHOULD draw this from a CSPRNG "at first encoding" and reuse it thereafter. A stateless encoder has nowhere to keep "the value from first encoding", so `mk encode` drew fresh entropy per invocation and emitted a different card on the wire every run — measured 2026-08-14. See DECISIONS D-16.
 
 Chunk-type byte assignments:
 

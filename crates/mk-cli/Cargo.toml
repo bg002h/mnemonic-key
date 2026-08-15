@@ -1,6 +1,6 @@
 [package]
 name = "mk-cli"
-version = "0.12.1"
+version = "0.13.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ name = "mk"
 path = "src/main.rs"
 
 [dependencies]
-mk-codec = { path = "../mk-codec", version = "0.4.0" }
+mk-codec = { path = "../mk-codec", version = "0.5.0" }
 # v0.4.1 cycle: bumped to md-codec 0.34.0 (v0.18+ wire-format series).
 # Pre-bump pin was 0.32.1; the from_md1_derivation test fixture was
 # regenerated against v0.34.0's canonical pkh_basic.phrase.txt.

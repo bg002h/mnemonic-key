@@ -28,31 +28,18 @@ use crate::key_card::KeyCard;
 use crate::string_layer::bch::{
     bytes_to_5bit, decode_string, encode_5bit_to_string, five_bit_to_bytes,
 };
-use crate::string_layer::chunk::{ChunkFragment, reassemble_from_chunks, split_into_chunks};
+use crate::string_layer::chunk::{
+    ChunkFragment, derive_chunk_set_id, reassemble_from_chunks, split_into_chunks,
+};
 use crate::string_layer::header::{MAX_CHUNK_SET_ID, StringLayerHeader, VERSION_V0_1};
-
-/// Draw a fresh 20-bit `chunk_set_id` from the system CSPRNG via
-/// [`getrandom`]. The OS entropy source is used to avoid pulling a
-/// full RNG framework into the codec — `getrandom` is the same crate
-/// that backs `rand`'s `OsRng`, so the entropy quality is identical.
-///
-/// Per closure Q-5, the `chunk_set_id` is opaque and only used for
-/// reassembly mismatch detection, so any uniformly-distributed 20-bit
-/// value is sufficient. Failure to read entropy is treated as an
-/// unrecoverable system error and panics; this matches the failure
-/// mode of `rand::thread_rng()` and is acceptable for an encode call
-/// because no key material has been emitted at the point of failure.
-fn fresh_chunk_set_id() -> u32 {
-    let mut buf = [0u8; 4];
-    getrandom::getrandom(&mut buf).expect("OS CSPRNG must be available for mk1 encode");
-    u32::from_be_bytes(buf) & MAX_CHUNK_SET_ID
-}
 
 /// Encode a `KeyCard` into one or more `mk1`-prefixed strings.
 ///
-/// Multi-chunk encodings draw a fresh 20-bit `chunk_set_id` from the
-/// system CSPRNG (`OsRng`). Use [`encode_with_chunk_set_id`] to pin the
-/// value for deterministic output (vector regeneration, conformance tests).
+/// Multi-chunk encodings derive their 20-bit `chunk_set_id` from the canonical
+/// bytecode via [`derive_chunk_set_id`], so encoding the same card twice yields
+/// byte-identical strings — the re-encode stability SPEC §2.5 requires, which a
+/// per-call CSPRNG draw cannot provide statelessly. Use
+/// [`encode_with_chunk_set_id`] to pin a specific value instead.
 pub fn encode(card: &KeyCard) -> Result<Vec<String>> {
     let bytecode = encode_bytecode(card)?;
     encode_bytecode_stream(&bytecode, None)
@@ -91,7 +78,7 @@ fn encode_bytecode_stream(bytecode: &[u8], chunk_set_id: Option<u32>) -> Result<
             }
             v
         }
-        None => fresh_chunk_set_id(),
+        None => derive_chunk_set_id(bytecode),
     };
 
     let chunks = split_into_chunks(bytecode, csid)?;
@@ -217,10 +204,10 @@ mod tests {
     }
 
     #[test]
-    fn random_chunk_set_id_decodes_round_trip() {
-        // encode (CSPRNG-derived chunk_set_id) round-trips even though we
-        // don't pin the chunk_set_id value — the decoder doesn't care
-        // about the value, only that it's consistent across chunks.
+    fn derived_chunk_set_id_decodes_round_trip() {
+        // encode() round-trips without pinning a chunk_set_id — the decoder
+        // doesn't care about the value, only that it's consistent across
+        // chunks.
         let card = fixture_card_typical_chunked();
         let strings = encode(&card).unwrap();
         let parts: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
@@ -229,9 +216,10 @@ mod tests {
     }
 
     #[test]
-    fn random_chunk_set_id_fits_20_bits() {
-        // Inspect the produced strings' chunk_set_id field; assert it's
-        // masked to 20 bits, no spillover from a u32 RNG.
+    fn derived_chunk_set_id_fits_20_bits() {
+        // Inspect the produced strings' chunk_set_id field; assert the
+        // derivation lands inside the 20-bit wire field, with no spillover
+        // from the u32 it is computed in.
         let card = fixture_card_typical_chunked();
         let strings = encode(&card).unwrap();
         // The first chunk's parsed header carries the chunk_set_id.
