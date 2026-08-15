@@ -320,9 +320,14 @@ The conforming ''stateless'' way to satisfy that is to derive the value from the
   chunk_set_id = (h[0] << 12) | (h[1] << 4) | (h[2] >> 4)     where h = SHA-256(canonical_bytecode)
 </pre>
 
-Deriving from the '''whole payload''' is what gives distinct cards distinct <code>chunk_set_id</code>s with no further help. A formula reading only one field — say the leading bits of the first <code>policy_id_stub</code> — collides across every card sharing that field, which in a multisig bundle is typically all of them.
+Deriving from the '''whole payload''' gives cards with '''distinct payloads''' distinct <code>chunk_set_id</code>s. It does not, and cannot, distinguish cards whose payloads are identical — see the note below, which is the case that matters in practice.
 
-An encoder MAY carry a value chosen some other way, including one drawn from a cryptographically secure random source, provided it then reuses that value for every re-encoding of the card. Any choice is interop-equivalent: the field is opaque, decoders MUST accept any 20-bit value, and it is mismatch-checked only within a single card's chunk set.
+An encoder MAY carry a value chosen some other way, including one drawn from a cryptographically secure random source or derived by a scheme of its own, provided it then reuses that value for every re-encoding of the card. Any choice is interop-equivalent: the field is opaque, decoders MUST accept any 20-bit value, and it is mismatch-checked only within a single card's chunk set.
+
+'''Note (toolkit slot-XOR).''' The reference bundling toolkit derives per-card <code>chunk_set_id</code> values as <code>base XOR slot</code>, where <code>base</code> is the leading 20 bits of the first <code>policy_id_stub</code> — '''not''' the payload hash above. Cards for different cosigner slots can be '''payload-identical''': in a self-multisig every slot carries the same xpub, fingerprint, path and stubs, and keyless template stubs likewise. A payload-derived id therefore collides across all such slots, and the toolkit's verify surface binds on the per-slot value, so byte-for-byte reproduction of a toolkit-emitted card requires the toolkit's derivation rather than the formula above. Interop is unaffected: the field is opaque and is only mismatch-checked within a single card's chunk set.
+
+'''<code>chunk_set_id</code> is not a privacy mechanism.''' A derived id is a deterministic function of the card payload, so chars 2-5 expose 20 bits of that payload's hash and two encodings of one card are trivially linkable. This gives away nothing: an <code>mk1</code> string is plaintext and its whole payload — xpub included — is recoverable by any reader. Choose the derivation for reproducibility, not for unlinkability.
+
 
 Chunk-type byte assignments:
 

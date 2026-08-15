@@ -121,7 +121,11 @@ The conforming stateless way to satisfy that is to derive the value from the pay
 chunk_set_id = (h[0] << 12) | (h[1] << 4) | (h[2] >> 4)   where h = SHA-256(canonical_bytecode)
 ```
 
-This mirrors the sibling format: md-codec's `derive_chunk_set_id` takes the top 20 bits of its payload hash by the same MSB-first rule. Deriving from the *whole* payload rather than from one field means two distinct cards get distinct ids without further help — cards sharing a `policy_id_stub` do not collide.
+This mirrors the sibling format: md-codec's `derive_chunk_set_id` takes the top 20 bits of its payload hash by the same MSB-first rule.
+
+Deriving from the *whole* payload distinguishes cards with **distinct payloads**. It cannot distinguish **payload-identical** cards, and those exist: a self-multisig gives every slot the same xpub, fingerprint, path and stubs. An encoder that must keep such cards apart needs an external distinguisher — the reference bundling toolkit uses `base XOR slot` over the first `policy_id_stub`, and its verify surface binds on that value, so reproducing a toolkit-emitted card byte-for-byte requires the toolkit's scheme rather than this one.
+
+**Not a privacy mechanism.** A derived id is a deterministic function of the payload, so it exposes 20 bits of that payload's hash and makes two encodings of one card linkable. That costs nothing: an mk1 string is plaintext and its payload is fully recoverable by any reader. The derivation is for reproducibility.
 
 An encoder MAY instead carry a value chosen some other way (mk-codec exposes `encode_with_chunk_set_id`, and `mk encode --chunk-set-id`), provided it still reuses that value across re-encodings of the same card. Any choice is interop-equivalent; the field is opaque.
 
