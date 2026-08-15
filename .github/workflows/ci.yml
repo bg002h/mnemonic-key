@@ -1,8 +1,29 @@
 # CI workflow for the `mnemonic-key` workspace.
 #
-# Triggers: push to main, push to mk-cli-v* / mk-codec-v* tags, PRs.
+# Triggers: push to main, push to ci/** staging refs, push to
+# mk-cli-v* / mk-codec-v* tags, PRs.
 # Jobs: build matrix (3 toolchains × 3 OS = 9), fmt (pinned toolchain),
 # vectors-roundtrip on stable, release-on-tag.
+#
+# WHY ci/** IS BUILT. A required status check binds to a COMMIT SHA, not to a
+# branch. So a commit pushed straight to `main` carries no check when the
+# protection rule is evaluated -- it reports "expected", and the push is
+# BYPASSED rather than satisfied. That is a chicken-and-egg in the rule, not a
+# lapse. `strict: false` is what makes it fixable: GitHub asks only whether the
+# commit carries a passing context, so let the SHA earn one first --
+#
+#     git push origin main:refs/heads/ci/staging   # builds this exact SHA
+#     gh run watch <id> --repo bg002h/mnemonic-key # wait for the context
+#     git push origin main                         # no bypass message = satisfied
+#     git push origin --delete ci/staging
+#
+# `enforce_admins` is false here DELIBERATELY -- it is the maintainer's own
+# escape hatch (ruled 2026-08-15). The staging path above is therefore what
+# AUTOMATION uses: the no-bypass constraint binds agents, not the human. Without
+# a ci/** trigger an agent has no compliant way to push here at all, which is
+# why this exists.
+#
+# `release-on-tag` is gated on tag refs, so a ci/** push can never publish.
 #
 # Note on apt-get hangs: this workflow doesn't install texlive (no PDF
 # build here, unlike the toolkit's manual workflow), so the recurring
@@ -13,7 +34,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'ci/**']
     tags:
       - 'mk-cli-v*'
       - 'mk-codec-v*'

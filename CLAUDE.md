@@ -58,3 +58,34 @@ The end-user manual for the m-format star lives in the sibling `bg002h/mnemonic-
 - Formatting is gated by CI's dedicated `fmt` job pinned to **1.95.0** (the canonical fmt toolchain — see `.github/workflows/ci.yml`). Format locally with `cargo +1.95.0 fmt --all` (NOT the floating local default, which may be a newer nightly that formats differently). When bumping the pin, re-run the fmt in the same commit. Do NOT add a rust-toolchain.toml (it would hijack the 3-toolchain CI matrix — rustup file-beats-default precedence).
 - The repo has its own `Cargo.toml` workspace at `crates/mk-codec`. md-codec is in a separate repo and a separate workspace.
 - Bitcoin crate is `bitcoin = "0.32"`. `DerivationPath`'s `Display` does NOT include the `m/` prefix; use structural comparison (`path.parse::<DerivationPath>() == other`) rather than string formatting when matching paths against the standard table.
+
+## Pushing `main` — agents stage, the maintainer may not have to
+
+**A required status check binds to a COMMIT SHA, not a branch.** So a commit
+pushed straight to `main` carries no check when branch protection is evaluated:
+it reports "expected", and the push is **bypassed** rather than satisfied. That
+is a chicken-and-egg in the rule, not a lapse. `strict: false` is what makes it
+fixable — GitHub asks only whether the commit carries a *passing context*, so let
+the SHA earn one first:
+
+```sh
+git push origin main:refs/heads/ci/staging      # builds this exact SHA
+gh run watch <id> --repo bg002h/mnemonic-key    # wait for the context below
+git push origin main                            # no bypass message = satisfied
+git push origin --delete ci/staging
+```
+
+**The required context here is `build (stable on ubuntu-latest)`** — one cell of
+the 3×3 build matrix. It is NOT `test (rust + go)`; that is the sibling
+`mnemonic-engrave` repo's context and copying its block here would wait forever
+on a check that never reports. `.github/workflows/ci.yml` builds `ci/**` for this
+purpose, and `release-on-tag` is gated on tag refs, so a `ci/**` push can never
+publish.
+
+**The asymmetry is deliberate** (ruled 2026-08-15: *"You are not permitted to
+bypass, but I am."*). `enforce_admins` is `false` here on purpose — it is the
+maintainer's own escape hatch, and **it is not to be flipped**. The no-bypass
+rule binds **automation**: an agent uses the staging path above every time, and
+reports a "Bypassed rule violations" message as a failure rather than papering
+over it. Without the `ci/**` trigger an agent would have no compliant way to push
+here at all, which is why that trigger exists.
