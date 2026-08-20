@@ -7,6 +7,30 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-08-19 — consumes mk-codec 0.5.0 (BREAKING: derived `chunk_set_id`)
+
+### Added
+
+- **`mk encode --chunk-set-id <HEX>`** — pin the 20-bit `chunk_set_id` instead
+  of letting it be derived from the payload. Chunked output only; single-string
+  encodings carry no such field. For vector regeneration and conformance
+  fixtures — the derived default is already deterministic, so ordinary encoding
+  never needs it.
+
+### Changed — BREAKING (inherited from mk-codec 0.5.0)
+
+- `chunk_set_id` is now **derived** from the payload
+  (top 20 bits of `SHA-256(canonical_bytecode)`, MSB-first) rather than drawn
+  from the OS CSPRNG per call. Encoding the same card twice now reproduces the
+  same strings; previously it did not, in violation of SPEC §2.5. See the
+  `mk-codec` 0.5.0 entry for the full rationale.
+- **Fixtures, goldens and transcripts holding a previously-random
+  `chunk_set_id` must be regenerated.**
+
+### Added — tests
+
+- T4 external BIP-84/86 address and BIP-32 compact-form oracles.
+
 ## [0.12.1] — 2026-07-10 — SemVer-patch; consumes mk-codec 0.4.2 (docs + depth-0 vector; no wire/behavior change).
 
 ## [0.11.2] — 2026-06-23
