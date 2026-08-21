@@ -186,6 +186,28 @@ pub enum Error {
         got: usize,
     },
 
+    /// A `use_site_path_overrides` entry was keyed on `@0`. `@0` is the
+    /// canonical baseline (`Descriptor::use_site_path`) and cannot be
+    /// overridden — an `@0` entry is a non-canonical / adversarial wire
+    /// (our encoders only push overrides for `i ≥ 1`). Per the D5(a) decode
+    /// canonical-form check (`restore-md1-per-key-use-site` SPEC §4.1).
+    #[error("use-site override keyed on baseline @{idx}; @0 cannot be overridden")]
+    BaselineUseSiteOverride {
+        /// The offending index (always 0).
+        idx: u8,
+    },
+
+    /// A `use_site_path_overrides` entry's `UseSitePath` equaled the
+    /// resolved baseline (`Descriptor::use_site_path`). A redundant override
+    /// is non-canonical (our encoders push an override only when it DIFFERS
+    /// from the baseline) and is rejected at decode. Per the D5(a) decode
+    /// canonical-form check.
+    #[error("redundant use-site override for @{idx}; equals the baseline use-site path")]
+    RedundantUseSiteOverride {
+        /// The placeholder index whose override duplicates the baseline.
+        idx: u8,
+    },
+
     /// Tap-script-tree leaf has a tag that is forbidden per spec §6.3.1.
     #[error("forbidden tap-script-tree leaf tag: 0x{tag:02x}")]
     ForbiddenTapTreeLeaf {
@@ -301,6 +323,26 @@ pub enum Error {
         idx: u8,
     },
 
+    /// An `OriginPathOverrides[idx]` entry is PRESENT but carries zero path
+    /// components. A present-but-empty override is MALFORMED — distinct
+    /// from an ABSENT override, which the shared/divergent `path_decl` may
+    /// still resolve. `crate::canonicalize::expand_per_at_n` treats a
+    /// present override as authoritative over `path_decl` regardless of
+    /// its component count, so an empty-but-present override silently
+    /// resolves to "no origin" unless rejected explicitly. Rejected
+    /// UNCONDITIONALLY (even for a CANONICAL-shape wrapper, e.g.
+    /// `wpkh(@0)`) by both the decoder (`crate::validate::
+    /// validate_no_empty_origin_overrides`) and `expand_per_at_n`; this is
+    /// a DISTINCT error variant from `MissingExplicitOrigin` so it is
+    /// never swallowed by partial-allowing decode (P0 pathless/dead-card
+    /// partial-decode) — fatal-in-partial. Per spec v0.13 §6.3 (I-1
+    /// hardening).
+    #[error("origin-path override for @{idx} is present but empty (zero components)")]
+    EmptyOriginOverride {
+        /// The placeholder index whose override entry is empty.
+        idx: u8,
+    },
+
     /// `presence_byte` had non-zero reserved bits (bits 2..7) inside a
     /// `WalletPolicyId` canonical-record preimage. Per spec v0.13 §5.3:
     /// encoders MUST set reserved bits to 0 and decoders MUST reject
@@ -390,19 +432,91 @@ pub enum Error {
         max: u8,
     },
 
-    /// BCH correction capacity exceeded: a chunk's syndrome pattern
-    /// indicated more than `t = 4` errors (BCH(93, 80, 8) singleton
-    /// bound `2t = 8`), so a unique correction cannot be derived.
-    /// v0.34.0 introduced; raised by [`crate::decode_with_correction`].
-    /// Atomic per plan §1 D28: any chunk failing this check fails the
-    /// whole multi-chunk call without partial output.
-    #[error("chunk {chunk_index} has more than {bound} errors; uncorrectable")]
+    /// BCH correction capacity exceeded: a chunk's syndrome pattern indicated
+    /// more errors than the BCH(93, 80, 8) code can correct. F-A9: the
+    /// *correction* capacity is `t = 4` substitution errors; the code's
+    /// `2t = 8` figure is its *detection* radius (the singleton bound), NOT the
+    /// number of correctable errors — the two must not be conflated. A pattern
+    /// beyond `t = 4` has no unique correction. v0.34.0 introduced; raised by
+    /// [`crate::decode_with_correction`]. Atomic per plan §1 D28: any chunk
+    /// failing this check fails the whole multi-chunk call without partial
+    /// output.
+    #[error(
+        "chunk {chunk_index} exceeds the BCH correction capacity of t=4 substitution errors; uncorrectable"
+    )]
     TooManyErrors {
         /// 0-indexed position of the offending chunk in the caller's
         /// `&[&str]` slice.
         chunk_index: usize,
-        /// The BCH singleton bound `2t = 8` (i.e. 4 correctable errors).
+        /// The BCH singleton (detection) bound `2t = 8`. Note this is the
+        /// detection radius, not the `t = 4` correction capacity stated in the
+        /// user-facing message; the field is retained for callers/tests that
+        /// pin the code's `2t` parameter.
         bound: u8,
+    },
+
+    /// Encode-side cap (cycle-4 H6): a single codex32 string's data part
+    /// exceeded the regular code's `REGULAR_DATA_SYMBOLS_MAX = 80` symbols.
+    /// The codex32 regular code is BCH(93, 80, 8); a single string therefore
+    /// carries at most 80 data symbols + 13 checksum = 93. `wrap_payload`
+    /// rejects an over-length payload (fail-closed) rather than emit an
+    /// un-decodable / aliasing-prone single string — callers needing more
+    /// capacity must use chunked encoding (`--force-chunked` / `split()`).
+    #[error(
+        "payload is {data_symbols} data symbols; the codex32 regular code caps single strings at {max} (use chunked encoding / --force-chunked)"
+    )]
+    PayloadTooLongForSingleString {
+        /// The over-length data-symbol count actually computed.
+        data_symbols: usize,
+        /// The maximum legal data-symbol count (80).
+        max: usize,
+    },
+
+    /// Decode-side cap, correcting path (cycle-4 M4): a chunk handed to the
+    /// BCH-correcting decoder (`decode_with_correction`) had more than 93
+    /// symbols. The codex32 regular code's generator `β` has order 93, so a
+    /// degree `d` and `d + 93` alias in `chien_search` for an over-93-symbol
+    /// word — the correcting decoder would mis-correct at an aliased root.
+    /// Reject the out-of-domain chunk before correction (fail-closed).
+    #[error(
+        "chunk {chunk_index} has {symbols} symbols; the codex32 regular code caps a string at {max}"
+    )]
+    ChunkSymbolCountOutOfRange {
+        /// 0-indexed position of the offending chunk in the caller's slice.
+        chunk_index: usize,
+        /// The over-length symbol count actually supplied.
+        symbols: usize,
+        /// The maximum legal codeword length (93).
+        max: usize,
+    },
+
+    /// Decode-side cap, non-correcting path (cycle-4 I1 / §5.2.3): a single
+    /// md1 string handed to the non-correcting primitive (`unwrap_string` /
+    /// `decode_md1_string`) had more than 93 symbols. A clean (residue == 0)
+    /// over-length word is BCH-verifiable by the length-agnostic
+    /// `bch_verify_regular` but is structurally out-of-domain for the regular
+    /// code; reject it before BCH verification (fail-closed). No chunk index
+    /// (single string, not a chunk).
+    #[error("string has {symbols} symbols; the codex32 regular code caps a string at {max}")]
+    StringSymbolCountOutOfRange {
+        /// The over-length symbol count actually supplied.
+        symbols: usize,
+        /// The maximum legal codeword length (93).
+        max: usize,
+    },
+
+    /// F-A8: the ≤7 trailing bits after the last TLV entry (or after the tree
+    /// when no TLVs are present) are byte-padding bits that the reference
+    /// encoder ALWAYS emits as zero (BitWriter + `wrap_payload` zero-pad to the
+    /// next byte boundary). A non-zero trailing pad is a malformed / hand-forged
+    /// wire, never produced by our encoders; the TLV rollback rejects it
+    /// (fail-closed) instead of silently discarding the non-zero bits. This is
+    /// the real error variant the BIP's §Padding rule cites for a non-zero
+    /// trailing pad (F-A8 / DG-5).
+    #[error("malformed payload padding: {bits} trailing pad bit(s) were not all zero")]
+    MalformedPayloadPadding {
+        /// Number of trailing pad bits inspected (1..=7).
+        bits: usize,
     },
 }
 
@@ -433,5 +547,25 @@ mod tests {
         let s = Error::NUMSSentinelConflict.to_string();
         assert!(s.contains("§7"), "Display must cite SPEC §7: {s}");
         assert!(s.contains("§11"), "Display must cite SPEC §11: {s}");
+    }
+
+    /// F-A9: `TooManyErrors` Display must state the correction capacity
+    /// `t = 4`, not conflate it with the `2t = 8` detection radius. The old
+    /// "more than 8 errors" text read as if 8 substitutions were correctable.
+    #[test]
+    fn too_many_errors_message_states_correction_capacity() {
+        let s = Error::TooManyErrors {
+            chunk_index: 0,
+            bound: 8,
+        }
+        .to_string();
+        assert!(
+            s.contains("t=4") || s.contains("t = 4"),
+            "Display must state correction capacity t=4: {s}"
+        );
+        assert!(
+            !s.contains("more than 8"),
+            "Display must not conflate the 2t=8 detection radius with correction: {s}"
+        );
     }
 }

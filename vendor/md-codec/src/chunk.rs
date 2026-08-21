@@ -13,6 +13,7 @@
 //! output.
 
 use crate::bitstream::{BitReader, BitWriter};
+use crate::codex32::REGULAR_CODE_SYMBOLS_MAX;
 use crate::error::Error;
 use crate::header::Header;
 
@@ -209,13 +210,17 @@ mod chunk_set_id_tests {
 
 use crate::encode::Descriptor;
 
-/// Threshold (in payload bits) above which chunking is required. Derived from
-/// codex32 *regular*-form's 80-char data-part limit (per BIP 93): 3 HRP + 1
-/// separator + 64 data + 13 checksum (see `codex32::REGULAR_CHECKSUM_SYMBOLS`).
-/// Long-form codex32 was dropped in v0.12.0, so the legal data-symbol budget
-/// per chunk is 64 = 320 bits.
-/// Encoders attempt single-string emit first; if the codex32 wrapping reports
-/// "too long", split into N chunks.
+/// Per-chunk payload *sizing* budget (in payload bits) that [`split`] uses to
+/// choose the chunk count: `count = ceil(padded_payload_bits / 320)`. It is 64
+/// data symbols (64 × 5 = 320 bits), deliberately BELOW the codex32 regular
+/// single-string data cap of 80 symbols / 400 bits (enforced by
+/// [`crate::codex32::wrap_payload`]), so each chunk's 37-bit header fits
+/// alongside the fragment inside one regular-code codeword.
+///
+/// NOTE: this is the chunk-*sizing* budget, NOT the single-string threshold.
+/// A payload that fits ≤ 400 bits is emitted as ONE string; only a payload
+/// exceeding the 400-bit single-string cap (or an explicit `--force-chunked`)
+/// is split — and once split, chunks are sized by this 320-bit budget.
 pub const SINGLE_STRING_PAYLOAD_BIT_LIMIT: usize = 64 * 5;
 
 /// Split a [`Descriptor`] into N codex32 md1 strings, each carrying a chunk
@@ -289,9 +294,9 @@ pub fn split(d: &Descriptor) -> Result<Vec<String>, Error> {
     Ok(chunks)
 }
 
-use crate::decode::decode_payload;
-
-/// Reassemble a [`Descriptor`] from N md1 codex32 strings.
+/// Reassemble a [`Descriptor`] from N md1 codex32 strings (strict:
+/// byte-identical to pre-P0 behavior). Delegates to
+/// [`reassemble_with_opts`] with the default (strict) options.
 ///
 /// Algorithm:
 /// 1. Unwrap each string via the codex32 layer (verifies BCH per chunk).
@@ -299,12 +304,34 @@ use crate::decode::decode_payload;
 /// 3. Validate consistency: same version, chunk_set_id, count.
 /// 4. Sort by index; verify `0..count-1` with no gaps.
 /// 5. Concatenate per-chunk payload bytes.
-/// 6. Decode the reassembled payload via [`decode_payload`].
+/// 6. Decode the reassembled payload via
+///    [`crate::decode::decode_payload`].
 /// 7. Verify the reassembled payload's derived chunk-set-id matches the
 ///    chunk-set-id present in every chunk header (cross-chunk integrity).
 pub fn reassemble(strings: &[&str]) -> Result<Descriptor, Error> {
+    reassemble_with_opts(strings, crate::decode::DecodeOpts::default())
+}
+
+/// Reassemble a [`Descriptor`] from N md1 codex32 strings, honoring
+/// `opts` (P0 partial-decode; see [`crate::decode::DecodeOpts`] for the
+/// contract). Same algorithm as [`reassemble`], except step 6 decodes via
+/// [`crate::decode::decode_payload_with_opts`] instead of the strict
+/// primitive.
+///
+/// INVARIANT (funds-load-bearing): `opts.allow_unresolved_origin` relaxes
+/// ONLY the origin-gate outcome of the step-6 decode call. Every check
+/// ABOVE that call (per-chunk BCH via `unwrap_string`, chunk-header
+/// consistency, index-gap) and the derived-chunk-set-id / content-id
+/// check BELOW it (step 7) stay enforced UNCONDITIONALLY regardless of
+/// `opts` — a chunk set with a doctored chunk-set-id still rejects with
+/// `Error::ChunkSetIdMismatch` even when `allow_unresolved_origin: true`.
+pub fn reassemble_with_opts(
+    strings: &[&str],
+    opts: crate::decode::DecodeOpts,
+) -> Result<Descriptor, Error> {
     use crate::bitstream::BitReader;
     use crate::codex32::unwrap_string;
+    use crate::decode::decode_payload_with_opts;
     use crate::identity::compute_md1_encoding_id;
 
     if strings.is_empty() {
@@ -372,10 +399,12 @@ pub fn reassemble(strings: &[&str]) -> Result<Descriptor, Error> {
         full_bytes.extend_from_slice(chunk_bytes);
     }
 
-    // Decode payload. bit_len = bytes.len() * 8; TLV-rollback handles trailing padding.
-    let descriptor = decode_payload(&full_bytes, full_bytes.len() * 8)?;
+    // Decode payload, honoring `opts` (P0.2). bit_len = bytes.len() * 8;
+    // TLV-rollback handles trailing padding.
+    let descriptor = decode_payload_with_opts(&full_bytes, full_bytes.len() * 8, opts)?;
 
-    // Cross-chunk integrity check.
+    // Cross-chunk integrity check — UNCONDITIONAL regardless of `opts`
+    // (the content-id oracle; P0.2 funds-load-bearing invariant).
     let md1_id = compute_md1_encoding_id(&descriptor)?;
     let derived_csid = derive_chunk_set_id(&md1_id);
     if derived_csid != expected_csid {
@@ -427,6 +456,16 @@ const HRP_PREFIX: &str = "md1";
 /// Returns the data-with-checksum symbols (i.e. all symbols after `md1`).
 /// Visual separators (whitespace + `-`) are stripped per codex32 convention.
 fn parse_chunk_symbols(chunk: &str, chunk_index: usize) -> Result<Vec<u8>, Error> {
+    // BIP-173: reject mixed-case (per chunk). The correction path rejects too —
+    // case is lowercased before symbol mapping, so a case-flip is a zero-symbol-
+    // error event never in the BCH channel; a wholesale mixed-case string is a
+    // malformed encoding, not noise to correct. (Mirrors mk-codec's correcting
+    // decode, which rejects MixedCase before correction.)
+    if crate::codex32::is_mixed_case(chunk) {
+        return Err(Error::Codex32DecodeError(format!(
+            "chunk {chunk_index}: string mixes upper and lower case (BIP-173 forbids mixed case)"
+        )));
+    }
     let lower = chunk.to_ascii_lowercase();
     if !lower.starts_with(HRP_PREFIX) {
         return Err(Error::Codex32DecodeError(format!(
@@ -497,10 +536,30 @@ pub fn decode_with_correction(
     }
 
     let mut corrected_strings: Vec<String> = Vec::with_capacity(strings.len());
+    // Track the post-correction 5-bit symbol vector of the first string so the
+    // single-string detection pre-pass below can inspect bit 0 of the first
+    // symbol (the chunked-flag per SPEC v0.30 §2.3) without re-parsing the
+    // wrapped string.
+    let mut first_corrected_symbols: Option<Vec<u8>> = None;
     let mut all_details: Vec<CorrectionDetail> = Vec::new();
 
     for (chunk_index, chunk) in strings.iter().enumerate() {
         let symbols = parse_chunk_symbols(chunk, chunk_index)?;
+
+        // cycle-4 M4: reject any chunk longer than the codex32 regular code's
+        // 93-symbol codeword BEFORE the residue/correction logic. β has order
+        // 93, so degrees d and d+93 alias in chien_search for an over-93-symbol
+        // word — the correcting decoder would otherwise mis-correct at an
+        // aliased root. This precedes the residue==0 pass-through, so a clean
+        // over-length md1 is rejected on `repair` too (the correct domain gate;
+        // composes with H6's encode cap). Fail-closed.
+        if symbols.len() > REGULAR_CODE_SYMBOLS_MAX {
+            return Err(Error::ChunkSymbolCountOutOfRange {
+                chunk_index,
+                symbols: symbols.len(),
+                max: REGULAR_CODE_SYMBOLS_MAX,
+            });
+        }
 
         // Polymod residue against md1's target constant.
         let mut input = crate::bch::hrp_expand("md");
@@ -510,6 +569,9 @@ pub fn decode_with_correction(
         if residue == 0 {
             // Already valid — pass through unchanged.
             corrected_strings.push((*chunk).to_string());
+            if chunk_index == 0 {
+                first_corrected_symbols = Some(symbols);
+            }
             continue;
         }
 
@@ -552,8 +614,7 @@ pub fn decode_with_correction(
         // that happen to produce a degree-≤4 locator with 4 valid roots).
         let mut verify_input = crate::bch::hrp_expand("md");
         verify_input.extend_from_slice(&corrected);
-        let verify_residue =
-            crate::bch::polymod_run(&verify_input) ^ crate::bch::MD_REGULAR_CONST;
+        let verify_residue = crate::bch::polymod_run(&verify_input) ^ crate::bch::MD_REGULAR_CONST;
         if verify_residue != 0 {
             return Err(Error::TooManyErrors {
                 chunk_index,
@@ -562,7 +623,41 @@ pub fn decode_with_correction(
         }
 
         corrected_strings.push(encode_chunk_string(&corrected));
+        if chunk_index == 0 {
+            first_corrected_symbols = Some(corrected);
+        }
         all_details.extend(details);
+    }
+
+    // v0.35.0: single-string auto-dispatch per SPEC v0.30 §2.3. The first
+    // 5-bit symbol of the corrected payload carries the chunked-flag in
+    // bit 0 (0 = single-payload, 1 = chunked). When the sole input string
+    // decodes (post-BCH correction) as non-chunked, route it through the
+    // single-payload decode path rather than `reassemble`. When it
+    // decodes as chunked, fall through to the existing `reassemble`
+    // path — which naturally surfaces `ChunkSetIncomplete { got: 1,
+    // expected: count }` for any `count > 1` (the "chunked-bit set but
+    // only one chunk supplied" ambiguity edge per plan §2.D.1) while
+    // preserving the legitimate count==1 chunked-of-1 case shipped in
+    // v0.34.0.
+    if strings.len() == 1 {
+        // `first_corrected_symbols` is populated by the loop above (both
+        // the residue==0 pass-through and the correction-applied paths
+        // populate it for `chunk_index == 0`).
+        let symbols = first_corrected_symbols
+            .as_ref()
+            .expect("loop populates first_corrected_symbols when strings.len() >= 1");
+        let chunked_flag = symbols.first().map(|s| s & 0x01).unwrap_or(1);
+        if chunked_flag == 0 {
+            // Non-chunked: decode via the single-payload path. The
+            // corrected string passes BCH-verify (proven by the defensive
+            // re-verify above; or by residue == 0 in the pass-through
+            // branch), so `decode_md1_string` will not re-fail at the
+            // codex32 layer.
+            let descriptor = crate::decode::decode_md1_string(&corrected_strings[0])?;
+            return Ok((descriptor, all_details));
+        }
+        // chunked_flag == 1: fall through to `reassemble` below.
     }
 
     // Hand corrected strings to the existing reassembly path.

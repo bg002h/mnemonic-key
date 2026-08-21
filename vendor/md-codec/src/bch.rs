@@ -16,6 +16,29 @@ pub const GEN_REGULAR: [u128; 5] = [
 /// `SHA-256("shibbolethnums")`).
 pub const MD_REGULAR_CONST: u128 = 0x0815c07747a3392e7;
 
+/// Initial polymod residue. This value (`0x23181b3`) IS codex32/BIP-93's
+/// `ms32_polymod` initial residue — the reference `ms32_polymod` seeds its
+/// accumulator with exactly this constant, and [`GEN_REGULAR`] above is
+/// BIP-93's `ms32` generator, term for term. (It is **not** bech32/BIP-173's
+/// init `1`; that init belongs to a different code. Earlier notes here
+/// claiming md1 "deliberately deviates from codex32's init `1`" and that
+/// "only ms1 uses `1`" were both wrong: codex32's init is `0x23181b3`, and no
+/// constellation format — md1, mk1, or ms1 — uses `1`.)
+///
+/// All three constellation codes (md1, mk1, ms1) build on the codex32 `ms32`
+/// code. md1 and mk1 seed this init literally (mk1: `mk-codec`'s
+/// `string_layer::bch::POLYMOD_INIT`). ms1 (`ms-codec`) uses the mathematically
+/// **equivalent** formulation — codex32's literal `1` init with an
+/// `hrp_expand("ms")` prepend — because `0x23181b3` is exactly the fold of
+/// `hrp_expand("ms")` from `1`; a raw constant-diff against `ms-codec`'s
+/// `POLYMOD_INIT = 0x1` is therefore NOT a discrepancy. Cross-format domain
+/// separation comes entirely from the per-HRP **target** residue that each
+/// format XORs against the final polymod (md1 uses [`MD_REGULAR_CONST`], a
+/// NUMS-derived constant, in place of codex32's own `MS32_CONST`) — never from
+/// the init. Because this same value seeds both
+/// [`bch_create_checksum_regular`] and [`bch_verify_regular`], its contribution
+/// cancels between create and verify, so `polymod(valid codeword) ==
+/// MD_REGULAR_CONST` holds at every length for any fixed init.
 const POLYMOD_INIT: u128 = 0x23181b3;
 const REGULAR_SHIFT: u32 = 60;
 const REGULAR_MASK: u128 = 0x0fffffffffffffff;
@@ -80,4 +103,31 @@ pub fn bch_verify_regular(hrp: &str, data_with_checksum: &[u8]) -> bool {
     let mut input = hrp_expand(hrp);
     input.extend_from_slice(data_with_checksum);
     polymod_run(&input) == MD_REGULAR_CONST
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::hashes::{Hash, sha256};
+
+    /// Drift-guard: `MD_REGULAR_CONST` must reproduce from its documented
+    /// NUMS rule — the top 65 bits of `SHA-256("shibbolethnums")`. Mirrors
+    /// mk-codec's `consts::tests::nums_constants_reproduce_from_domain`
+    /// (and ms-codec's `tests/bch_all_lengths.rs::ms_regular_const_is_secretshare32_packed`).
+    /// Catches accidental drift if the domain string or the constant is
+    /// edited without the other — without this, a silent edit to either would
+    /// break cross-format domain separation undetected.
+    #[test]
+    fn md_regular_const_reproduces_from_nums_domain() {
+        let digest = sha256::Hash::hash(b"shibbolethnums");
+        let bytes = digest.as_byte_array();
+        // Leading 128 bits of the 256-bit digest as a big-endian u128, then
+        // the top 65 bits (shift right by 128 - 65 = 63).
+        let hi = u128::from_be_bytes(bytes[0..16].try_into().unwrap());
+        let derived = hi >> 63;
+        assert_eq!(
+            derived, MD_REGULAR_CONST,
+            "MD_REGULAR_CONST drift from SHA-256(\"shibbolethnums\") top-65-bits",
+        );
+    }
 }

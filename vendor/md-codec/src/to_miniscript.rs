@@ -19,7 +19,8 @@ use crate::use_site_path::UseSitePath;
 
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint};
 use miniscript::descriptor::{
-    DescriptorPublicKey, DescriptorXKey, SinglePub, SinglePubKey, Wildcard,
+    DerivPaths, DescriptorMultiXKey, DescriptorPublicKey, DescriptorXKey, SinglePub, SinglePubKey,
+    Wildcard,
 };
 use miniscript::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use miniscript::{
@@ -28,10 +29,7 @@ use miniscript::{
 use std::str::FromStr;
 use std::sync::Arc;
 
-/// BIP-341 NUMS H-point x-only coordinate. Used as the internal key when
-/// `Body::Tr { is_nums: true, .. }`.
-const NUMS_H_POINT_X_ONLY_HEX: &str =
-    "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0";
+use crate::nums::NUMS_H_POINT_X_ONLY_HEX;
 
 /// Convert an md1 [`Descriptor`] AST to a
 /// `miniscript::Descriptor<DescriptorPublicKey>` for `chain` (the
@@ -57,38 +55,198 @@ pub fn to_miniscript_descriptor(
     let expanded = expand_per_at_n(d)?;
     let mut keys: Vec<DescriptorPublicKey> = Vec::with_capacity(expanded.len());
     for e in &expanded {
-        keys.push(build_descriptor_public_key(e, &d.use_site_path, chain)?);
+        // D1 (faithful per-key reconstruction): each `@N` derives at its
+        // OWN already-resolved use-site path (`e.use_site_path`), NOT the
+        // shared descriptor baseline. Passing `&d.use_site_path` here was
+        // the silent-wrong-address bug for per-cosigner override cards.
+        keys.push(build_descriptor_public_key(e, &e.use_site_path, chain)?);
     }
     node_to_descriptor(&d.tree, &keys)
 }
 
-/// Build a `DescriptorPublicKey::XPub` for one expanded `@N`, with the
-/// chain alt substituted into `derivation_path` in-place.
-fn build_descriptor_public_key(
+/// Returns `true` if ANY use-site path on `d` requires a hardened public
+/// derivation step — the descriptor-level baseline (`d.use_site_path`) OR
+/// any per-`@N` entry in `d.tlv.use_site_path_overrides`. "Hardened
+/// anywhere" means a hardened wildcard (`/*h`) OR any hardened
+/// [`Alternative`](crate::use_site_path::Alternative) inside a multipath
+/// group.
+///
+/// BIP 32 forbids hardened derivation from an xpub, so an xpub-only restore
+/// cannot produce addresses for such a wallet. This is the single source of
+/// truth ("Point B") for the hardened-derivation refusal: the derivation
+/// boundary ([`Descriptor::derive_address`](crate::Descriptor::derive_address))
+/// uses it to refuse cleanly with [`Error::HardenedPublicDerivation`], and
+/// downstream consumers (e.g. the toolkit `restore` guard + advisory) reuse
+/// the SAME predicate so refusal and advisory stay in exact parity.
+///
+/// Note: this scans `use_site_path_overrides` directly (not the
+/// `expand_per_at_n` resolution), because the override set is exactly the
+/// per-`@N` divergent paths; a key with no override inherits the baseline,
+/// which is already covered by the `d.use_site_path` scan.
+pub fn has_hardened_use_site(d: &Descriptor) -> bool {
+    use_site_is_hardened(&d.use_site_path)
+        || d.tlv
+            .use_site_path_overrides
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .any(|(_, usp)| use_site_is_hardened(usp))
+}
+
+/// Returns `true` if `u` has a hardened wildcard or any hardened multipath
+/// alternative.
+fn use_site_is_hardened(u: &UseSitePath) -> bool {
+    u.wildcard_hardened
+        || u.multipath
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .any(|a| a.hardened)
+}
+
+/// Origin metadata for one expanded `@N`: `(fingerprint, origin_path)` when
+/// a `Fingerprints` TLV entry is present, else `None`. Shared by the
+/// single-path and multipath key builders so the two paths can never drift
+/// on origin/xkey assembly.
+type DescriptorOrigin = Option<(Fingerprint, DerivationPath)>;
+
+/// Assemble the `(origin, xkey)` pair common to both
+/// [`build_descriptor_public_key`] (single-path) and
+/// [`build_descriptor_multi_public_key`] (multipath) for one expanded `@N`.
+fn assemble_origin_and_xkey(
     e: &ExpandedKey,
-    use_site: &UseSitePath,
-    chain: u32,
-) -> Result<DescriptorPublicKey, Error> {
+) -> Result<(DescriptorOrigin, bitcoin::bip32::Xpub), Error> {
     let xpub_bytes = e.xpub.ok_or(Error::MissingPubkey { idx: e.idx })?;
     let xkey = xpub_from_tlv_bytes(e.idx, &xpub_bytes)?;
-
     let origin = e.fingerprint.map(|fp| {
         (
             Fingerprint::from(fp),
             origin_path_to_derivation(&e.origin_path),
         )
     });
+    Ok((origin, xkey))
+}
+
+/// `Wildcard::Hardened` for a `/*h` use-site, else `Wildcard::Unhardened`.
+/// Hardened wildcards are pre-refused at the derivation boundary
+/// ([`has_hardened_use_site`]); this only governs the rendered text.
+fn wildcard_for(use_site: &UseSitePath) -> Wildcard {
+    if use_site.wildcard_hardened {
+        Wildcard::Hardened
+    } else {
+        Wildcard::Unhardened
+    }
+}
+
+/// Build a `DescriptorPublicKey::XPub` for one expanded `@N`, with the
+/// chain alt substituted into `derivation_path` in-place. Single-path:
+/// resolves the `chain`-th multipath alternative now.
+fn build_descriptor_public_key(
+    e: &ExpandedKey,
+    use_site: &UseSitePath,
+    chain: u32,
+) -> Result<DescriptorPublicKey, Error> {
+    let (origin, xkey) = assemble_origin_and_xkey(e)?;
 
     // Derivation path is the use-site multipath alt (without the trailing
-    // wildcard, which is handled via `Wildcard::Unhardened`).
+    // wildcard, which is handled via the `wildcard` field below).
     let derivation_path = use_site_to_derivation_path(use_site, chain)?;
 
     Ok(DescriptorPublicKey::XPub(DescriptorXKey {
         origin,
         xkey,
         derivation_path,
-        wildcard: Wildcard::Unhardened,
+        wildcard: wildcard_for(use_site),
     }))
+}
+
+/// Build a `DescriptorPublicKey` for one expanded `@N` carrying its FULL
+/// use-site multipath GROUP (not a single resolved chain). Used by
+/// [`to_miniscript_descriptor_multipath`] to render the faithful
+/// descriptor STRING with per-`@N` `<…;…>` groups.
+///
+/// - `e.use_site_path.multipath = Some(alts)` → `MultiXPub` with one
+///   `DerivationPath` per alternative (e.g. `<2;3>` → `[m/2, m/3]`).
+/// - `e.use_site_path.multipath = None` → a single-path `XPub` (bare `/*`).
+///
+/// rust-miniscript's `into_single_descriptors` selects each key's own alt
+/// at derivation time, so per-`@N` groups stay faithful end-to-end (and
+/// `sortedmulti` sorts the per-index-derived keys correctly).
+fn build_descriptor_multi_public_key(e: &ExpandedKey) -> Result<DescriptorPublicKey, Error> {
+    let (origin, xkey) = assemble_origin_and_xkey(e)?;
+    let use_site = &e.use_site_path;
+    let wildcard = wildcard_for(use_site);
+
+    match &use_site.multipath {
+        Some(alts) => {
+            let paths: Vec<DerivationPath> = alts
+                .iter()
+                .map(|a| {
+                    let child = if a.hardened {
+                        ChildNumber::from_hardened_idx(a.value)
+                            .unwrap_or(ChildNumber::Hardened { index: a.value })
+                    } else {
+                        ChildNumber::Normal { index: a.value }
+                    };
+                    DerivationPath::from(vec![child])
+                })
+                .collect();
+            let derivation_paths = DerivPaths::new(paths)
+                .ok_or_else(|| failed(format!("@{} multipath group is empty", e.idx)))?;
+            Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+                origin,
+                xkey,
+                derivation_paths,
+                wildcard,
+            }))
+        }
+        None => Ok(DescriptorPublicKey::XPub(DescriptorXKey {
+            origin,
+            xkey,
+            derivation_path: DerivationPath::master(),
+            wildcard,
+        })),
+    }
+}
+
+/// Convert an md1 [`Descriptor`] AST to a *multipath*
+/// `miniscript::Descriptor<DescriptorPublicKey>` — one key per `@N`
+/// carrying its FULL resolved use-site multipath group (`<…;…>`), not the
+/// single-chain collapse of [`to_miniscript_descriptor`].
+///
+/// This is the faithful descriptor-STRING entry for per-cosigner use-site
+/// override cards: each `@N`'s group comes from `ExpandedKey.use_site_path`
+/// (per-`@N` override composed over the baseline) where `@N` == the
+/// `expand_per_at_n` Vec position — the unambiguous correspondence. A
+/// `None`-multipath override renders as a single-path `XPub` (bare `/*`)
+/// while sibling keys stay `MultiXPub` (the legal `Some`/`None` mix).
+///
+/// The trailing `/*` wildcards remain for
+/// `miniscript::Descriptor::into_single_descriptors` /
+/// `at_derivation_index` to resolve. The result is NOT single-path; callers
+/// that need addresses call `into_single_descriptors` (rust-miniscript
+/// selects each key's own alt per chain).
+///
+/// Hardened use-site cards are pre-refused by callers via
+/// [`has_hardened_use_site`]; a hardened alt reaching this builder renders a
+/// hardened child in the group (still a valid descriptor string, never a
+/// wrong address — it is never asked to *derive*).
+///
+/// # Errors
+///
+/// Same propagation as [`to_miniscript_descriptor`]:
+/// [`Error::MissingPubkey`] / [`Error::InvalidXpubBytes`] /
+/// [`Error::MissingExplicitOrigin`] from [`expand_per_at_n`], and
+/// [`Error::AddressDerivationFailed`] wrapping any miniscript-layer failure.
+pub fn to_miniscript_descriptor_multipath(
+    d: &Descriptor,
+) -> Result<miniscript::Descriptor<DescriptorPublicKey>, Error> {
+    let expanded = expand_per_at_n(d)?;
+    let mut keys: Vec<DescriptorPublicKey> = Vec::with_capacity(expanded.len());
+    for e in &expanded {
+        keys.push(build_descriptor_multi_public_key(e)?);
+    }
+    node_to_descriptor(&d.tree, &keys)
 }
 
 /// Translate an `OriginPath` into a `bip32::DerivationPath`.
@@ -303,6 +461,23 @@ where
         }
         (Tag::Check, Body::Children(children)) => {
             arity_eq(node.tag, children.len(), 1)?;
+            // Check-idempotence (`to-miniscript-check-pkh-double-wrap`): a
+            // `Tag::Check` over a BARE key tag denotes the same fragment as the
+            // bare tag — both mean `c:pk_k`/`c:pk_h` (type B), and the PkK/PkH
+            // arms above already re-apply `Check`. Wrapping a second `Check`
+            // yields `Check(Check(PkH))` = `c:` over type-B → "cannot wrap a
+            // fragment of type B". The toolkit walker (non-tap context) and
+            // pre-v0.30 md-cli cards both emit this `Tag::Check(Tag::PkK/PkH)`
+            // wire shape, and such cards are already engraved — the renderer
+            // must accept it. A `Tag::Check` whose child is NOT a bare key
+            // (`Check(Check(..))`, shape C `Check(or_i(pk_k,pk_k))`) still
+            // double-wraps below and correctly errors — never a wrong descriptor.
+            if matches!(
+                (&children[0].tag, &children[0].body),
+                (Tag::PkK | Tag::PkH, Body::KeyArg { .. })
+            ) {
+                return node_to_miniscript::<Ctx>(&children[0], keys);
+            }
             Terminal::Check(Arc::new(node_to_miniscript::<Ctx>(&children[0], keys)?))
         }
         (Tag::Verify, Body::Children(children)) => {

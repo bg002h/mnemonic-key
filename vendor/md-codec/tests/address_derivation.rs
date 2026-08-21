@@ -983,8 +983,20 @@ fn round_trip_then_derive_address() {
         .assume_checked()
         .to_string();
 
-    let s = md_codec::encode_md1_string(&d).unwrap();
-    let decoded = md_codec::decode_md1_string(&s).unwrap();
+    // This wallet-policy descriptor carries a populated 65-byte xpub TLV, whose
+    // payload exceeds the codex32 regular code's 80-data-symbol single-string
+    // cap (cycle-4 H6) → encode_md1_string now fails closed. Round-trip via the
+    // chunked path (`split` → `reassemble`), the contractual remedy.
+    assert!(
+        matches!(
+            md_codec::encode_md1_string(&d),
+            Err(md_codec::Error::PayloadTooLongForSingleString { .. })
+        ),
+        "an oversize wallet-policy descriptor must reject the single-string encode"
+    );
+    let chunks = md_codec::chunk::split(&d).unwrap();
+    let refs: Vec<&str> = chunks.iter().map(String::as_str).collect();
+    let decoded = md_codec::chunk::reassemble(&refs).unwrap();
     let after = decoded
         .derive_address(0, 0, Network::Bitcoin)
         .unwrap()
@@ -993,4 +1005,130 @@ fn round_trip_then_derive_address() {
 
     assert_eq!(direct, after);
     assert_eq!(after, "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu");
+}
+
+// ── `to-miniscript-check-pkh-double-wrap` (PART 2) ──────────────────────────
+// The toolkit walker emits an explicit `Tag::Check(Tag::PkK/PkH)` wire node in
+// non-tap context (pre-v0.30 md-cli cards too). The renderer re-applies `Check`
+// in the PkK/PkH arms AND wrapped a second `Check` in the `Tag::Check` arm →
+// `Check(Check(PkH))` = `c:` over type-B → "cannot wrap a fragment of type B".
+// The Check-idempotence collapse renders the bare-key child directly.
+
+/// 1-key Wsh-wrapped policy whose single child is `child`.
+fn wsh_one_key_descriptor(child: Node, xpub: [u8; 65]) -> Descriptor {
+    Descriptor {
+        n: 1,
+        path_decl: PathDecl {
+            n: 1,
+            paths: PathDeclPaths::Shared(origin(&[(true, 84), (true, 0), (true, 0)])),
+        },
+        use_site_path: UseSitePath::standard_multipath(),
+        tree: Node {
+            tag: Tag::Wsh,
+            body: Body::Children(vec![child]),
+        },
+        tlv: {
+            let mut t = TlvSection::new_empty();
+            t.pubkeys = Some(vec![(0u8, xpub)]);
+            t
+        },
+    }
+}
+
+fn render(d: &Descriptor) -> Result<String, md_codec::Error> {
+    md_codec::to_miniscript::to_miniscript_descriptor(d, 0).map(|x| x.to_string())
+}
+
+/// `Tag::Check(Tag::PkH)` (toolkit dialect) renders IDENTICALLY to bare
+/// `Tag::PkH` (md-cli canonical) — `wsh(pkh(...))`. RED pre-fix (the Check(PkH)
+/// shape errored). Pins the literal `pkh(` keyword (R0-r1 Minor 1).
+#[test]
+fn wsh_check_pkh_renders_same_as_bare_pkh() {
+    let xpub = account_xpub_bytes("m/84'/0'/0'");
+    let bare = render(&wsh_one_key_descriptor(
+        Node {
+            tag: Tag::PkH,
+            body: Body::KeyArg { index: 0 },
+        },
+        xpub,
+    ))
+    .expect("bare PkH renders");
+    let checked = render(&wsh_one_key_descriptor(
+        Node {
+            tag: Tag::Check,
+            body: Body::Children(vec![Node {
+                tag: Tag::PkH,
+                body: Body::KeyArg { index: 0 },
+            }]),
+        },
+        xpub,
+    ))
+    .expect("Check(PkH) must render after the idempotence fix");
+    assert_eq!(
+        checked, bare,
+        "Check(PkH) must render identically to bare PkH"
+    );
+    assert!(
+        checked.contains("pkh("),
+        "must be a pkh fragment, not pk/collapsed: {checked}"
+    );
+    assert!(
+        !checked.contains("pk(") || checked.contains("pkh("),
+        "no pk() mis-render"
+    );
+}
+
+/// `Tag::Check(Tag::PkK)` renders identically to bare `Tag::PkK` — `wsh(pk(...))`.
+/// RED pre-fix.
+#[test]
+fn wsh_check_pk_k_explicit_node_renders_same_as_bare() {
+    let xpub = account_xpub_bytes("m/84'/0'/0'");
+    let bare = render(&wsh_one_key_descriptor(pkk(0), xpub)).expect("bare PkK renders");
+    let checked = render(&wsh_one_key_descriptor(
+        Node {
+            tag: Tag::Check,
+            body: Body::Children(vec![pkk(0)]),
+        },
+        xpub,
+    ))
+    .expect("Check(PkK) must render after the fix");
+    assert_eq!(checked, bare);
+    assert!(checked.contains("pk("));
+}
+
+/// Boundary pin (R0-r1 Minor 2): the deferred shape C — `Check(or_i(pk_k,pk_k))`
+/// — still ERRORS post-fix (the collapse is gated on a BARE-KEY child; an `or_i`
+/// child double-wraps and `c:` over type-B is rejected). Never a wrong
+/// descriptor. Full support is tracked under the A2 follow-up.
+#[test]
+fn wsh_check_or_i_shape_c_still_errors() {
+    let xpub0 = account_xpub_bytes("m/84'/0'/0'");
+    let xpub1 = account_xpub_bytes("m/84'/0'/1'");
+    let d = Descriptor {
+        n: 2,
+        path_decl: PathDecl {
+            n: 1,
+            paths: PathDeclPaths::Shared(origin(&[(true, 84), (true, 0), (true, 0)])),
+        },
+        use_site_path: UseSitePath::standard_multipath(),
+        tree: Node {
+            tag: Tag::Wsh,
+            body: Body::Children(vec![Node {
+                tag: Tag::Check,
+                body: Body::Children(vec![Node {
+                    tag: Tag::OrI,
+                    body: Body::Children(vec![pkk(0), pkk(1)]),
+                }]),
+            }]),
+        },
+        tlv: {
+            let mut t = TlvSection::new_empty();
+            t.pubkeys = Some(vec![(0u8, xpub0), (1u8, xpub1)]);
+            t
+        },
+    };
+    assert!(
+        render(&d).is_err(),
+        "shape C (Check over or_i) must still error, not mis-render"
+    );
 }
