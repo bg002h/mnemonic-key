@@ -18,10 +18,20 @@ path = "src/main.rs"
 
 [dependencies]
 mk-codec = { path = "../mk-codec", version = "0.5.0" }
-# v0.4.1 cycle: bumped to md-codec 0.34.0 (v0.18+ wire-format series).
-# Pre-bump pin was 0.32.1; the from_md1_derivation test fixture was
-# regenerated against v0.34.0's canonical pkh_basic.phrase.txt.
-md-codec = "0.34.0"
+# F-127 cycle: bumped to md-codec 0.42.0, the primary's current version.
+#
+# At 0.34.0 this CLI could not read a CHUNKED md1 at all -- every chunk was
+# refused with "wire-format version mismatch: got 9, expected 4", because a
+# chunk is not a standalone card and 0.34 predates the v9 chunk series. Single
+# md1 strings worked, so the gap was invisible until a wallet outgrew one
+# string. Measured: `mk encode --from-md1` failed on every chunked card the
+# constellation produces, which forced the stub to be computed BY HAND and
+# passed as --policy-id-stub.
+#
+# Earlier note, kept: the v0.4.1 cycle bumped from 0.32.1 to 0.34.0, and the
+# from_md1_derivation fixture was regenerated against 0.34.0's canonical
+# pkh_basic.phrase.txt.
+md-codec = "0.42.0"
 clap = { version = "4", features = ["derive"] }
 clap_mangen = "0.3"
 libc = "0.2"

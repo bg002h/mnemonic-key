@@ -53,8 +53,56 @@ pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
     })
 }
 
-/// Derive the 4-byte `policy_id_stub` from an md1 string per SPEC §3.3,
-/// **FORM-AWARE** (matches the toolkit's `bundle_binding_stub`, #28):
+/// The 20-bit chunk-set id of `s`, or `None` when `s` is a complete
+/// single-string md1 rather than one chunk of a set.
+///
+/// Reads the wire header directly instead of inferring from a failed decode:
+/// a chunk's first symbol carries `[version:4][chunked:1]`, and
+/// `ChunkHeader::read` refuses anything whose chunked-flag is clear. A string
+/// that is not a chunk therefore returns `None` here without being decoded,
+/// and a malformed string returns `None` too -- it is passed through to the
+/// codec so the real error text reaches the operator, rather than being
+/// reported as a grouping failure.
+fn md1_chunk_set_id(s: &str) -> Option<u32> {
+    let (bytes, _bit_len) = md_codec::codex32::unwrap_string(s).ok()?;
+    let mut r = md_codec::bitstream::BitReader::new(&bytes);
+    md_codec::ChunkHeader::read(&mut r)
+        .ok()
+        .map(|h| h.chunk_set_id)
+}
+
+/// Partition `--from-md1` values into CARDS, preserving first-appearance order.
+///
+/// One `--from-md1` value is one md1 STRING, but one card may be several
+/// strings: a keyed wallet policy is 246 data symbols and the codex32 regular
+/// code caps a single md1 string at 80, so every keyed card in the
+/// constellation arrives as a chunk SET. Chunks are grouped by the 20-bit
+/// chunk-set id in their wire header, which means they need not be adjacent or
+/// in index order on the command line.
+///
+/// `--from-md1` remains "one card per POLICY": distinct chunk sets stay
+/// distinct cards and yield one stub each, in the order their first chunk
+/// appeared. That is what keeps a key card that belongs to two wallets from
+/// collapsing into one stub -- see `two_chunk_sets_are_two_cards_in_order`.
+pub fn group_md1_cards(values: &[String]) -> Vec<Vec<&str>> {
+    let mut groups: Vec<(Option<u32>, Vec<&str>)> = Vec::new();
+    for v in values {
+        let key = md1_chunk_set_id(v);
+        match key.and_then(|k| groups.iter_mut().find(|(g, _)| *g == Some(k))) {
+            Some((_, chunks)) => chunks.push(v.as_str()),
+            // A non-chunk (`key == None`) always starts its own group: two
+            // identical single-string cards are two cards, and `None` is not a
+            // set id to merge on.
+            None => groups.push((key, vec![v.as_str()])),
+        }
+    }
+    groups.into_iter().map(|(_, v)| v).collect()
+}
+
+/// Derive the 4-byte `policy_id_stub` for ONE card, supplied as either a
+/// single complete md1 string or the full set of its chunks.
+///
+/// The stub is **FORM-AWARE** (matches the toolkit's `bundle_binding_stub`, #28):
 ///
 /// - a **keyed wallet-policy** md1 (`is_wallet_policy()`) → top 4 bytes of the
 ///   policy's **WalletPolicyId** (`md_codec::compute_wallet_policy_id`, md SPEC
@@ -70,8 +118,16 @@ pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
 /// `is_wallet_policy()` keeps a stub minted via `mk --from-md1` byte-for-byte
 /// in agreement with the toolkit-emitted bundle card for the SAME md1 form
 /// (audit I1, 2026-06-10; toolkit #28 `bundle --md1-form=template`).
-pub fn derive_stub_from_md1(md1_str: &str) -> Result<[u8; 4]> {
-    let descriptor = md_codec::decode_md1_string(md1_str)?;
+///
+/// Chunked input goes through `md_codec::reassemble`, which verifies per-chunk
+/// BCH, header consistency, index completeness, and the cross-chunk
+/// content-id -- so a short or doctored set is refused here rather than
+/// producing a stub from whatever chunks were present.
+pub fn derive_stub_from_md1_card(card: &[&str]) -> Result<[u8; 4]> {
+    let descriptor = match card {
+        [single] if md1_chunk_set_id(single).is_none() => md_codec::decode_md1_string(single)?,
+        chunks => md_codec::reassemble(chunks)?,
+    };
     let id_bytes = if descriptor.is_wallet_policy() {
         *md_codec::compute_wallet_policy_id(&descriptor)?.as_bytes()
     } else {

@@ -7,8 +7,8 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    derive_stub_from_md1, fmt_fingerprint, fmt_stub, parse_derivation_path, parse_fingerprint,
-    parse_stub_hex, parse_xpub_normalized, read_mk1_strings,
+    derive_stub_from_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards, parse_derivation_path,
+    parse_fingerprint, parse_stub_hex, parse_xpub_normalized, read_mk1_strings,
 };
 use crate::error::{CliError, Result};
 
@@ -103,8 +103,11 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     for s in &args.policy_id_stub {
         expected_stubs.push(parse_stub_hex(s)?);
     }
-    for md1 in &args.from_md1 {
-        expected_stubs.push(derive_stub_from_md1(md1)?);
+    // One card per POLICY, not one per string: a keyed wallet policy always
+    // arrives as a chunk set, so the values are grouped by chunk-set id first
+    // and each GROUP contributes one stub.
+    for card in group_md1_cards(&args.from_md1) {
+        expected_stubs.push(derive_stub_from_md1_card(&card)?);
     }
     if !expected_stubs.is_empty() && expected_stubs != card.policy_id_stubs {
         let expected_fmt: Vec<String> = expected_stubs.iter().map(fmt_stub).collect();
