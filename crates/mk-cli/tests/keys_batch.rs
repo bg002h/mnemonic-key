@@ -46,15 +46,23 @@ fn mk() -> Command {
     Command::cargo_bin("mk").expect("mk binary")
 }
 
+/// Write `body` to a key file at a path unique to THIS CALL.
+///
+/// The name was derived from the body's length and first byte, so tests
+/// sharing a body shared a path. That is not merely a collision -- it is a
+/// RACE: `fs::write` truncates before writing, so one test's `mk` subprocess
+/// could open the file mid-truncate and see no records at all. It surfaced
+/// only in CI, because nextest gives each test its own PROCESS (distinct pid,
+/// distinct name) while plain `cargo test` runs them as THREADS in one process
+/// and CI's musl job uses `cargo test`. A per-call counter removes the sharing
+/// rather than trying to order the accesses.
 fn write_keyfile(body: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+
     let dir = std::env::temp_dir().join(format!("mk-keys-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    // Distinct name per body so parallel tests never share a file.
-    let name = format!(
-        "k{:x}.txt",
-        body.len() * 31 + body.as_bytes().first().copied().unwrap_or(0) as usize
-    );
-    let p = dir.join(name);
+    let p = dir.join(format!("k{}.txt", SEQ.fetch_add(1, Ordering::Relaxed)));
     std::fs::write(&p, body).unwrap();
     p
 }
