@@ -300,6 +300,58 @@ fn incomplete_chunk_set_is_refused() {
     );
 }
 
+/// The KEYLESS form of the same wallet as [`KEYED_POLICY_A_CHUNKS`]:
+/// `wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))` at `m/48'/0'/0'/2'` with no keys.
+/// Keyless, so it fits a single md1 string where the keyed form needs four.
+const KEYLESS_SAME_TEMPLATE_MD1: &str = "md1ypfdsssj5qqcyxppggah9rg9v9gjh4";
+
+/// Top 4 bytes of the shared `WalletDescriptorTemplateId` `a235ee7574702e45…`
+/// -- the stub the KEYLESS form must carry. Cross-checked in Rust (`md
+/// inspect`) and Go (`md.FormAwareIdChunks`) like the other goldens here.
+const EXPECTED_SAME_TEMPLATE_STUB: [u8; 4] = [0xa2, 0x35, 0xee, 0x75];
+
+/// Top 4 bytes of the KEYLESS card's own `WalletPolicyId` `16ba6a79d0a4ce75…`
+/// -- the value the superseded "always WalletPolicyId" rule would have
+/// produced. Asserted AGAINST, never for.
+const KEYLESS_FORM_POLICY_STUB: [u8; 4] = [0x16, 0xba, 0x6a, 0x79];
+
+/// ONE wallet, TWO stubs -- the consequence of the form-aware rule, pinned.
+///
+/// `KEYLESS_SAME_TEMPLATE_MD1` is `wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))` at
+/// `m/48'/0'/0'/2'` with NO keys: the same template as
+/// [`KEYED_POLICY_A_CHUNKS`], which is that template WITH two xpubs. The two
+/// cards describe the same wallet and share a WalletDescriptorTemplateId
+/// (`a235ee75…`), yet they carry DIFFERENT stubs, because the form decides
+/// which identity the stub is rooted on (SPEC_mk_v0_1.md 3.3).
+///
+/// This is funds-relevant and is why the spec carries it as a CONSEQUENCE box:
+/// membership compares stubs verbatim, so an mk1 minted against the keyed
+/// policy is refused against the template-form card and vice versa. The
+/// failure presents as "wrong card", not "wrong form".
+///
+/// The test also pins WHY an unconditional WalletPolicyId is wrong. The
+/// keyless card's own WalletPolicyId is `16ba6a79…` -- a hash over a policy
+/// with no keys in it. Asserting the stub is NOT that value is what would
+/// catch a regression to the pre-2026-08-21 spec wording.
+#[test]
+fn one_wallet_two_forms_two_stubs() {
+    let keyed = stubs_from_md1(&KEYED_POLICY_A_CHUNKS);
+    let keyless = stubs_from_md1(&[KEYLESS_SAME_TEMPLATE_MD1]);
+
+    assert_eq!(keyed, vec![EXPECTED_KEYED_POLICY_A_STUB]);
+    assert_eq!(keyless, vec![EXPECTED_SAME_TEMPLATE_STUB]);
+    assert_ne!(
+        keyed[0], keyless[0],
+        "the two FORMS of one wallet must carry different stubs; if these ever \
+         match, SPEC 3.3's CONSEQUENCE box and the F-216 seating rules are stale"
+    );
+    assert_ne!(
+        keyless[0], KEYLESS_FORM_POLICY_STUB,
+        "a keyless template must NOT be stubbed with its own (degenerate, \
+         keyless) WalletPolicyId -- that is the pre-2026-08-21 spec wording"
+    );
+}
+
 /// Run `mk encode` with one `--from-md1` per value in `md1s`.
 fn encode_with_md1(md1s: &[&str]) -> std::process::Output {
     let mut args: Vec<String> = vec![

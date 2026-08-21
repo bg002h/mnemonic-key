@@ -1,5 +1,19 @@
 # PLAN — mk1 policy_id_stub aligns to WalletPolicyId (audit I1 + I2)
 
+> **SUPERSEDED IN PART, 2026-08-21 (F-128).** This plan is kept as the record of
+> the audit-I1 change and is accurate for what it did: it moved the stub off the
+> md1 bytecode hash and onto the WalletPolicyId. What it did NOT capture is that
+> the shipped behaviour is **form-aware** — `mk` uses the WalletPolicyId for a
+> keyed policy but the **WalletDescriptorTemplateId** for a keyless template
+> (toolkit #28). So statements below of the form "Canonical = WalletPolicyId",
+> read as unconditional, describe only one of the two arms.
+>
+> The dispatch was verified in 2026-08 to be deliberate rather than drift: the
+> md-codec pin moved 0.34.0 -> 0.42.0 and the behaviour did not change. The
+> normative rule now lives in `SPEC_mk_v0_1.md` §3.3, which is the authority;
+> read this document as history.
+
+
 **Status:** R0 GREEN at R1 (2026-06-10, `design/agent-reports/stub-formula-plan-r0-round2-review.md`) — implementation may proceed
 **Source grounding:** mk-codec `main` 3882823; toolkit 59c5254; md-codec 8f5a15f (working copy md-codec 0.35.0).
 **Resolves:** `design/FOLLOWUPS.md::audit-2026-06-10-backlog` items `stub-formula-divergence` (I1) + `from-md1-test-tautology` (I2).

@@ -201,7 +201,28 @@ Total bytes for a typical 1-stub mainnet card with std-table indicator and finge
 
 ### 3.3 Policy ID stub format
 
-Each stub is **4 bytes** = the top 4 bytes of the MD-encoded policy's **WalletPolicyId** — `md_codec::compute_wallet_policy_id(descriptor)`, the 16-byte canonical-expanded policy identity (md SPEC v0.13 §5.3; encoder-divergence-free preimage). It is **NOT** the md1 bytecode hash (`Md1EncodingId` = `SHA-256(canonical_bytecode)`), which is encoding-sensitive and would not survive a re-encode of the same logical wallet (origin/use-site elision, override-vs-baseline path placement). *This supersedes the closure Q-2 lock's bytecode-hash formula, which predated md-codec v0.13's WalletPolicyId; see §9 Q-2 and `design/PLAN_stub_formula_walletpolicyid.md` (audit I1, 2026-06-10).*
+Each stub is **4 bytes** = the top 4 bytes of a 16-byte canonical wallet identity. **Which identity depends on the FORM of the md1 card the stub is derived from** — this dispatch is normative, not an implementation detail:
+
+| md1 form | test | identity | 
+|---|---|---|
+| **keyed wallet policy** (carries a `Pubkeys` TLV) | `descriptor.is_wallet_policy()` | **WalletPolicyId** — `md_codec::compute_wallet_policy_id`, the canonical-expanded policy identity (md SPEC v0.13 §5.3; encoder-divergence-free preimage) |
+| **keyless template** (no keys, e.g. a `--md1-form=template` bundle) | `!descriptor.is_wallet_policy()` | **WalletDescriptorTemplateId** — `md_codec::compute_wallet_descriptor_template_id`, the key-stable BIP-388 template-only identity (md SPEC §8.1) |
+
+In both cases the stub is rooted on a canonical, encoder-divergence-free identity. It is **NOT** the md1 bytecode hash (`Md1EncodingId` = `SHA-256(canonical_bytecode)`), which is encoding-sensitive and would not survive a re-encode of the same logical wallet (origin/use-site elision, override-vs-baseline path placement). *This supersedes the closure Q-2 lock's bytecode-hash formula, which predated md-codec v0.13's WalletPolicyId; see §9 Q-2 and `design/PLAN_stub_formula_walletpolicyid.md` (audit I1, 2026-06-10).*
+
+**Why the form matters, and why an unconditional WalletPolicyId is wrong.** The WalletPolicyId is computed over the policy's keys, so it is *not* key-stable — a keyless template has no keys and hashes to a degenerate value that binds nothing about the cosigners the stub exists to index. Measured on `wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))` at `m/48'/0'/0'/2'`, the same wallet in both forms:
+
+```
+KEYED form:    wallet-descriptor-template-id: a235ee75…   wallet-policy-id: 38bd7cec…
+KEYLESS form:  wallet-descriptor-template-id: a235ee75…   wallet-policy-id: 16ba6a79…
+                                              ^ key-stable                  ^ NOT stable
+```
+
+Applying this section's rule, `mk` stamps `38bd7cec` from the keyed card and `a235ee75` from the keyless one. Applying the pre-2026-08-21 wording literally — WalletPolicyId unconditionally — would stamp `16ba6a79` on the keyless card: an identity derived from a policy with no keys in it.
+
+> **CONSEQUENCE, funds-relevant: one wallet has TWO stubs.** A card minted against the keyed policy (`38bd7cec`) does **not** match a card minted against the keyless template (`a235ee75`), and membership checks compare stubs verbatim. An mk1 minted for the full policy will be refused against a template-form md1 unless it is re-stubbed. This is a property of the design, not a defect — the two forms are different artifacts with different identities — but any surface that gathers mk1 cards against an md1 **must say on screen which form it is matching**, because the failure looks like "wrong card" rather than "wrong form". See `mnemonic-engrave` F-216.
+
+Rationale for the dispatch rather than a single identity: it keeps a stub minted via `mk encode --from-md1` byte-for-byte in agreement with the toolkit-emitted bundle card for the SAME md1 form (audit I1, 2026-06-10; toolkit #28 `bundle --md1-form=template`). Two tools deriving a stub from the same card must agree, and the form is the only thing that decides which identity is available.
 
 Why 4 bytes:
 
@@ -323,11 +344,13 @@ Note: the v0 spec sketch's `XpubDepthMismatch` rule is re-instated under compact
 
 ## §5. Linkage to MD
 
-A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose **WalletPolicyId** prefix matches one of these stubs."
+A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is intended to serve any MD-encoded policy whose **form-appropriate identity** (§3.3) prefix matches one of these stubs."
 
 **Recovery flow:**
 
-1. Decode the policy card. Compute its full 16-byte Policy ID = the **WalletPolicyId** (`md_codec::compute_wallet_policy_id(descriptor)`). Take the top 4 bytes as `policy_stub`.
+1. Decode the policy card. Compute its full 16-byte Policy ID **by the form-aware rule in §3.3** — `compute_wallet_policy_id` for a keyed wallet policy, `compute_wallet_descriptor_template_id` for a keyless template. Take the top 4 bytes as `policy_stub`.
+
+   > **A recovery tool that computes only the WalletPolicyId here will reject every card minted from a template.** The two forms of one wallet carry different stubs (§3.3), so step 2's comparison silently fails for all N candidates — which presents as "none of my cards belong to this wallet", not as a form error. Dispatch on `descriptor.is_wallet_policy()` before comparing, and report the form in the failure message so the operator can tell "wrong card" from "wrong form".
 2. For each candidate key card:
    a. Decode and extract its Policy ID stubs.
    b. Reject the card unless `policy_stub` matches one of its stubs.
@@ -342,6 +365,8 @@ A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is 
 5. Accept and proceed to address derivation.
 
 Step 2 is the indexing aid (fast filter, template-level). Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
+
+Note the division of labour this implies: **step 2 is allowed to be form-sensitive because it is only an index.** A stub mismatch between the keyed and keyless forms of the same wallet costs the operator a re-stub, not their funds — step 4 recomputes the Wallet Instance ID from the assembled descriptor and is what actually decides whether the recovered wallet is the intended one. A stub that matched would still be rejected at step 4 if the assembly were wrong.
 
 **Implementation note:** the `compute_wallet_instance_id(canonical_bytecode, xpubs)` helper is provided by md-codec v0.8.0+. mk1 implementations integrating with md-codec ≥ 0.8.0 SHOULD use that helper directly rather than reimplementing the SHA-256 construction.
 
@@ -400,7 +425,7 @@ All ten v0.1 open questions Q-1..Q-10 are closed. See [`docs/superpowers/specs/2
 | ID | Locked answer | Section |
 |---|---|---|
 | Q-1 | Domain `b"shibbolethnumskey"`; constants 0x1062435f91072fa5c (regular), 0x41890d7e441cbe97273 (long) | §2.3 |
-| Q-2 | 4-byte Policy ID stub (formula superseded 2026-06-10: top 4 bytes of **WalletPolicyId**, not the bytecode hash — predated md-codec v0.13; audit I1, see §3.3 + `PLAN_stub_formula_walletpolicyid.md`) | §3.3 |
+| Q-2 | 4-byte Policy ID stub, **FORM-AWARE** (top 4 bytes of **WalletPolicyId** for a keyed policy, **WalletDescriptorTemplateId** for a keyless template). Formula superseded twice: the bytecode-hash form predated md-codec v0.13 (audit I1, 2026-06-10), and the unconditional-WalletPolicyId form was corrected 2026-08-21 to match shipped `mk` + toolkit #28 behaviour. See §3.3 + `PLAN_stub_formula_walletpolicyid.md` | §3.3 |
 | Q-3 | Path-component cap = 10 | §3.5 |
 | Q-4 | mk1 declares authority precedence; md1 tag-byte allocation shipped as `Tag::OriginPaths = 0x36` in [md-codec v0.10.0](https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.10.0) | §5.1 |
 | Q-5 | Chunk types 0x00=SingleString, 0x01=Chunked; full string-layer header structure pinned | §2.5 |
