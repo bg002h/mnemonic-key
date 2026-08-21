@@ -11,8 +11,8 @@ use mk_codec::string_layer::header::MAX_CHUNK_SET_ID;
 use serde_json::json;
 
 use crate::cmd::{
-    classify_code_variant, derive_stub_from_md1_card, group_md1_cards, parse_derivation_path,
-    parse_fingerprint, parse_stub_hex, parse_xpub_normalized,
+    classify_code_variant, decode_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards,
+    parse_derivation_path, parse_fingerprint, parse_stub_hex, parse_xpub_normalized,
 };
 use crate::error::{CliError, Result};
 
@@ -128,8 +128,14 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // One card per POLICY, not one per string: a keyed wallet policy always
     // arrives as a chunk set, so the values are grouped by chunk-set id first
     // and each GROUP contributes one stub.
+    // Each GROUP is one policy card and contributes one stub. The cosigner set
+    // is kept alongside so the keys being stamped can be checked against the
+    // policy they claim membership in, below.
+    let mut policies: Vec<crate::cmd::Md1Card> = Vec::new();
     for card in group_md1_cards(&args.from_md1) {
-        stubs.push(derive_stub_from_md1_card(&card)?);
+        let decoded = decode_md1_card(&card)?;
+        stubs.push(decoded.stub);
+        policies.push(decoded);
     }
     if stubs.is_empty() {
         return Err(CliError::UsageError(
@@ -166,16 +172,52 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         }
     };
 
+    // Membership: a key stamped with a KEYED policy's stub must actually be one
+    // of that policy's cosigners.
+    //
+    // The claim an mk1 card makes is "this xpub is intended to serve the policy
+    // with this stub" (SPEC 5). Minting that claim for a key the policy does not
+    // contain produces a card that looks correct, engraves fine, and is refused
+    // at recovery -- a wasted plate at best, and in a batch it is invisible
+    // because the other records mint correctly and the run still exits 0.
+    // The cosigner set is already parsed in-process, so refusing costs nothing.
+    //
+    // Only KEYED policies are checked. A keyless template carries no keys
+    // (`cosigners == None`), so membership is not decidable from it and every
+    // template-form card stays legal -- that is the ordinary bundle workflow.
+    for (_fp, path, xpub) in &cards {
+        let ident = crate::cmd::xpub_identity_65(xpub);
+        for policy in &policies {
+            let Some(cosigners) = &policy.cosigners else {
+                continue;
+            };
+            if !cosigners.contains(&ident) {
+                return Err(CliError::UsageError(format!(
+                    "xpub {xpub} (origin {path}) is not a cosigner of the wallet policy \
+                     with stub {}; that policy declares {} key(s). A card stamped with a \
+                     policy it is not in is refused at recovery. (A keyless template md1 \
+                     carries no keys and is not checked.)",
+                    fmt_stub(&policy.stub),
+                    cosigners.len(),
+                )));
+            }
+        }
+    }
+
     // One mint path for both routes: a batch card and a single card differ only
     // in where their (fingerprint, path, xpub) came from, so they cannot drift.
-    let mut minted: Vec<Vec<String>> = Vec::with_capacity(cards.len());
+    let mut minted: Vec<MintedCard> = Vec::with_capacity(cards.len());
     for (fp, path, xpub) in cards {
-        let card = KeyCard::new(stubs.clone(), fp, path, xpub);
+        let card = KeyCard::new(stubs.clone(), fp, path.clone(), xpub);
         let strings = match &args.chunk_set_id {
             Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?)?,
             None => mk_codec::encode(&card)?,
         };
-        minted.push(strings);
+        minted.push(MintedCard {
+            fingerprint: fp,
+            path,
+            strings,
+        });
     }
 
     if args.json {
@@ -185,14 +227,14 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             emit_json(&minted[0])?;
         }
     } else {
-        for (i, strings) in minted.iter().enumerate() {
+        for (i, card) in minted.iter().enumerate() {
             // Blank line BETWEEN cards, never before the first or after the
             // last: single-card output stays byte-identical to what it was
             // before --keys existed.
             if i > 0 {
                 println!();
             }
-            for s in strings {
+            for s in &card.strings {
                 println!(
                     "{}",
                     crate::format::render_grouped(s, args.group_size as usize, args.separator)
@@ -230,8 +272,8 @@ fn parse_chunk_set_id(s: &str) -> Result<u32> {
 /// JSON for `--keys`: a `cards` array whose entries are exactly the object
 /// single-card `--json` emits. Additive, so a consumer of the single form can
 /// read a batch entry without changes.
-fn emit_json_batch(minted: &[Vec<String>]) -> Result<()> {
-    let cards: Vec<_> = minted.iter().map(|s| card_json(s)).collect();
+fn emit_json_batch(minted: &[MintedCard]) -> Result<()> {
+    let cards: Vec<_> = minted.iter().map(card_json).collect();
     let envelope = json!({
         "schema_version": 1,
         "card_count": cards.len(),
@@ -244,29 +286,39 @@ fn emit_json_batch(minted: &[Vec<String>]) -> Result<()> {
 }
 
 /// The per-card JSON object, shared by the single and batch emitters.
-fn card_json(strings: &[String]) -> serde_json::Value {
-    let variant = strings
+///
+/// Carries the card's ORIGIN as well as its strings. Without it the batch hands
+/// back N interchangeable blocks whose only link to the input records is
+/// position -- so a consumer captioning plates has no choice but to assume card
+/// order still matches file order. That assumption is exactly the one this
+/// project already has an incident for: 30 plates captioned with the wrong
+/// cosigner. Naming each card lets a consumer JOIN on identity instead of
+/// counting (R2/I + R3/I, 2026-08-21).
+fn card_json(card: &MintedCard) -> serde_json::Value {
+    let variant = card
+        .strings
         .first()
         .map(|s| classify_code_variant(s))
         .unwrap_or("regular");
     json!({
-        "mk1_strings": strings,
-        "chunk_count": strings.len(),
+        "mk1_strings": card.strings,
+        "chunk_count": card.strings.len(),
         "code_variant": variant,
+        "origin_fingerprint": card.fingerprint.as_ref().map(fmt_fingerprint),
+        "origin_path": card.path.to_string(),
     })
 }
 
-fn emit_json(strings: &[String]) -> Result<()> {
-    let variant = strings
-        .first()
-        .map(|s| classify_code_variant(s))
-        .unwrap_or("regular");
-    let envelope = json!({
-        "schema_version": 1,
-        "mk1_strings": strings,
-        "chunk_count": strings.len(),
-        "code_variant": variant,
-    });
+/// One minted card: the strings, plus the origin they were minted for.
+pub struct MintedCard {
+    pub fingerprint: Option<Fingerprint2>,
+    pub path: DerivationPath2,
+    pub strings: Vec<String>,
+}
+
+fn emit_json(card: &MintedCard) -> Result<()> {
+    let mut envelope = card_json(card);
+    envelope["schema_version"] = json!(1);
     let s = serde_json::to_string(&envelope)
         .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
     println!("{s}");

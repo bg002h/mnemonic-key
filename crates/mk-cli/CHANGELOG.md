@@ -9,6 +9,74 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Fixed — from an independent six-lens adversarial review (2026-08-21)
+
+- **`mk encode` refuses an origin path deeper than `MAX_PATH_COMPONENTS` (10).**
+  `decode_explicit_path` had always refused `count > 10` with `PathTooDeep`,
+  but `encode_path` wrote the count unchecked — so the encoder minted a
+  well-formed card that its own decoder refused. A **write-only card**:
+  engraved in metal, unrecoverable, produced at exit 0. In a batch it was
+  invisible, because the other records mint fine and the run still exits 0
+  with a full-looking bundle.
+
+  **The Go port already had this check** (`seedhammer` `mk/encode.go`
+  `encodePath`), so the primary was wrong and the downstream port was right —
+  this Rust fix is a convergence *onto* the port, the opposite of the usual
+  direction.
+
+- **`mk encode --from-md1` refuses a key that is not a cosigner of a KEYED
+  policy.** Stamping a card asserts "this xpub is intended to serve the policy
+  with this stub" (SPEC §5). Minting that claim for a key the policy does not
+  contain produced a card that looks correct, engraves fine, and is refused at
+  recovery — with the cosigner set already parsed in-process. Keyless templates
+  are unaffected: they carry no keys, so membership is not decidable from them
+  and every template-form card stays legal.
+
+- **Piping batch output into a consumer that closes early no longer panics.**
+  Rust sets `SIGPIPE` to `SIG_IGN` before `main`, so `println!` into a closed
+  pipe returned `Err` and panicked — `mk encode --keys big.txt | head` gave a
+  Rust panic and exit 101 after a partial bundle. Now exits 141 silently, like
+  every other Unix filter. Measured before/after: exit 101 + 194 stderr bytes →
+  exit 141 + 0.
+
+### Added
+
+- **Each card in `--json` output names its own origin** (`origin_fingerprint`,
+  `origin_path`), in both the single-card and batch forms. Without it the batch
+  handed back N interchangeable blocks whose only link to the input records was
+  position, forcing any consumer captioning plates to assume card order still
+  matches file order — the assumption this project already has an incident for
+  (30 plates captioned with the wrong cosigner). Consumers can now join on
+  identity instead of counting. Additive; existing keys unchanged.
+
+### Fixed — tests that passed while the behaviour they name was broken
+
+- `json_batch_wraps_the_single_card_object` checked only `cards[0]`, so a
+  mutant swapping `cards[1]`/`cards[2]` passed all 132 tests in the crate. Now
+  checks every index, and asserts each card names its own record.
+- `verify_from_keyless_template_md1_matches_template_id_stub` never compared
+  against the golden stub — it tested self-agreement plus difference from one
+  unrelated literal. Two independent corruptions of the identity logic survived
+  it while killing its siblings. Now anchored to `EXPECTED_TEMPLATE_STUB`.
+- The keyed-policy fixtures minted cards for an xpub that is **not** a cosigner
+  of the fixture policy — the very defect the membership check now refuses.
+  Switched to a real member; the stub does not depend on which cosigner is
+  carded, so the assertions are unchanged.
+
+### Changed — docs
+
+- `docs/MK_CODEC_RUST_API.md` cited `md_codec::compute_policy_id_stub`, which
+  **has never existed** (0 occurrences in md-codec's source), and described the
+  stub with a formula wrong under every rule this project has shipped. The
+  example did not compile. Replaced with the real form-aware dispatch.
+- `bip/bip-mnemonic-key.mediawiki` contradicted itself on the exact rule F-128
+  fixed: its glossary and "Policy ID stubs" section stated the unconditional
+  WalletPolicyId while its own "Linkage to MD" section was already form-aware.
+  An implementer reading only the first two would have built a silently wrong
+  implementation — in the document furthest along toward external publication.
+  All three sections now agree.
+
+
 ### Fixed
 
 - **`mk encode --from-md1` / `mk verify --from-md1` can read a CHUNKED md1 at

@@ -16,6 +16,7 @@ use bitcoin::bip32::ChildNumber;
 use crate::bytecode::header::BytecodeHeader;
 use crate::bytecode::path::encode_path;
 use crate::bytecode::xpub_compact::{XpubCompact, encode_xpub_compact};
+use crate::consts::MAX_PATH_COMPONENTS;
 use crate::error::{Error, Result};
 use crate::key_card::KeyCard;
 
@@ -35,6 +36,24 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
     // expected_child mirrors reconstruct_xpub exactly: the terminal component,
     // or Normal{0} for an empty path (depth-0 / no-path key, e.g. a WIF). A card
     // encodes iff it survives compact-drop + reconstruction unchanged.
+    // Encoder-side path cap. `decode_explicit_path` has always refused
+    // `count > MAX_PATH_COMPONENTS` with `PathTooDeep`, but `encode_path` wrote
+    // the count unchecked -- so the encoder could mint a well-formed card that
+    // this crate's OWN decoder refuses. That is a write-only card: engraved in
+    // metal and unrecoverable, produced at exit 0. Refusing here makes the
+    // write side agree with the read side (R2/C2, 2026-08-21).
+    //
+    // Checked before the depth/child guard below so the error names the real
+    // problem: an over-deep path also has an over-deep xpub, and reporting
+    // XpubOriginPathMismatch would send the operator after the wrong thing.
+    let component_count = card.origin_path.into_iter().count();
+    if component_count > MAX_PATH_COMPONENTS as usize {
+        // `as u8` is safe: the depth/child guard below requires
+        // `xpub.depth as usize == component_count`, and `xpub.depth` is a u8,
+        // so a card with more than 255 components cannot reach encode at all.
+        return Err(Error::PathTooDeep(component_count as u8));
+    }
+
     let path_depth = card.origin_path.into_iter().count();
     let path_child = card.origin_path.into_iter().last().copied();
     let expected_child = path_child.unwrap_or(ChildNumber::Normal { index: 0 });
@@ -221,6 +240,52 @@ mod tests {
     // `encodes_typical_1stub_card_to_84_bytes` covers the standard-table-aligned
     // case = SPEC cell 5; `xpub_compact.rs::round_trip_full_xpub_depth_4` covers
     // the reconstruct round-trip = SPEC cell 4 losslessness.)
+    /// An origin path deeper than `MAX_PATH_COMPONENTS` must be refused AT
+    /// ENCODE, not merely at decode.
+    ///
+    /// `decode_explicit_path` has always refused `count > MAX_PATH_COMPONENTS`
+    /// with `PathTooDeep`, but `encode_path` wrote `components.len() as u8`
+    /// unchecked. The asymmetry let the encoder mint a well-formed card that
+    /// its own decoder refuses -- a WRITE-ONLY card. Engraved in metal it is
+    /// unrecoverable, and the operator gets exit 0 and a full-looking bundle.
+    /// Found by an adversarial review, 2026-08-21 (R2/C2).
+    #[test]
+    fn rejects_path_deeper_than_max_components() {
+        for n in [MAX_PATH_COMPONENTS as usize + 1, 20, 255] {
+            let comps: Vec<String> = (0..n).map(|i| format!("{i}'")).collect();
+            let path = DerivationPath::from_str(&format!("m/{}", comps.join("/"))).unwrap();
+            let card = KeyCard {
+                policy_id_stubs: vec![[0xAA; 4]],
+                origin_fingerprint: None,
+                xpub: synthetic_xpub(&path), // depth-aligned, so the SPEC §5 guard passes
+                origin_path: path,
+            };
+            match encode_bytecode(&card) {
+                Err(Error::PathTooDeep(got)) => assert_eq!(got as usize, n),
+                other => panic!("{n} components must be refused at encode, got {other:?}"),
+            }
+        }
+    }
+
+    /// The boundary itself still encodes -- the cap refuses `> MAX`, not `>=`.
+    #[test]
+    fn accepts_path_at_exactly_max_components() {
+        let comps: Vec<String> = (0..MAX_PATH_COMPONENTS as usize)
+            .map(|i| format!("{i}'"))
+            .collect();
+        let path = DerivationPath::from_str(&format!("m/{}", comps.join("/"))).unwrap();
+        let card = KeyCard {
+            policy_id_stubs: vec![[0xAA; 4]],
+            origin_fingerprint: None,
+            xpub: synthetic_xpub(&path),
+            origin_path: path,
+        };
+        assert!(
+            encode_bytecode(&card).is_ok(),
+            "exactly MAX_PATH_COMPONENTS must still encode"
+        );
+    }
+
     #[test]
     fn aligned_explicit_path_card_encodes() {
         let path = DerivationPath::from_str("m/44'/0'/0'/0/5").unwrap(); // 5 comps, explicit

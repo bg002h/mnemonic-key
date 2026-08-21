@@ -35,7 +35,7 @@ MK reuses BIP 93's BCH plumbing (same generator polynomials, same alphabet, same
 * '''Origin fingerprint''': the 4-byte master-key fingerprint identifying the seed from which the xpub was derived. Verbatim from BIP 380 origin notation <code>[fp/...]</code>. Optional in MK v0.1; presence is signaled by the bytecode header's fingerprint flag.
 * '''Origin path''': the BIP 32 derivation path from the master seed to the xpub. E.g., <code>m/48'/0'/0'/2'</code>.
 * '''Policy ID''' (a.k.a. '''WalletPolicyId'''): the 16-byte canonical-''expanded'' policy identity <code>md_codec::compute_wallet_policy_id(descriptor)</code> (md SPEC v0.13 §5.3), an encoder-divergence-free hash of an MD-encoded policy ''template'' — placeholders + shared path, not the concrete cosigner xpubs (a one-to-many relationship to actual wallets, not a wallet instance). It '''supersedes''' the earlier v0.8.0 "Policy ID" = <code>SHA-256(canonical_bytecode)[0..16]</code> (the encoding-sensitive md1 bytecode hash <code>Md1EncodingId</code>, itself renamed from "wallet ID" in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]); the bytecode hash predated WalletPolicyId and is not stable under re-encoding the same logical wallet. See the naming note below (audit I1, 2026-06-10).
-* '''Policy ID stub''': the top 4 bytes of a Policy ID. Carried by MK cards as an indexing aid.
+* '''Policy ID stub''': the top 4 bytes of a '''form-aware''' MD identity — the '''WalletPolicyId''' for a keyed wallet-policy card, the '''WalletDescriptorTemplateId''' for a keyless template card. Carried by MK cards as an indexing aid. See "Policy ID stubs" and "Linkage to MD".
 * '''Wallet Instance ID''': the derived 16-byte value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]'s BIP for cross-tool consistency. Recovery tools compute it on demand from policy + assembled xpubs.
 * '''<code>chunk_set_id</code>''': a 20-bit per-encoding tag carried in the chunked-string header, derived from the payload (see below), used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec v0.8.x originally called this field "wallet identifier"; [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0 md-codec v0.9.0] renamed it to <code>chunk_set_id</code> across both the BIP draft and the reference implementation. Wire format unchanged.)
 
@@ -425,7 +425,14 @@ Rationale (recovery-friendly):
 
 ====Policy ID stubs====
 
-Each stub is the top 4 bytes (32 bits) of an MD-encoded policy's '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id(descriptor)</code>, md SPEC v0.13 §5.3) — '''not''' the md1 bytecode hash <code>SHA-256(canonical_bytecode)</code>, which is encoding-sensitive (see the naming note, audit I1). The stub is an indexing aid — not a cryptographic primitive — so 4 bytes is sufficient.
+Each stub is the top 4 bytes (32 bits) of a 16-byte canonical wallet identity. '''Which identity depends on the FORM of the MD card''' the stub is derived from — this dispatch is normative:
+
+* a '''keyed wallet-policy''' md1 card (carries concrete cosigner keys) → the '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id(descriptor)</code>, md SPEC v0.13 §5.3);
+* a '''keyless template''' md1 card (the <code>@N</code>-placeholder form, no keys) → the '''WalletDescriptorTemplateId''', the key-stable template identity.
+
+Neither is the md1 bytecode hash <code>SHA-256(canonical_bytecode)</code>, which is encoding-sensitive (see the naming note, audit I1). The stub is an indexing aid — not a cryptographic primitive — so 4 bytes is sufficient.
+
+The WalletPolicyId is computed over the policy's keys and is therefore '''not''' key-stable: a keyless template hashes to a value that binds nothing about the cosigners the stub exists to index, which is why the form decides. A consequence implementers MUST handle: '''one wallet has two stubs''', one per form, and membership compares stubs verbatim — so a card minted against the keyed policy is refused against the template-form card and vice versa. See "Linkage to MD" below, which states the same rule for the recovery direction; the two sections MUST stay in lockstep.
 
 Birthday-bound collision probability among <code>k = 50</code> stubs at 32 bits: <code>P(collision) ≈ k(k − 1) / (2 · 2³²) ≈ 2.85 × 10⁻⁷</code> ≈ 0.00003% — effectively zero for the threat model. Even 24 bits clears it; 32 bits is conservative margin.
 

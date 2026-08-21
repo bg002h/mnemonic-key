@@ -60,6 +60,8 @@ enum Command {
 fn main() -> ExitCode {
     // argv-hardening: deny other-UID /proc/$PID/cmdline reads + core dumps.
     process_hardening::set_non_dumpable();
+    // Die quietly on EPIPE instead of panicking mid-bundle (see the fn's docs).
+    process_hardening::restore_default_sigpipe();
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
         Err(e) => {

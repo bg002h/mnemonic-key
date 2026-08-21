@@ -341,29 +341,49 @@ fn json_batch_wraps_the_single_card_object() {
     let cards = batch["cards"].as_array().expect("cards array");
     assert_eq!(cards.len(), KEYS.len());
 
-    let single: serde_json::Value = serde_json::from_str(&stdout_of(
-        &mk()
-            .args([
-                "encode",
-                "--xpub",
-                KEYS[0].2,
-                "--origin-fingerprint",
-                KEYS[0].0,
-                "--origin-path",
-                &format!("m/{}", KEYS[0].1),
-                "--policy-id-stub",
-                STUB,
-                "--json",
-            ])
-            .output()
-            .unwrap(),
-    ))
-    .unwrap();
-
-    for key in ["mk1_strings", "chunk_count", "code_variant"] {
+    // EVERY index, not just cards[0]. Checking only the first entry left the
+    // array's ORDER unpinned: a mutant swapping cards[1] and cards[2] passed
+    // all 132 tests in the crate, because the plain-text tests never pass
+    // --json and this test never looked past index 0 (R5/C, 2026-08-21).
+    for (i, (fp, path, x)) in KEYS.iter().enumerate() {
+        let single: serde_json::Value = serde_json::from_str(&stdout_of(
+            &mk()
+                .args([
+                    "encode",
+                    "--xpub",
+                    x,
+                    "--origin-fingerprint",
+                    fp,
+                    "--origin-path",
+                    &format!("m/{path}"),
+                    "--policy-id-stub",
+                    STUB,
+                    "--json",
+                ])
+                .output()
+                .unwrap(),
+        ))
+        .unwrap();
+        for key in ["mk1_strings", "chunk_count", "code_variant"] {
+            assert_eq!(
+                cards[i][key], single[key],
+                "batch cards[{i}].{key} must equal a single-card encode of KEYS[{i}]"
+            );
+        }
+        // Each card NAMES the record it was minted for, so a consumer can join
+        // on identity instead of assuming card order still matches file order.
+        // Position-only output is what forces caption-by-counting, and this
+        // project already has an incident where that captioned 30 plates with
+        // the wrong cosigner (R2/I + R3/I).
         assert_eq!(
-            cards[0][key], single[key],
-            "batch card[0].{key} must equal the single-card object"
+            cards[i]["origin_fingerprint"],
+            serde_json::Value::from(*fp),
+            "cards[{i}] must name its own fingerprint"
+        );
+        assert_eq!(
+            cards[i]["origin_path"],
+            serde_json::Value::from(*path),
+            "cards[{i}] must name its own origin path"
         );
     }
 }

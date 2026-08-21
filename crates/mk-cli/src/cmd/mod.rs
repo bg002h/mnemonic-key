@@ -124,6 +124,37 @@ pub fn group_md1_cards(values: &[String]) -> Vec<Vec<&str>> {
 /// content-id -- so a short or doctored set is refused here rather than
 /// producing a stub from whatever chunks were present.
 pub fn derive_stub_from_md1_card(card: &[&str]) -> Result<[u8; 4]> {
+    Ok(decode_md1_card(card)?.stub)
+}
+
+/// The 65-byte identity md1 stores for a concrete key: 32-byte chain code
+/// followed by the 33-byte compressed public key (`TlvSection::pubkeys`).
+///
+/// Compared as bytes rather than as a base58 xpub string so the check cannot be
+/// defeated by an equivalent re-serialization (a SLIP-132 `Zpub`, or a differing
+/// depth/child byte) that names the same key.
+pub fn xpub_identity_65(x: &Xpub) -> [u8; 65] {
+    let mut out = [0u8; 65];
+    out[..32].copy_from_slice(&x.chain_code.to_bytes());
+    out[32..].copy_from_slice(&x.public_key.serialize());
+    out
+}
+
+/// One `--from-md1` card, decoded once: its binding stub, plus the cosigner set
+/// it declares (`None` for a keyless template, which carries no keys).
+pub struct Md1Card {
+    pub stub: [u8; 4],
+    pub cosigners: Option<Vec<[u8; 65]>>,
+}
+
+/// Decode ONE card -- a single complete md1 string, or the full set of its
+/// chunks -- into its stub and cosigner set.
+///
+/// Chunked input goes through `md_codec::reassemble`, which verifies per-chunk
+/// BCH, header consistency, index completeness, and the cross-chunk content-id
+/// -- so a short or doctored set is refused here rather than producing a stub
+/// from whatever chunks were present.
+pub fn decode_md1_card(card: &[&str]) -> Result<Md1Card> {
     let descriptor = match card {
         [single] if md1_chunk_set_id(single).is_none() => md_codec::decode_md1_string(single)?,
         chunks => md_codec::reassemble(chunks)?,
@@ -135,7 +166,18 @@ pub fn derive_stub_from_md1_card(card: &[&str]) -> Result<[u8; 4]> {
     };
     let mut stub = [0u8; 4];
     stub.copy_from_slice(&id_bytes[..4]);
-    Ok(stub)
+
+    // A keyless template has no cosigners to be a member of, so membership is
+    // not checkable and `None` means "do not check" rather than "empty set".
+    // Conflating the two would refuse every legitimate template-form card.
+    let cosigners = descriptor
+        .tlv
+        .pubkeys
+        .as_ref()
+        .filter(|v| !v.is_empty())
+        .map(|v| v.iter().map(|(_, k)| *k).collect());
+
+    Ok(Md1Card { stub, cosigners })
 }
 
 /// Format `policy_id_stub` bytes as 8 lowercase hex chars.

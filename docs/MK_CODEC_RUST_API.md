@@ -88,20 +88,36 @@ was emitted in privacy-preserving mode); `policy_id_stubs` is
 
 ## Cross-binding with md-codec
 
-Each mk1 card carries one or more 4-byte `policy_id_stub`s (each is
-the first 4 bytes of `SHA-256(canonical wallet-policy preimage)`).
-Toolkits combining mk-codec with md-codec compute the stub on the
-policy side and embed it on the key side, so that mismatched cards
-can be detected:
+Each mk1 card carries one or more 4-byte `policy_id_stub`s. The stub is the top
+4 bytes of a 16-byte canonical wallet identity, and **which identity depends on
+the FORM of the md1 card** (`SPEC_mk_v0_1.md` §3.3):
+
+| md1 form | identity |
+| --- | --- |
+| keyed wallet policy (`is_wallet_policy()`) | `md_codec::compute_wallet_policy_id` |
+| keyless template | `md_codec::compute_wallet_descriptor_template_id` |
+
+Toolkits combining mk-codec with md-codec compute the stub on the policy side
+and embed it on the key side, so mismatched cards can be detected:
 
 ```rust
-let mk_stubs = &mk_card.policy_id_stubs;
-let md_stub = compute_policy_id_stub(&md_template, &xpubs);
-assert!(mk_stubs.contains(&md_stub));
+let descriptor = md_codec::decode_md1_string(md1)?;
+let id = if descriptor.is_wallet_policy() {
+    *md_codec::compute_wallet_policy_id(&descriptor)?.as_bytes()
+} else {
+    *md_codec::compute_wallet_descriptor_template_id(&descriptor)?.as_bytes()
+};
+let md_stub: [u8; 4] = id[..4].try_into().unwrap();
+assert!(mk_card.policy_id_stubs.contains(&md_stub));
 ```
 
-The md-codec crate exposes `compute_policy_id_stub`; see the
-descriptor-mnemonic README for that surface.
+**Corrected 2026-08-21 (R6/F2).** This section previously described the stub as
+"the first 4 bytes of `SHA-256(canonical wallet-policy preimage)`" and showed
+`md_codec::compute_policy_id_stub(&md_template, &xpubs)`. **No such function has
+ever existed** — md-codec exposes `compute_wallet_policy_id` and
+`compute_wallet_descriptor_template_id` — so the example did not compile, and
+the formula was wrong under every rule this project has shipped. The reference
+implementation is `mk-cli`'s `decode_md1_card`.
 
 ## Modules
 

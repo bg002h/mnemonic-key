@@ -21,8 +21,19 @@ use std::process::Command;
 
 use assert_cmd::cargo::CommandCargoExt;
 
-const V1_XPUB: &str = "xpub6Den8YwXbKQvkwukmx7Uukicw4qDgMEPuuUkhMp3Rn557YSN2uVQnCMQNSfgDtennU9nES3Wbbmz1LAPBydhNpED8NU4mf1SFF41hM7vFrc";
-const V1_FP_HEX: &str = "aabbccdd";
+/// The xpub these tests mint cards for.
+///
+/// It is `@0` of [`KEYED_POLICY_A_CHUNKS`] / [`KEYED_POLICY_B_CHUNKS`], NOT an
+/// arbitrary key. `mk encode` refuses to stamp a card with a KEYED policy's
+/// stub unless the xpub is one of that policy's cosigners (R2/C1) -- a card
+/// claiming membership in a policy it is not in is refused at recovery, so
+/// minting it wastes an engraved plate.
+///
+/// These tests are about which IDENTITY the stub is derived from, and the stub
+/// does not depend on which cosigner is being carded, so using a real member
+/// costs the assertions nothing and keeps the fixtures self-consistent.
+const V1_XPUB: &str = "xpub6DkFAXWQ2dHxq2vatrt9qyA3bXYU4ToWQwCHbf5XB2mSTexcHZCeKS1VZYcPoBd5X8yVcbXFHJR9R8UCVpt82VX1VhR28mCyxUFL4r6KFrf";
+const V1_FP_HEX: &str = "73c5da0a";
 const V1_PATH: &str = "m/48'/0'/0'/2'";
 
 /// Canonical KEYLESS template md1 — md-codec's `pkh_basic` vector
@@ -148,6 +159,25 @@ fn verify_from_keyless_template_md1_matches_template_id_stub() {
     assert!(out.status.success(), "mk encode failed: {out:?}");
     let stdout = String::from_utf8(out.stdout).unwrap();
     let strings: Vec<String> = stdout.lines().map(str::to_string).collect();
+
+    // Anchor to the INDEPENDENT golden before going on to the agreement check.
+    //
+    // Steps 2 and 3 below are an agreement test: both sides call the same
+    // `derive_stub_from_md1_card`, so they agree whether or not it is correct,
+    // and step 3 only proves the derived stub differs from one unrelated
+    // literal. Two independent corruptions of the identity logic -- swapping
+    // the keyless arm to WalletPolicyId, and shifting the stub window to
+    // [1..5] -- both survived this test while killing its siblings (R5/I,
+    // 2026-08-21). Comparing the emitted stub to EXPECTED_TEMPLATE_STUB is what
+    // makes the test pin the value rather than the self-consistency.
+    {
+        let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+        let card = mk_codec::decode(&refs).expect("decode emitted strings");
+        assert_eq!(
+            card.policy_id_stubs[0], EXPECTED_TEMPLATE_STUB,
+            "encode must stamp the golden template-id stub, not merely agree with itself"
+        );
+    }
     assert!(!strings.is_empty());
 
     // 2. `mk verify --from-md1 <same template>` must agree → exit 0.

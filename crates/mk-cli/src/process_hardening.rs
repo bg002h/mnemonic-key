@@ -68,6 +68,25 @@ pub fn set_non_dumpable() {
     }
 }
 
+/// Restore the default SIGPIPE disposition, which Rust's runtime sets to
+/// `SIG_IGN` before `main`.
+///
+/// With SIGPIPE ignored, a `println!` into a closed pipe returns `Err` and the
+/// `print!` machinery PANICS. `mk encode --keys big.txt | head` therefore
+/// printed a Rust panic and exit 101 after emitting a partial bundle -- and a
+/// large batch (a 1000-record file emits ~3000 lines) is exactly what an
+/// operator pages. Restoring `SIG_DFL` makes the process die quietly on EPIPE
+/// the way every other Unix filter does (R2/I, 2026-08-21).
+///
+/// Safety: `signal(2)` with `SIG_DFL` is async-signal-safe and this runs before
+/// any thread is spawned.
+pub fn restore_default_sigpipe() {
+    // SAFETY: single-threaded at this point; SIG_DFL is the kernel default.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(target_os = "linux")]
