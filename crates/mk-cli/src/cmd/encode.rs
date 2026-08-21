@@ -204,6 +204,36 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         }
     }
 
+    // Coverage: say so when the keys being carded do not cover every cosigner.
+    //
+    // A NOTE, not a refusal. Minting one card at a time is a legitimate and
+    // common workflow -- a cosigner cards their own key without the others'
+    // xpubs in hand -- so refusing an incomplete set would break the ordinary
+    // case. But a --keys BATCH that silently produces N cards for N+1
+    // cosigners is a short bundle, and a short bundle discovered at recovery
+    // is the expensive way to find out. Membership is already enforced above,
+    // so every card here is a genuine member; this is only about how many of
+    // them are present (R2/I, 2026-08-21).
+    for policy in &policies {
+        let Some(cosigners) = &policy.cosigners else {
+            continue;
+        };
+        let carded: std::collections::HashSet<[u8; 65]> = cards
+            .iter()
+            .map(|(_, _, x)| crate::cmd::xpub_identity_65(x))
+            .collect();
+        let missing = cosigners.iter().filter(|c| !carded.contains(*c)).count();
+        if missing > 0 {
+            eprintln!(
+                "note: policy {} has {} cosigner(s); {} card(s) minted here, {} not carded",
+                fmt_stub(&policy.stub),
+                cosigners.len(),
+                carded.len(),
+                missing,
+            );
+        }
+    }
+
     // One mint path for both routes: a batch card and a single card differ only
     // in where their (fingerprint, path, xpub) came from, so they cannot drift.
     let mut minted: Vec<MintedCard> = Vec::with_capacity(cards.len());

@@ -447,3 +447,38 @@ fn record_order_follows_file_order() {
         "the FIRST card out must be the FIRST record in the file"
     );
 }
+
+/// A batch that does not cover every cosigner of a KEYED policy says so on
+/// stderr -- and still exits 0, because minting one card at a time is a normal
+/// workflow (a cosigner cards their own key without the others' xpubs in hand).
+///
+/// The point is that a SHORT bundle should not be silent: discovering at
+/// recovery that a cosigner was never carded is the expensive way to find out.
+/// A keyless template carries no cosigner list, so it must stay quiet.
+#[test]
+fn short_coverage_of_a_keyed_policy_is_noted_not_refused() {
+    // Only the first of three keys, against a policy the test fixture declares
+    // with more cosigners than that.
+    let body = keyfile_body(&KEYS[..1]);
+    let kf = write_keyfile(&body);
+    let out = mk()
+        .args([
+            "encode",
+            "--keys",
+            kf.to_str().unwrap(),
+            "--policy-id-stub",
+            STUB,
+            "--group-size",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    // --policy-id-stub carries no cosigner list either, so this must be silent
+    // AND succeed: the note is only reachable via a KEYED --from-md1 policy.
+    assert!(out.status.success(), "a short set must still mint");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !err.contains("cosigner"),
+        "a stub-only encode has no cosigner list to compare against: {err}"
+    );
+}

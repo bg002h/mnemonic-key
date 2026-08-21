@@ -16,7 +16,18 @@
 //! `card-index.txt` on the mk1 string rather than on key order in
 //! `mnemonic-engrave`'s pathological journey, after an ordering assumption
 //! captioned 30 plates with the wrong cosigner. One record carries its
-//! fingerprint, path and key together and cannot come apart.
+//! fingerprint, path and key together, so they cannot be misaligned BY THE
+//! TOOL the way three parallel lists can.
+//!
+//! What this does NOT do is check that a record is internally truthful. A
+//! record pairing a real xpub with a DIFFERENT key's fingerprint and path is
+//! accepted whenever the xpub's own depth still matches (the encoder checks
+//! depth and child number, not whose key it is), so two same-depth cosigners
+//! can be crossed by an operator editing the file. The earlier wording here
+//! claimed records "cannot come apart", which over-claims a real but narrower
+//! guarantee (R1, 2026-08-21). What DOES catch a crossed record is
+//! `mk decode` on the emitted card, or the origin each card now reports in
+//! `--json`.
 //!
 //! Blank lines and `#` comments are ignored, so a key list can be annotated.
 
