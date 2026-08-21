@@ -241,3 +241,52 @@ fn gui_schema_lists_address_and_derive_with_dropdowns() {
     assert!(dnames.contains(&"--path"));
     assert!(dnames.contains(&"--index"));
 }
+
+/// `--keys` is CLI-only and must NOT reach the GUI contract (F-223).
+///
+/// `mk gui-schema` describes the form `mnemonic-gui` renders, and that form
+/// mints ONE card. `--keys` mints N from a file, which is a different screen
+/// the GUI does not implement. Emitting it would tell the GUI to render a
+/// control that does not exist.
+///
+/// This test is also what keeps `--xpub` honest. `--keys` made it
+/// `required_unless_present`, so clap's `is_required_set()` reports false; the
+/// schema overrides it back to true for the single-card form. `mnemonic-gui`
+/// keeps a HAND-WRITTEN mirror (`src/schema/mk.rs`) with `required: true` and
+/// there is no automated gate between the two repos, so a silent flip here
+/// would desync them with nothing to catch it.
+#[test]
+fn keys_flag_is_cli_only_and_absent_from_gui_schema() {
+    let out = Command::cargo_bin("mk")
+        .expect("mk binary")
+        .arg("gui-schema")
+        .output()
+        .expect("invoke mk gui-schema");
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).expect("JSON");
+    let encode = v["subcommands"]
+        .as_array()
+        .expect("subcommands")
+        .iter()
+        .find(|s| s["name"] == "encode")
+        .expect("encode subcommand");
+    let flags = encode["flags"].as_array().expect("flags");
+
+    assert!(
+        !flags.iter().any(|f| f["name"] == "--keys"),
+        "--keys must not appear in the GUI schema"
+    );
+    // And the flags it relaxes must still read as required, or the GUI form
+    // would stop validating them.
+    for name in ["--xpub", "--origin-path"] {
+        let f = flags
+            .iter()
+            .find(|f| f["name"] == name)
+            .unwrap_or_else(|| panic!("{name} present"));
+        assert_eq!(
+            f["required"],
+            Value::from(true),
+            "{name} required in the GUI form"
+        );
+    }
+}

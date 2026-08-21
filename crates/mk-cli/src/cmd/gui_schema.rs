@@ -85,7 +85,10 @@ fn build_schema(cmd: &Command) -> serde_json::Value {
                 if id == "help" || id == "version" {
                     continue;
                 }
-                flags.push(flag_from_arg(arg));
+                if CLI_ONLY_FLAGS.contains(&(name.as_str(), id)) {
+                    continue;
+                }
+                flags.push(flag_from_arg(&name, arg));
             }
         }
         subs.push(Subcommand {
@@ -101,12 +104,34 @@ fn build_schema(cmd: &Command) -> serde_json::Value {
     })
 }
 
-fn flag_from_arg(arg: &Arg) -> Flag {
+/// Flags that exist on the CLI but are deliberately NOT part of the GUI
+/// contract.
+///
+/// `mk gui-schema` describes the form `mnemonic-gui` RENDERS, not the CLI's
+/// whole surface. The GUI's encode form mints ONE card from one xpub; `--keys`
+/// mints N from a file and has no sensible form in that shape (a file picker
+/// plus an N-card result view is a different screen). Emitting it would tell
+/// the GUI to render a control it does not implement.
+const CLI_ONLY_FLAGS: &[(&str, &str)] = &[("encode", "keys")];
+
+/// Flags the GUI form requires, even though clap can no longer mark them
+/// required because a CLI-only flag above relaxes them.
+///
+/// `--xpub` and `--origin-path` are `required_unless_present("keys")`, so
+/// `Arg::is_required_set()` reports false for both. Within the single-card
+/// form the GUI renders, they ARE required, and `mnemonic-gui`'s hand-written
+/// mirror (`src/schema/mk.rs`) says so. Without this the schema would flip
+/// them to optional and silently desync a repo that has no automated gate
+/// against this one.
+const REQUIRED_IN_GUI_FORM: &[(&str, &str)] = &[("encode", "xpub"), ("encode", "origin_path")];
+
+fn flag_from_arg(sub: &str, arg: &Arg) -> Flag {
     let long = arg
         .get_long()
         .map(|s| format!("--{s}"))
         .unwrap_or_else(|| format!("--{}", arg.get_id().as_str().replace('_', "-")));
-    let required = arg.is_required_set();
+    let id = arg.get_id().as_str();
+    let required = arg.is_required_set() || REQUIRED_IN_GUI_FORM.contains(&(sub, id));
     let (kind, choices) = classify(arg);
     Flag {
         name: long,

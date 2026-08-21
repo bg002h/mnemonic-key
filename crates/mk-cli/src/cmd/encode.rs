@@ -2,6 +2,9 @@
 //!
 //! Realizes SPEC §3.3 (Policy ID stub format) from the v0.2 plan.
 
+use bitcoin::bip32::{
+    DerivationPath as DerivationPath2, Fingerprint as Fingerprint2, Xpub as Xpub2,
+};
 use clap::Args;
 use mk_codec::KeyCard;
 use mk_codec::string_layer::header::MAX_CHUNK_SET_ID;
@@ -16,17 +19,29 @@ use crate::error::{CliError, Result};
 /// `mk encode` arguments.
 #[derive(Args, Debug)]
 pub struct EncodeArgs {
-    /// BIP 32 extended public key (xpub-prefixed string).
-    #[arg(long)]
-    pub xpub: String,
+    /// BIP 32 extended public key (xpub-prefixed string). Required unless
+    /// `--keys` supplies the keys in a file.
+    #[arg(long, required_unless_present = "keys")]
+    pub xpub: Option<String>,
 
     /// 8-hex-char master fingerprint. Mutually exclusive with `--privacy-preserving`.
     #[arg(long)]
     pub origin_fingerprint: Option<String>,
 
-    /// Derivation path (e.g., `m/48'/0'/0'/2'`).
-    #[arg(long)]
-    pub origin_path: String,
+    /// Derivation path (e.g., `m/48'/0'/0'/2'`). Required unless `--keys`
+    /// supplies the origins in a file.
+    #[arg(long, required_unless_present = "keys")]
+    pub origin_path: Option<String>,
+
+    /// Mint ONE card per key record in FILE (`-` for stdin), instead of the
+    /// single card described by `--xpub`/`--origin-path`.
+    ///
+    /// Each record is BIP-380 origin notation on its own line --
+    /// `[fingerprint/path]xpub` -- so a key cannot be separated from the origin
+    /// it was derived at. Blank lines and `#` comments are ignored. Every card
+    /// receives the same `--policy-id-stub`/`--from-md1` binding.
+    #[arg(long, value_name = "FILE")]
+    pub keys: Option<String>,
 
     /// Repeatable. Each value is 8 lowercase hex chars (4 bytes).
     #[arg(long)]
@@ -79,6 +94,33 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         ));
     }
 
+    if args.keys.is_some() {
+        // Each --keys record carries its own origin, so a global one would have
+        // to either override it (engraving an origin the key was not derived
+        // at) or be ignored. Both are worse than refusing.
+        for (flag, present) in [
+            ("--xpub", args.xpub.is_some()),
+            ("--origin-path", args.origin_path.is_some()),
+            ("--origin-fingerprint", args.origin_fingerprint.is_some()),
+            // --chunk-set-id pins ONE card's 20-bit id; N cards cannot share it.
+            ("--chunk-set-id", args.chunk_set_id.is_some()),
+            ("--privacy-preserving", args.privacy_preserving),
+        ] {
+            if present {
+                return Err(CliError::UsageError(format!(
+                    "--keys and {flag} are mutually exclusive; {}",
+                    if flag == "--privacy-preserving" {
+                        "a --keys record always declares a fingerprint, and dropping it \
+                         silently is how a card gets engraved wrong -- mint \
+                         privacy-preserving cards one at a time"
+                    } else {
+                        "each --keys record carries its own origin"
+                    }
+                )));
+            }
+        }
+    }
+
     let mut stubs: Vec<[u8; 4]> = Vec::new();
     for s in &args.policy_id_stub {
         stubs.push(parse_stub_hex(s)?);
@@ -102,23 +144,60 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         (Some(_), true) => unreachable!("guarded above"),
     };
 
-    let path = parse_derivation_path(&args.origin_path)?;
-    let xpub = parse_xpub_normalized(&args.xpub, Some(&path))?;
-
-    let card = KeyCard::new(stubs, fingerprint, path, xpub);
-    let strings = match &args.chunk_set_id {
-        Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?)?,
-        None => mk_codec::encode(&card)?,
+    let cards: Vec<(Option<Fingerprint2>, DerivationPath2, Xpub2)> = match &args.keys {
+        Some(path) => crate::keyfile::read_key_records(path)?
+            .into_iter()
+            .map(|r| {
+                // --privacy-preserving is refused alongside --keys (guarded
+                // above), so every batch record engraves its own fingerprint.
+                (Some(r.fingerprint), r.path, r.xpub)
+            })
+            .collect(),
+        None => {
+            let path = parse_derivation_path(args.origin_path.as_deref().ok_or_else(|| {
+                CliError::UsageError("--origin-path is required (or use --keys)".into())
+            })?)?;
+            let xpub_str = args
+                .xpub
+                .as_deref()
+                .ok_or_else(|| CliError::UsageError("--xpub is required (or use --keys)".into()))?;
+            let xpub = parse_xpub_normalized(xpub_str, Some(&path))?;
+            vec![(fingerprint, path, xpub)]
+        }
     };
 
+    // One mint path for both routes: a batch card and a single card differ only
+    // in where their (fingerprint, path, xpub) came from, so they cannot drift.
+    let mut minted: Vec<Vec<String>> = Vec::with_capacity(cards.len());
+    for (fp, path, xpub) in cards {
+        let card = KeyCard::new(stubs.clone(), fp, path, xpub);
+        let strings = match &args.chunk_set_id {
+            Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?)?,
+            None => mk_codec::encode(&card)?,
+        };
+        minted.push(strings);
+    }
+
     if args.json {
-        emit_json(&strings)?;
+        if args.keys.is_some() {
+            emit_json_batch(&minted)?;
+        } else {
+            emit_json(&minted[0])?;
+        }
     } else {
-        for s in &strings {
-            println!(
-                "{}",
-                crate::format::render_grouped(s, args.group_size as usize, args.separator)
-            );
+        for (i, strings) in minted.iter().enumerate() {
+            // Blank line BETWEEN cards, never before the first or after the
+            // last: single-card output stays byte-identical to what it was
+            // before --keys existed.
+            if i > 0 {
+                println!();
+            }
+            for s in strings {
+                println!(
+                    "{}",
+                    crate::format::render_grouped(s, args.group_size as usize, args.separator)
+                );
+            }
         }
     }
     crate::output_advisory::emit_output_class_advisory(
@@ -146,6 +225,35 @@ fn parse_chunk_set_id(s: &str) -> Result<u32> {
         )));
     }
     Ok(v)
+}
+
+/// JSON for `--keys`: a `cards` array whose entries are exactly the object
+/// single-card `--json` emits. Additive, so a consumer of the single form can
+/// read a batch entry without changes.
+fn emit_json_batch(minted: &[Vec<String>]) -> Result<()> {
+    let cards: Vec<_> = minted.iter().map(|s| card_json(s)).collect();
+    let envelope = json!({
+        "schema_version": 1,
+        "card_count": cards.len(),
+        "cards": cards,
+    });
+    let s = serde_json::to_string(&envelope)
+        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+    println!("{s}");
+    Ok(())
+}
+
+/// The per-card JSON object, shared by the single and batch emitters.
+fn card_json(strings: &[String]) -> serde_json::Value {
+    let variant = strings
+        .first()
+        .map(|s| classify_code_variant(s))
+        .unwrap_or("regular");
+    json!({
+        "mk1_strings": strings,
+        "chunk_count": strings.len(),
+        "code_variant": variant,
+    })
 }
 
 fn emit_json(strings: &[String]) -> Result<()> {

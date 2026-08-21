@@ -7,6 +7,71 @@ file is the source of truth for `mk-cli` release notes.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`mk encode --from-md1` / `mk verify --from-md1` can read a CHUNKED md1 at
+  all (F-127).** Two defects, stacked. The vendored `md-codec` was **0.34.0**,
+  five wire versions behind, so every chunk was refused with
+  `wire-format version mismatch: got 9, expected 4`; bumped to **0.42.0**. With
+  that fixed the error only *changed*, to
+  `chunk set incomplete: got 1 chunks, expected 4`, because each `--from-md1`
+  value was decoded INDEPENDENTLY — a four-chunk card was four incomplete sets.
+  Values are now grouped by the 20-bit chunk-set id in their wire header, and
+  each GROUP yields one stub.
+
+  Scale, measured: a keyed wallet policy is 246 data symbols against a
+  single-string cap of 80, so **every** keyed wallet-policy card is chunked.
+  This was not a large-wallet edge case — `--from-md1` was unusable for all of
+  them, and only ever worked on keyless templates short enough to fit one
+  string.
+
+  `--from-md1` still means one card per POLICY: grouping keys on the set id,
+  not on adjacency, so a key card belonging to two wallets still gets two stubs
+  in first-appearance order.
+
+### Added
+
+- **`mk encode --keys <FILE>`** — mint one card per key record instead of one
+  card per invocation (F-223). Records are BIP-380 origin notation, one per
+  line (`[fingerprint/path]xpub`); blank lines and `#` comments are ignored,
+  and `-` reads stdin. Every card receives the same
+  `--policy-id-stub`/`--from-md1` binding.
+
+  Measured on an 11-cosigner wallet: **11 invocations → 1**, with output
+  byte-identical to the loop it replaces.
+
+  The record format was chosen over three parallel repeatable flags because
+  parallel lists can desync, and a desync does not fail — it mints a card
+  naming the wrong master.
+
+  `--keys` is mutually exclusive with `--xpub`, `--origin-path`,
+  `--origin-fingerprint`, `--chunk-set-id` and `--privacy-preserving`: each
+  record carries its own origin, so a global one would have to override it or
+  be ignored. Privacy-preserving cards are minted one at a time, deliberately —
+  a record always declares a fingerprint, and dropping it silently is how a
+  card gets engraved wrong.
+
+  Plain output separates cards with a blank line (single-card output is
+  unchanged — no leading or trailing blank). `--json` gains a `cards` array
+  whose entries are exactly the object the single-card form emits.
+
+  **`mk gui-schema` is byte-identical** — verified by diffing against a build of
+  the previous tree. `--keys` is deliberately excluded from the GUI contract:
+  the schema describes the form `mnemonic-gui` renders, that form mints ONE
+  card, and `mnemonic-gui`'s mirror is hand-written with no automated gate
+  against this repo.
+
+### Changed — docs
+
+- **`SPEC_mk_v0_1.md` §3.3 and §5 now state the FORM-AWARE stub rule (F-128)**:
+  `WalletPolicyId` for a keyed wallet policy, `WalletDescriptorTemplateId` for a
+  keyless template. The spec had named `WalletPolicyId` unconditionally while
+  shipped `mk` has always dispatched on the form. §5's recovery flow was the
+  load-bearing half — followed literally it would reject **every** card minted
+  from a template, presenting as "none of my cards belong to this wallet".
+
 ## [0.13.0] — 2026-08-19 — consumes mk-codec 0.5.0 (BREAKING: derived `chunk_set_id`)
 
 ### Added
