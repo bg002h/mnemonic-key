@@ -67,8 +67,9 @@ happens to notice is what left them the first time, so
 against the SPEC's real headings and fails on any that does not — a command
 instead of a discipline. **Scope, stated precisely because the first version of
 this sentence overclaimed "every citation":** it covers Rust sources only, so
-cites in `design/**.md` are not checked (`FOLLOWUPS.md` still carries a live
-`§3.5.5`). Its first draft was also prefix-anchored and would have missed the
+cites in `design/**.md` are not checked — this repo's own
+`design/FOLLOWUPS.md:151` carried a live `§3.5.5`, found by that review and
+repointed to §10 by hand, since the guard cannot see it. Its first draft was also prefix-anchored and would have missed the
 shape one of the nine actually had — a second cite on the same line with no
 repeated `SPEC ` prefix — and excluded any line whose preceding token merely
 ended with "md", swallowing `CLAUDE.md SPEC §x`. Both fixed; all three shapes
