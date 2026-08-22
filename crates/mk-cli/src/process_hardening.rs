@@ -80,9 +80,19 @@ pub fn set_non_dumpable() {
 ///
 /// Safety: `signal(2)` with `SIG_DFL` is async-signal-safe and this runs before
 /// any thread is spawned.
+///
+/// A no-op on Windows, which has no SIGPIPE. Gating this INSIDE the function
+/// (as `set_non_dumpable` does) rather than at the call site is what keeps
+/// `main` free of `cfg`; the first version omitted the gate entirely and broke
+/// all three Windows builds, which a Linux-only local gate cannot see.
 pub fn restore_default_sigpipe() {
-    // SAFETY: single-threaded at this point; SIG_DFL is the kernel default.
+    // Unix only: SIGPIPE does not exist on Windows, and Rust does not install
+    // the SIG_IGN disposition there, so there is nothing to restore. Gated the
+    // same way `set_non_dumpable` gates its platform primitives, rather than
+    // gating the CALL SITE, so main() stays platform-agnostic.
+    #[cfg(unix)]
     unsafe {
+        // SAFETY: single-threaded at this point; SIG_DFL is the kernel default.
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 }
