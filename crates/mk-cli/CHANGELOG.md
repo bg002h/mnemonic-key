@@ -37,9 +37,13 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   CR-only file (classic Mac) has no `\n`, so every record after the first
   vanished into line 1 — a SHORT BUNDLE, silently. Now refused by name.
 
-- **`--from-md1` accepts display-grouped md1.** `md` prints grouped strings by
-  default and `mk`'s own mk1 intake already strips separators, so a
-  copy-pasted md1 was refused by the one flag that exists to consume it.
+- **`--from-md1` accepts display-grouped md1**, on both `encode` and `verify`.
+  The stated cause was wrong on first writing: `md`'s DEFAULT separator is a
+  space, and `md-codec`'s `unwrap_string` has always tolerated whitespace and
+  `-`, so the default form round-tripped before this change. What was refused
+  is `--separator comma`. The fix is real, the original explanation was not.
+  (`verify` was also missed on the first pass and only `encode` got the
+  normalization, so the two commands disagreed about the same string.)
 
 - The SLIP-0132 normalization note no longer says `--xpub`; the xpub can arrive
   via `--keys`, and naming a flag the operator did not use is misleading.
@@ -47,8 +51,11 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Fixed — phantom SPEC citations, and a guard so the class stays closed
 
 A review found one doc comment citing `SPEC §3.5.4`, which does not exist.
-Sweeping the class found **eight**: §3.5.2, §3.5.3, §3.5.4, §3.5.5, §3.5.6 (×2),
-§3.5.7 (×2) and §1.1. The mk SPEC's §3.5 is "Origin path encoding" and has no
+Sweeping the class found **nine**: §3.5.2, §3.5.3, §3.5.4, §3.5.5, §3.5.6 (×2),
+§3.5.7 (×2) and §1.1. (Said "eight" on first writing — the enumeration in the
+same sentence lists nine, because `error.rs:3` carried two cites on one line.
+Corrected 2026-08-21 after a review machine-counted it; the fourth wrong count
+in this cycle, in the entry that exists because a count was wrong.) The mk SPEC's §3.5 is "Origin path encoding" and has no
 subsections at all, and several of these cited CLI surfaces the format spec
 never covered — so they were repointed at what actually governs them, or
 plainly marked as governed by tests rather than by the spec.
@@ -56,9 +63,16 @@ plainly marked as governed by tests rather than by the spec.
 **This is the second time.** A 2026-06-10 audit found four `§3.5.1` cites and
 repointed them, leaving these eight. Fixing only the instance a reviewer
 happens to notice is what left them the first time, so
-`tests/spec_cites_resolve.rs` now resolves every citation against the SPEC's
-real headings and fails on any that does not — a command instead of a
-discipline. Cross-document cites (`md SPEC §8.1`,
+`tests/spec_cites_resolve.rs` now resolves the citations in `crates/**/*.rs`
+against the SPEC's real headings and fails on any that does not — a command
+instead of a discipline. **Scope, stated precisely because the first version of
+this sentence overclaimed "every citation":** it covers Rust sources only, so
+cites in `design/**.md` are not checked (`FOLLOWUPS.md` still carries a live
+`§3.5.5`). Its first draft was also prefix-anchored and would have missed the
+shape one of the nine actually had — a second cite on the same line with no
+repeated `SPEC ` prefix — and excluded any line whose preceding token merely
+ended with "md", swallowing `CLAUDE.md SPEC §x`. Both fixed; all three shapes
+are now covered by an injection check. Cross-document cites (`md SPEC §8.1`,
 `SPEC_v0_11_wire_format.md §1.4`) are out of scope and correct in-tree; the
 first draft of the test flagged both, and two of its own explanatory comments.
 

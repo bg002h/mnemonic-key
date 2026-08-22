@@ -29,13 +29,6 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
         return Err(Error::InvalidPolicyIdStubCount);
     }
 
-    // Encoder-side invariant (SPEC_mk_v0_1.md §4): compact-73 reconstructs depth/
-    // child_number from origin_path on decode; reject any xpub whose depth/
-    // child_number disagree, else the emitted card decodes to a different-
-    // metadata xpub (the decoder cannot detect — no on-wire depth).
-    // expected_child mirrors reconstruct_xpub exactly: the terminal component,
-    // or Normal{0} for an empty path (depth-0 / no-path key, e.g. a WIF). A card
-    // encodes iff it survives compact-drop + reconstruction unchanged.
     // Encoder-side path cap. `decode_explicit_path` has always refused
     // `count > MAX_PATH_COMPONENTS` with `PathTooDeep`, but `encode_path` wrote
     // the count unchecked -- so the encoder could mint a well-formed card that
@@ -48,13 +41,32 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
     // XpubOriginPathMismatch would send the operator after the wrong thing.
     let component_count = card.origin_path.into_iter().count();
     if component_count > MAX_PATH_COMPONENTS as usize {
-        // `as u8` is safe: the depth/child guard below requires
-        // `xpub.depth as usize == component_count`, and `xpub.depth` is a u8,
-        // so a card with more than 255 components cannot reach encode at all.
-        return Err(Error::PathTooDeep(component_count as u8));
+        // SATURATE, do not truncate. `Error::PathTooDeep` carries a `u8`, and
+        // this check deliberately runs BEFORE the depth/child guard below --
+        // so the guard cannot be relied on to bound the count, and `as u8`
+        // wrapped: 256 components reported "0 components", 300 reported "44".
+        //
+        // An earlier comment here claimed the truncation was unreachable
+        // BECAUSE of that guard. Moving this check above the guard is what
+        // made that false, and the claim shipped anyway (R7/B1, 2026-08-21).
+        // Diagnostics only -- the refusal was always correct -- but a refusal
+        // that misreports its own reason is the class R2 already filed against
+        // `XpubOriginPathMismatch`, reproduced in the fix for it.
+        //
+        // Saturation makes the number a floor rather than a lie: a path at or
+        // beyond 255 components reports 255, and every such path is refused.
+        let reported = u8::try_from(component_count).unwrap_or(u8::MAX);
+        return Err(Error::PathTooDeep(reported));
     }
 
-    let path_depth = card.origin_path.into_iter().count();
+    // Encoder-side invariant (SPEC_mk_v0_1.md §4): compact-73 reconstructs depth/
+    // child_number from origin_path on decode; reject any xpub whose depth/
+    // child_number disagree, else the emitted card decodes to a different-
+    // metadata xpub (the decoder cannot detect — no on-wire depth).
+    // expected_child mirrors reconstruct_xpub exactly: the terminal component,
+    // or Normal{0} for an empty path (depth-0 / no-path key, e.g. a WIF). A card
+    // encodes iff it survives compact-drop + reconstruction unchanged.
+    let path_depth = component_count;
     let path_child = card.origin_path.into_iter().last().copied();
     let expected_child = path_child.unwrap_or(ChildNumber::Normal { index: 0 });
     if card.xpub.depth as usize != path_depth || card.xpub.child_number != expected_child {
@@ -251,7 +263,9 @@ mod tests {
     /// Found by an adversarial review, 2026-08-21 (R2/C2).
     #[test]
     fn rejects_path_deeper_than_max_components() {
-        for n in [MAX_PATH_COMPONENTS as usize + 1, 20, 255] {
+        // 256 and 300 are the cases the previous `as u8` wrapped on; the old
+        // test stopped at 255, one short of the boundary that broke.
+        for n in [MAX_PATH_COMPONENTS as usize + 1, 20, 255, 256, 300] {
             let comps: Vec<String> = (0..n).map(|i| format!("{i}'")).collect();
             let path = DerivationPath::from_str(&format!("m/{}", comps.join("/"))).unwrap();
             let card = KeyCard {
@@ -261,7 +275,14 @@ mod tests {
                 origin_path: path,
             };
             match encode_bytecode(&card) {
-                Err(Error::PathTooDeep(got)) => assert_eq!(got as usize, n),
+                // Saturating: at or beyond 255 the reported count is a floor.
+                Err(Error::PathTooDeep(got)) => {
+                    let want = u8::try_from(n).unwrap_or(u8::MAX);
+                    assert_eq!(
+                        got, want,
+                        "{n} components must report {want}, not a wrapped value"
+                    );
+                }
                 other => panic!("{n} components must be refused at encode, got {other:?}"),
             }
         }

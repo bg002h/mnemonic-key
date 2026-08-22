@@ -167,14 +167,25 @@ pub fn decode_md1_card(card: &[&str]) -> Result<Md1Card> {
     let mut stub = [0u8; 4];
     stub.copy_from_slice(&id_bytes[..4]);
 
-    // A keyless template has no cosigners to be a member of, so membership is
-    // not checkable and `None` means "do not check" rather than "empty set".
-    // Conflating the two would refuse every legitimate template-form card.
+    // The cosigner set, but ONLY when it is complete. `None` means "membership
+    // is not decidable from this card", not "the set is empty".
+    //
+    // `TlvSection::pubkeys` is SPARSE: a policy may carry keys for some `@N`
+    // and not others, and `md` emits such a card at exit 0. Treating a partial
+    // list as exhaustive refuses a legitimate cosigner whose slot simply is not
+    // filled in yet -- with a message asserting they are "not a cosigner",
+    // which is false. Refusing a valid mint is the expensive direction, and it
+    // pushes a careful operator onto `--policy-id-stub`, which is NOT
+    // membership-checked -- the very bypass this check exists to close.
+    //
+    // So: decidable iff every one of the descriptor's `n` placeholders has a
+    // key. Found by an independent review of this check's own fold (R7/B2,
+    // 2026-08-21).
     let cosigners = descriptor
         .tlv
         .pubkeys
         .as_ref()
-        .filter(|v| !v.is_empty())
+        .filter(|v| v.len() == descriptor.n as usize)
         .map(|v| v.iter().map(|(_, k)| *k).collect());
 
     Ok(Md1Card { stub, cosigners })

@@ -280,10 +280,10 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         let missing = cosigners.iter().filter(|c| !carded.contains(*c)).count();
         if missing > 0 {
             eprintln!(
-                "note: policy {} has {} cosigner(s); {} card(s) minted here, {} not carded",
+                "note: policy {} has {} cosigner(s); {} of them carded here, {} not carded",
                 fmt_stub(&policy.stub),
                 cosigners.len(),
-                carded.len(),
+                cosigners.len() - missing,
                 missing,
             );
         }

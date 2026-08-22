@@ -3,7 +3,10 @@
 //! This class has recurred twice. A 2026-06-10 audit found four `SPEC §3.5.1`
 //! cites pointing at a section that does not exist and repointed them; on
 //! 2026-08-21 an independent review found a fifth (`§3.5.4`), and sweeping the
-//! whole crate found EIGHT. The mk SPEC's §3.5 is "Origin path encoding" and
+//! whole crate found NINE (`error.rs:3` carried two cites on one line, which
+//! is also the shape the first draft of THIS test would have missed).
+//!
+//! The mk SPEC's §3.5 is "Origin path encoding" and
 //! has no subsections at all, so the entire `§3.5.x` family referred to
 //! nothing — and several cited CLI surfaces the format spec never covered.
 //!
@@ -91,38 +94,39 @@ fn every_spec_citation_resolves_to_a_real_section() {
             if line.contains("SPEC-CITE-EXEMPT") {
                 continue;
             }
-            // Only THIS spec's cites. A bare `SPEC §x` or an explicit
-            // `SPEC_mk_v0_1.md §x`. Anything else -- `md SPEC §8.1`,
-            // `SPEC_v0_11_wire_format.md §1.4` -- names a different document,
-            // often in another repository, which this test cannot resolve and
-            // must not flag. (Both forms are present and correct in-tree; the
-            // first draft of this test reported them as phantoms.)
-            for pat in ["SPEC §", "SPEC_mk_v0_1.md §"] {
-                for (idx, _) in line.match_indices(pat) {
-                    // `md SPEC §` / `SPEC_other.md §` end with a different token.
-                    let before = &line[..idx];
-                    if pat == "SPEC §"
-                        && (before.trim_end().ends_with("md") || before.ends_with('_'))
-                    {
-                        continue;
-                    }
-                    let rest = &line[idx + pat.len()..];
-                    let num: String = rest
-                        .chars()
-                        .take_while(|c| c.is_ascii_digit() || *c == '.')
-                        .collect();
-                    let num = num.trim_end_matches('.');
-                    if num.is_empty() {
-                        continue;
-                    }
-                    if !sections.contains(num) {
-                        bad.push(format!(
-                            "{}:{} cites SPEC §{num}, which the SPEC does not define",
-                            f.strip_prefix(repo_root()).unwrap_or(f).display(),
-                            i + 1
-                        ));
-                    }
+            // Does this line carry an mk-SPEC anchor at all?
+            //
+            // Exclude ONLY the `md SPEC §x` convention (the sibling repo's
+            // spec) and `SPEC_<other>.md §x`. The first draft excluded any line
+            // whose preceding token merely ENDED with "md", which also
+            // swallowed `CLAUDE.md SPEC §x`.
+            let anchored = line.match_indices("SPEC §").any(|(i, _)| {
+                let prev = line[..i].split_whitespace().next_back().unwrap_or("");
+                prev != "md" && !prev.ends_with('_')
+            }) || line.contains("SPEC_mk_v0_1.md §");
+            if !anchored {
+                continue;
+            }
+            // Then check EVERY section reference on the line, not just the one
+            // directly after "SPEC". The real pre-fold `error.rs:3` read
+            // "Realizes SPEC §3.5.6 (JSON error envelope) and §3.5.7 (…)" --
+            // the second cite carries no repeated prefix, so a prefix-anchored
+            // scan missed one of the very nine this exists to catch
+            // (R7/B5, 2026-08-21).
+            for (ix, _) in line.match_indices('§') {
+                let num: String = line[ix + '§'.len_utf8()..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.')
+                    .collect();
+                let num = num.trim_end_matches('.');
+                if num.is_empty() || sections.contains(num) {
+                    continue;
                 }
+                bad.push(format!(
+                    "{}:{} cites SPEC §{num}, which the SPEC does not define",
+                    f.strip_prefix(repo_root()).unwrap_or(f).display(),
+                    i + 1
+                ));
             }
         }
     }

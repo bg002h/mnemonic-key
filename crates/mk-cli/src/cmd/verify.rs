@@ -37,11 +37,13 @@ pub struct VerifyArgs {
     #[arg(long)]
     pub origin_path: Option<String>,
 
-    /// Expected `policy_id_stub` (repeatable; order-sensitive).
+    /// Expected `policy_id_stub` (repeatable). Compared as a multiset, so the
+    /// order given need not match the order the card carries.
     #[arg(long)]
     pub policy_id_stub: Vec<String>,
 
-    /// Expected `policy_id_stub` derived from md1 strings (repeatable; order-sensitive).
+    /// Expected `policy_id_stub` derived from md1 strings (repeatable).
+    /// Compared as a multiset; see `--policy-id-stub`.
     #[arg(long)]
     pub from_md1: Vec<String>,
 
@@ -113,7 +115,16 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     // One card per POLICY, not one per string: a keyed wallet policy always
     // arrives as a chunk set, so the values are grouped by chunk-set id first
     // and each GROUP contributes one stub.
-    for card in group_md1_cards(&args.from_md1) {
+    // Same normalization `encode` does: `md` prints display-grouped strings and
+    // this CLI's own mk1 intake strips separators, so a grouped md1 must be
+    // accepted here too. The fold applied this to `encode` ONLY, leaving the
+    // two commands disagreeing about the same input (R7/B3).
+    let from_md1: Vec<String> = args
+        .from_md1
+        .iter()
+        .map(|s| crate::format::strip_display_separators(s))
+        .collect();
+    for card in group_md1_cards(&from_md1) {
         expected_stubs.push(derive_stub_from_md1_card(&card)?);
     }
     if !expected_stubs.is_empty() {
