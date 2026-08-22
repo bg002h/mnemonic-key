@@ -121,7 +121,8 @@ fn is_json_mode(cmd: &Command) -> bool {
 
 fn emit_error(e: &CliError, json_mode: bool) {
     if json_mode {
-        // JSON-mode errors go to stdout (one stream) per SPEC §3.5.6.
+        // JSON-mode errors go to stdout (one stream) -- a CLI convention pinned by
+        // tests; the format SPEC has no section on it (see error.rs).
         let envelope = json!({
             "schema_version": 1,
             "error": {

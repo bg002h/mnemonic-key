@@ -482,3 +482,135 @@ fn short_coverage_of_a_keyed_policy_is_noted_not_refused() {
         "a stub-only encode has no cosigner list to compare against: {err}"
     );
 }
+
+/// `verify --from-md1` compares stubs as a MULTISET, so the same card checked
+/// against the same policies in a different argument order still passes — and
+/// a genuinely wrong stub still fails.
+///
+/// The ordered comparison this replaces returned exit 4 for a CORRECT card
+/// whose `--from-md1` groups were supplied in a different order (R1). A false
+/// negative on a verification tool invites re-engraving a good plate.
+#[test]
+fn verify_stub_comparison_is_order_independent_but_not_blind() {
+    let (fp, path, x) = KEYS[0];
+    let mint = |stubs: &[&str]| -> Vec<String> {
+        let mut args = vec![
+            "encode".to_string(),
+            "--xpub".into(),
+            x.into(),
+            "--origin-fingerprint".into(),
+            fp.into(),
+            "--origin-path".into(),
+            format!("m/{path}"),
+            "--group-size".into(),
+            "0".into(),
+        ];
+        for s in stubs {
+            args.push("--policy-id-stub".into());
+            args.push((*s).into());
+        }
+        stdout_of(&mk().args(&args).output().unwrap())
+            .lines()
+            .filter(|l| l.starts_with("mk1"))
+            .map(str::to_string)
+            .collect()
+    };
+    let card = mint(&["5b48af35", "38bd7cec"]);
+    assert!(!card.is_empty());
+
+    let verify = |stubs: &[&str]| -> Option<i32> {
+        let mut args = vec!["verify".to_string()];
+        args.extend(card.iter().cloned());
+        for s in stubs {
+            args.push("--policy-id-stub".into());
+            args.push((*s).into());
+        }
+        mk().args(&args).output().unwrap().status.code()
+    };
+
+    assert_eq!(verify(&["5b48af35", "38bd7cec"]), Some(0), "as minted");
+    assert_eq!(
+        verify(&["38bd7cec", "5b48af35"]),
+        Some(0),
+        "swapped order, same binding"
+    );
+    // Still catches a genuinely different binding, and a short one.
+    assert_eq!(
+        verify(&["5b48af35", "deadbeef"]),
+        Some(4),
+        "a wrong stub must fail"
+    );
+    assert_eq!(verify(&["5b48af35"]), Some(4), "a missing stub must fail");
+    assert_eq!(
+        verify(&["5b48af35", "5b48af35"]),
+        Some(4),
+        "multiset, not set: a duplicated stub must not stand in for a distinct one"
+    );
+}
+
+/// The declared origin fingerprint is checked where the xpub PROVES it: at
+/// depth 0 (the xpub is the master) and depth 1 (its parent is).
+///
+/// A record pairs a fingerprint, a path and a key, and nothing checked they
+/// describe the same thing — so two same-depth cosigners could be crossed by
+/// an operator editing the file and the card would mint. Most depths are
+/// uncheckable (an xpub carries its PARENT's fingerprint, not the master's);
+/// these two are not (R2, 2026-08-21).
+#[test]
+fn origin_fingerprint_is_checked_where_the_xpub_proves_it() {
+    use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
+    use bitcoin::secp256k1::Secp256k1;
+    use std::str::FromStr;
+
+    let secp = Secp256k1::new();
+    let master = Xpriv::new_master(bitcoin::Network::Bitcoin, &[7u8; 32]).unwrap();
+    let master_xpub = Xpub::from_priv(&secp, &master);
+    let real_fp = master_xpub.fingerprint().to_string();
+
+    let child_path = DerivationPath::from_str("m/7'").unwrap();
+    let child = Xpub::from_priv(&secp, &master.derive_priv(&secp, &child_path).unwrap());
+    assert_eq!(
+        child.depth, 1,
+        "fixture must be depth 1 for this to be provable"
+    );
+
+    let run = |record: &str| -> (Option<i32>, String) {
+        let kf = write_keyfile(&format!("{record}\n"));
+        let out = mk()
+            .args([
+                "encode",
+                "--keys",
+                kf.to_str().unwrap(),
+                "--policy-id-stub",
+                STUB,
+                "--group-size",
+                "0",
+            ])
+            .output()
+            .unwrap();
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+        )
+    };
+
+    // depth 1, correct fingerprint -> mints.
+    let (code, err) = run(&format!("[{real_fp}/7']{child}"));
+    assert_eq!(code, Some(0), "a truthful depth-1 record must mint: {err}");
+
+    // depth 1, WRONG fingerprint -> refused, and the message says why.
+    let (code, err) = run(&format!("[deadbeef/7']{child}"));
+    assert_eq!(code, Some(64), "a crossed depth-1 record must be refused");
+    assert!(
+        err.contains("does not match the xpub") && err.contains("depth 1"),
+        "the refusal must name the provable relationship: {err}"
+    );
+
+    // depth 0, WRONG fingerprint -> refused too.
+    let (code, err) = run(&format!("[deadbeef/]{master_xpub}"));
+    assert_eq!(
+        code,
+        Some(64),
+        "a crossed depth-0 record must be refused: {err}"
+    );
+}

@@ -131,8 +131,18 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // Each GROUP is one policy card and contributes one stub. The cosigner set
     // is kept alongside so the keys being stamped can be checked against the
     // policy they claim membership in, below.
+    // `md` prints md1 in display-grouped form by default, and `mk`'s own mk1
+    // intake already strips those separators -- so a copy-pasted md1 string was
+    // refused by the one flag that exists to consume it. Normalize first
+    // (R1, 2026-08-21).
+    let from_md1: Vec<String> = args
+        .from_md1
+        .iter()
+        .map(|s| crate::format::strip_display_separators(s))
+        .collect();
+
     let mut policies: Vec<crate::cmd::Md1Card> = Vec::new();
-    for card in group_md1_cards(&args.from_md1) {
+    for card in group_md1_cards(&from_md1) {
         let decoded = decode_md1_card(&card)?;
         stubs.push(decoded.stub);
         policies.push(decoded);
@@ -171,6 +181,51 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             vec![(fingerprint, path, xpub)]
         }
     };
+
+    // The declared origin fingerprint, checked where it is PROVABLE from the
+    // xpub itself.
+    //
+    // A record pairs a fingerprint, a path and a key, and nothing checked that
+    // they describe the same thing -- so two same-depth cosigners could be
+    // crossed by an operator editing the file, and the card would mint. Most
+    // depths cannot be checked (the xpub carries its PARENT's fingerprint, not
+    // the master's), but two can:
+    //   depth 0 -- the xpub IS the master, so its own fingerprint must match;
+    //   depth 1 -- its parent IS the master, so parent_fingerprint must match.
+    // Narrow, but it is the only mechanical check on whether a record is
+    // internally truthful, and it costs nothing (R2, 2026-08-21).
+    for (fp, path, xpub) in &cards {
+        let Some(declared) = fp else { continue };
+        let depth = path.into_iter().count();
+        // Only when the xpub's own depth agrees with the declared path. If they
+        // disagree the record is structurally inconsistent and THAT is the real
+        // error (the encoder reports it precisely); comparing a fingerprint
+        // across a depth mismatch compares against a key that is not the one
+        // the path describes, and would report a misleading cause. Caught by
+        // this fix's own first test.
+        if xpub.depth as usize != depth {
+            continue;
+        }
+        let provable = match depth {
+            0 => Some(("the xpub is the master key", xpub.fingerprint())),
+            1 => Some((
+                "the xpub's parent is the master key",
+                xpub.parent_fingerprint,
+            )),
+            _ => None,
+        };
+        if let Some((why, actual)) = provable {
+            if actual != *declared {
+                return Err(CliError::UsageError(format!(
+                    "origin fingerprint {} does not match the xpub: at depth {depth} {why}, \
+                     so the fingerprint must be {}. The record pairs a key with an origin \
+                     that is not its own.",
+                    fmt_fingerprint(declared),
+                    fmt_fingerprint(&actual),
+                )));
+            }
+        }
+    }
 
     // Membership: a key stamped with a KEYED policy's stub must actually be one
     // of that policy's cosigners.
@@ -237,12 +292,31 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // One mint path for both routes: a batch card and a single card differ only
     // in where their (fingerprint, path, xpub) came from, so they cannot drift.
     let mut minted: Vec<MintedCard> = Vec::with_capacity(cards.len());
-    for (fp, path, xpub) in cards {
+    for (i, (fp, path, xpub)) in cards.into_iter().enumerate() {
         let card = KeyCard::new(stubs.clone(), fp, path.clone(), xpub);
-        let strings = match &args.chunk_set_id {
-            Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?)?,
-            None => mk_codec::encode(&card)?,
+        let encoded = match &args.chunk_set_id {
+            Some(s) => mk_codec::encode_with_chunk_set_id(&card, parse_chunk_set_id(s)?),
+            None => mk_codec::encode(&card),
         };
+        // Name the RECORD. A parse failure already reports its line number, but
+        // a failure here happens after parsing -- and without the record an
+        // operator has to bisect an 11-line key file to find which cosigner
+        // broke (R1, 2026-08-21).
+        let strings = encoded.map_err(|e| {
+            if args.keys.is_some() {
+                CliError::UsageError(format!(
+                    "--keys record {} ([{}/{}]): {}",
+                    i + 1,
+                    fp.as_ref()
+                        .map(fmt_fingerprint)
+                        .unwrap_or_else(|| "-".into()),
+                    path,
+                    CliError::from(e).message()
+                ))
+            } else {
+                CliError::from(e)
+            }
+        })?;
         minted.push(MintedCard {
             fingerprint: fp,
             path,

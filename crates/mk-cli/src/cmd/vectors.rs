@@ -1,6 +1,11 @@
 //! `mk vectors` — emit the SHA-pinned v0.1 mk-codec test-vector corpus.
 //!
-//! Realizes SPEC §3.5.5. The corpus JSON is re-exported from
+//! Re-exports the conformance corpus of SPEC §10 (Reference implementation).
+//!
+//! (Was a `SPEC §3.5.x` cite. The mk SPEC's §3.5 is "Origin path encoding"
+//! and has no subsections -- that whole family of cites referred to nothing.
+//! A 2026-06-10 audit repointed four of them; a 2026-08-21 review found a
+//! fifth, and sweeping the class found eight. See FOLLOWUPS F-224.) The corpus JSON is re-exported from
 //! `mk_codec::test_vectors::V0_1_JSON` (since mk-codec 0.3.0 / mk-cli
 //! 0.3.2); the canonical file lives at `crates/mk-codec/src/test_vectors/v0.1.json`
 //! and is `include_str!`-baked into mk-codec at compile time. Runtime

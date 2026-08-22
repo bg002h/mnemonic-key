@@ -20,7 +20,10 @@ fn to_slip132(xpub_str: &str, version: [u8; 4]) -> String {
     base58::encode_check(&data)
 }
 const ZPUB_V: [u8; 4] = [0x04, 0xB2, 0x47, 0x46];
-const NOTE_ZPUB: &str = "note: --xpub was a SLIP-0132 zpub";
+/// The note no longer names `--xpub`, because the xpub can now arrive via
+/// `--keys` too and naming a flag the operator did not use is misleading
+/// (R1, 2026-08-21).
+const NOTE_ZPUB: &str = "note: the xpub was a SLIP-0132 zpub";
 /// Zpub = BIP-48 P2WSH multisig mainnet.
 const ZPUB_MULTISIG_V: [u8; 4] = [0x02, 0xAA, 0x7E, 0xD3];
 const WATCH_ONLY: &str = "note: stdout is watch-only \u{2014} public keys only, cannot spend";
@@ -171,7 +174,7 @@ fn encode_zpub_multisig_match() {
         "expected exit 0 for matching Zpub multisig; stderr={stderr}"
     );
     assert!(
-        stderr.contains("note: --xpub was a SLIP-0132 Zpub"),
+        stderr.contains("note: the xpub was a SLIP-0132 Zpub"),
         "expected Zpub normalization note; stderr={stderr}"
     );
 }

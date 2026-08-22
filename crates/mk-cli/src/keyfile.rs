@@ -107,6 +107,27 @@ pub fn read_key_records(path: &str) -> Result<Vec<KeyRecord>> {
         (buf, path.to_string())
     };
 
+    // A key file is authored by hand, often on another machine. Two encodings
+    // used to fail with a message that never named the cause (R2, 2026-08-21):
+    //
+    //   * a UTF-8 BOM makes the first record start with U+FEFF, so it does not
+    //     begin with `[` and was reported as bad BIP-380 notation;
+    //   * a CR-only file (classic Mac line endings) has no `\n` at all, so
+    //     `lines()` yields ONE line and every record after the first vanishes
+    //     into it -- a SHORT BUNDLE, which is the failure mode this project
+    //     most wants to be loud.
+    //
+    // CRLF needs no special case: the trailing `\r` is whitespace and `trim()`
+    // below removes it.
+    let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
+    if buf.contains('\r') && !buf.contains('\n') {
+        return Err(CliError::UsageError(format!(
+            "--keys {source}: the file uses CR-only line endings (classic Mac), so every \
+             record after the first would be read as part of line 1. Convert it to LF or \
+             CRLF."
+        )));
+    }
+
     let mut out = Vec::new();
     for (i, raw) in buf.lines().enumerate() {
         let line = raw.split('#').next().unwrap_or("").trim();

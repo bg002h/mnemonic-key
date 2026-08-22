@@ -9,6 +9,60 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Fixed — the Minor/Nit pass from the six-lens review (2026-08-21)
+
+- **`mk verify --from-md1` no longer reports a CORRECT card as failing.** Stub
+  comparison was an ordered list compare, so the same card checked against the
+  same policies in a different `--from-md1` order returned exit 4. Now compared
+  as a **multiset** — same binding, order-independent — with a note on stderr
+  when the order differs, since a re-mint in that order would be a different
+  card on the wire. A false negative here invites re-engraving a good plate.
+
+- **A batch mint failure names the record.** Parse errors already gave a line
+  number; a failure *after* parsing did not, so an operator had to bisect an
+  11-line key file. Now: `--keys record 3 ([73c5da0a/9']): xpub origin-path
+  mismatch: …`.
+
+- **The declared origin fingerprint is checked where the xpub proves it** —
+  depth 0 (the xpub *is* the master) and depth 1 (its parent is). Most depths
+  are uncheckable, because an xpub carries its parent's fingerprint rather than
+  the master's; these two are not. It is the only mechanical check that a
+  record is internally truthful, and it catches two same-depth cosigners
+  crossed by hand. Skipped when the xpub's depth disagrees with the declared
+  path, because then the structural mismatch is the real error — a case this
+  fix's own first test caught it getting wrong.
+
+- **Key files authored elsewhere are accepted or explained.** A UTF-8 BOM made
+  the first record fail as "bad BIP-380 notation"; it is now stripped. A
+  CR-only file (classic Mac) has no `\n`, so every record after the first
+  vanished into line 1 — a SHORT BUNDLE, silently. Now refused by name.
+
+- **`--from-md1` accepts display-grouped md1.** `md` prints grouped strings by
+  default and `mk`'s own mk1 intake already strips separators, so a
+  copy-pasted md1 was refused by the one flag that exists to consume it.
+
+- The SLIP-0132 normalization note no longer says `--xpub`; the xpub can arrive
+  via `--keys`, and naming a flag the operator did not use is misleading.
+
+### Fixed — phantom SPEC citations, and a guard so the class stays closed
+
+A review found one doc comment citing `SPEC §3.5.4`, which does not exist.
+Sweeping the class found **eight**: §3.5.2, §3.5.3, §3.5.4, §3.5.5, §3.5.6 (×2),
+§3.5.7 (×2) and §1.1. The mk SPEC's §3.5 is "Origin path encoding" and has no
+subsections at all, and several of these cited CLI surfaces the format spec
+never covered — so they were repointed at what actually governs them, or
+plainly marked as governed by tests rather than by the spec.
+
+**This is the second time.** A 2026-06-10 audit found four `§3.5.1` cites and
+repointed them, leaving these eight. Fixing only the instance a reviewer
+happens to notice is what left them the first time, so
+`tests/spec_cites_resolve.rs` now resolves every citation against the SPEC's
+real headings and fails on any that does not — a command instead of a
+discipline. Cross-document cites (`md SPEC §8.1`,
+`SPEC_v0_11_wire_format.md §1.4`) are out of scope and correct in-tree; the
+first draft of the test flagged both, and two of its own explanatory comments.
+
+
 ### Fixed — from an independent six-lens adversarial review (2026-08-21)
 
 - **`mk encode` refuses an origin path deeper than `MAX_PATH_COMPONENTS` (10).**

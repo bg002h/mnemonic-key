@@ -48,6 +48,13 @@ md1 sanity check: applying the same procedure to `b"shibbolethnums"` reproduces 
 
 **Provisional:** 4 bytes = top 32 bits of `SHA-256(canonical_bytecode)`.
 
+> **Superseded twice — see `SPEC_mk_v0_1.md` §3.3 and §9 Q-2.** The formula
+> half of this answer is stale: the bytecode hash was replaced by the
+> **WalletPolicyId** on 2026-06-10 (audit I1, it predated md-codec v0.13), and
+> that was corrected again on 2026-08-21 to the **form-aware** rule
+> (WalletPolicyId for a keyed policy, WalletDescriptorTemplateId for a keyless
+> template). The byte-count half — 4 bytes — is still current.
+
 **Fresh-eyes finding:** The §3.3 rationale's claim "matches the existing chunk-header wallet-ID stub convention from md1" is loose — md1's chunk-header `walletID` is 4 bech32 chars × 5 bits = 20 bits, not 32 bits. The two truncations are at different bit lengths and live at different layers (string header vs. bytecode body); the parallelism is shape-level, not byte-level. Threat-model permits even 24 bits (birthday-bound collision probability among 50 entries: `50·49 / (2·2²⁴) ≈ 7.3×10⁻⁵` ≈ 0.0073%). At the locked 32 bits the same bound is `50·49 / (2·2³²) ≈ 2.85×10⁻⁷` ≈ 0.00003% — effectively zero for the 50-wallet ceiling per D-7. Byte-savings argument for 3-byte stubs is weak in the typical 1-stub case (no chunk-boundary impact) and the 7-stub case is explicitly not being optimized.
 
 **Lock:** 4 bytes. Conservative collision margin; round-byte alignment is friendlier to implementers than sub-byte packing; future-proof if md1 ever adds a "32-bit Policy ID stub" mode.

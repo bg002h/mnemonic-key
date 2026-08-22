@@ -1,6 +1,12 @@
 //! `mk inspect` — decode + structural commentary.
 //!
-//! Realizes SPEC §3.5.3. v0.2 inspect output is intentionally less rich
+//! Presents a card decoded per SPEC §2 + §3; the presentation itself is a CLI
+//! surface with no SPEC section, pinned by its tests.
+//!
+//! (Was a `SPEC §3.5.x` cite. The mk SPEC's §3.5 is "Origin path encoding"
+//! and has no subsections -- that whole family of cites referred to nothing.
+//! A 2026-06-10 audit repointed four of them; a 2026-08-21 review found a
+//! fifth, and sweeping the class found eight. See FOLLOWUPS F-224.) v0.2 inspect output is intentionally less rich
 //! than md-cli's: mk-codec's bytecode-layer surface isn't public yet
 //! (see plan §3.7 — `bytecode` subcommand deferred to v0.3 alongside
 //! the public-bytecode-API decision). Future enhancement opportunity.

@@ -1,7 +1,14 @@
 //! `CliError` enum + exit-code mapping.
 //!
-//! Realizes SPEC §3.5.6 (JSON error envelope) and §3.5.7 (exit-code table)
-//! from the `concurrent-cooking-scone` plan.
+//! The JSON error envelope and the exit-code table are CLI conventions with NO
+//! mk SPEC section governing them -- they are pinned by `tests/` and the
+//! CHANGELOG, not by the format spec.
+//!
+//! This module previously claimed to realize two SPEC sections that do not
+//! exist; §3.5 is "Origin path encoding" and has no subsections at all. The
+//! retired cites were §3.5.6 and §3.5.7. SPEC-CITE-EXEMPT (quoted as retired,
+//! not asserted). Origin: the `concurrent-cooking-scone` plan. See FOLLOWUPS
+//! F-224.
 
 use serde_json::json;
 
@@ -97,7 +104,7 @@ impl CliError {
         }
     }
 
-    /// Exit code per SPEC §3.5.7.
+    /// Exit code. A CLI convention pinned by tests, not by the format SPEC.
     pub fn exit_code(&self) -> u8 {
         match self {
             CliError::Codec(mk_codec::Error::UnsupportedVersion(_)) => 3,

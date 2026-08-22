@@ -1,6 +1,13 @@
 //! `mk verify` — BCH check + optional content match against expected fields.
 //!
-//! Realizes SPEC §3.5.4.
+//! Realizes SPEC §3.3 (the form-aware `policy_id_stub`, which the `--from-md1`
+//! comparison derives) and §5 (Linkage to MD, whose step 2 is the stub match
+//! this performs).
+//!
+//! Was `§3.5.4`, which does not exist -- the document's deepest heading is
+//! §3.7 and it has no `x.y.z` subsections. A 2026-06-10 audit repointed four
+//! phantom `§3.5.1` cites to §3.3; this is a fifth of the same class, missed
+//! then and found by an independent review 2026-08-21 (R6/F4).
 
 use clap::Args;
 use mk_codec::KeyCard;
@@ -109,14 +116,54 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     for card in group_md1_cards(&args.from_md1) {
         expected_stubs.push(derive_stub_from_md1_card(&card)?);
     }
-    if !expected_stubs.is_empty() && expected_stubs != card.policy_id_stubs {
-        let expected_fmt: Vec<String> = expected_stubs.iter().map(fmt_stub).collect();
-        let actual_fmt: Vec<String> = card.policy_id_stubs.iter().map(fmt_stub).collect();
-        return Err(CliError::ContentMismatch {
-            field: "policy_id_stubs".into(),
-            expected: expected_fmt.join(","),
-            actual: actual_fmt.join(","),
-        });
+    if !expected_stubs.is_empty() {
+        // Compare as a MULTISET, not as an ordered list.
+        //
+        // Stub order on the wire is mint order, which is argument order -- but
+        // the question `verify` answers is "is this card bound to these
+        // policies", and that does not depend on the order they were typed.
+        // The ordered comparison meant the SAME card checked against the SAME
+        // policies in a different `--from-md1` order returned exit 4: a
+        // CORRECT card reported as failing (R1, 2026-08-21). A false negative
+        // here is expensive in a way a false positive is not -- it invites
+        // re-engraving a good plate, or distrusting a sound backup.
+        //
+        // Sorting a copy rather than the originals keeps the ORDER available
+        // for the note below, and multiset (not set) so a duplicated stub
+        // still has to appear the same number of times.
+        let mut want = expected_stubs.clone();
+        let mut got = card.policy_id_stubs.clone();
+        want.sort_unstable();
+        got.sort_unstable();
+        if want != got {
+            let expected_fmt: Vec<String> = expected_stubs.iter().map(fmt_stub).collect();
+            let actual_fmt: Vec<String> = card.policy_id_stubs.iter().map(fmt_stub).collect();
+            return Err(CliError::ContentMismatch {
+                field: "policy_id_stubs".into(),
+                expected: expected_fmt.join(","),
+                actual: actual_fmt.join(","),
+            });
+        }
+        // Same stubs, different order: not a failure, but say so. Re-minting
+        // with the chunk sets supplied in a different order produces a
+        // different card on the wire, and an operator comparing two cards
+        // byte-for-byte deserves to know why they differ.
+        if expected_stubs != card.policy_id_stubs {
+            eprintln!(
+                "note: the card carries these stubs in a different order ({} vs {} as given); \
+                 the binding is the same, but a re-mint in this order would be a different card",
+                card.policy_id_stubs
+                    .iter()
+                    .map(fmt_stub)
+                    .collect::<Vec<_>>()
+                    .join(","),
+                expected_stubs
+                    .iter()
+                    .map(fmt_stub)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+        }
     }
 
     emit_ok(&card, &strings, args.json)?;

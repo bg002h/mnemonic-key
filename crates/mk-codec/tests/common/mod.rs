@@ -62,7 +62,7 @@ pub fn path_strategy() -> impl Strategy<Value = DerivationPath> {
 /// An `Xpub` built by DIRECT struct construction (precedent:
 /// `tests/round_trip.rs::synthetic_xpub`). `depth`/`child_number` are derived
 /// from `path` so they are consistent by construction (sidesteps the
-/// depth/child "lossless by construction" seam — SPEC §1.1). `public_key`,
+/// depth/child "lossless by construction" seam — SPEC §3.6 (xpub compact-73)). `public_key`,
 /// `chain_code`, `parent_fingerprint`, and `network` are strategy-varied.
 pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
     // `path.as_ref()` → `&[ChildNumber]` (avoids `clippy::into_iter_on_ref`

@@ -248,7 +248,7 @@ pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> R
     let (xpub, variant) = crate::slip132::detect_and_normalize(s)?;
     if let Some(v) = variant {
         eprintln!(
-            "note: --xpub was a SLIP-0132 {}; normalized to canonical {} — script type is conveyed by the origin path, not the key prefix",
+            "note: the xpub was a SLIP-0132 {}; normalized to canonical {} — script type is conveyed by the origin path, not the key prefix",
             v.label(),
             v.canonical_label()
         );
