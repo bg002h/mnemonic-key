@@ -105,16 +105,51 @@ impl CliError {
     }
 
     /// Exit code. A CLI convention pinned by tests, not by the format SPEC.
+    ///
+    /// **`Codec(_) | MdCodec(_)` is 1, not 2 (SPEC §6f).** An invalid artifact
+    /// is 1 across `md`, `ms` and `mnemonic`, and `mk` was the outlier.
+    ///
+    /// `mk repair` still exits **2** on any codec error, and it no longer
+    /// reaches this arm to do it: it returns `Ok(2)` from its own bypass, the
+    /// shape `md repair` already ships. That split is by VERB, not by error
+    /// kind -- see `cmd/repair.rs` -- and it is the reason this arm could move
+    /// without breaking the repair-exit-code contract (F-291).
+    ///
+    /// `SetReassemblyMismatch` is a SEPARATE arm and stays **2**. It is the
+    /// miscorrection rejection, and it is unreachable from the arm above -- a
+    /// fact established by mutation rather than by reading: applying the naive
+    /// `=> 1` edit alone reds exactly two tests, neither of them one of the four
+    /// that pin this variant.
     pub fn exit_code(&self) -> u8 {
         match self {
             CliError::Codec(mk_codec::Error::UnsupportedVersion(_)) => 3,
-            CliError::Codec(_) | CliError::MdCodec(_) => 2,
+            CliError::Codec(_) | CliError::MdCodec(_) => 1,
             CliError::FutureFormat(_) => 3,
             CliError::ContentMismatch { .. } => 4,
             CliError::UsageError(_) => 64,
             CliError::IoError(_) => 1,
             CliError::SetReassemblyMismatch { .. } => 2,
         }
+    }
+
+    /// The JSON error envelope, as one line.
+    ///
+    /// `exit_code` is a PARAMETER rather than `self.exit_code()` because
+    /// `mk repair` returns its 2 from a bypass (SPEC §6f, see `cmd/repair.rs`)
+    /// while the same `CliError` maps to 1. The envelope must report the code
+    /// the process actually exits with, or a `--json` consumer reads one number
+    /// and its shell reads another.
+    pub fn json_envelope(&self, exit_code: u8) -> String {
+        let envelope = json!({
+            "schema_version": 1,
+            "error": {
+                "kind": self.kind(),
+                "message": self.message(),
+                "exit_code": exit_code,
+                "details": self.details(),
+            },
+        });
+        serde_json::to_string(&envelope).expect("error envelope serializes")
     }
 
     /// Optional `details` field for the JSON envelope.
@@ -198,3 +233,70 @@ impl From<std::io::Error> for CliError {
 
 /// `Result` alias for `mk-cli` handlers.
 pub type Result<T> = core::result::Result<T, CliError>;
+
+#[cfg(test)]
+mod exit_code_table {
+    use super::CliError;
+
+    /// The whole exit-code table, pinned at the source.
+    ///
+    /// The integration tests measure BEHAVIOUR through the binary; this pins the
+    /// mapping itself, so an arm that is edited without a matching CLI path --
+    /// or a variant whose code is moved while "tidying" a neighbour -- reds here
+    /// even if no verb currently constructs it.
+    ///
+    /// **The `SetReassemblyMismatch` row is the funds-safety one.** It is the
+    /// miscorrection rejection: `mk repair` corrected every chunk of a complete
+    /// group individually, but the group does not reassemble, so a correction
+    /// may have aliased to a DIFFERENT valid card. It must never become a
+    /// success code and it must not follow `Codec(_)` to 1.
+    #[test]
+    fn every_arm_maps_to_its_documented_code() {
+        let cases: Vec<(CliError, u8, &str)> = vec![
+            (
+                CliError::Codec(mk_codec::Error::UnsupportedVersion(9)),
+                3,
+                "a future wire version",
+            ),
+            (
+                CliError::Codec(mk_codec::Error::MixedCase),
+                1,
+                "SPEC 6f: an invalid artifact is 1, not 2",
+            ),
+            (
+                CliError::Codec(mk_codec::Error::BchUncorrectable("5 errors".into())),
+                1,
+                "uncorrectable is still just an invalid artifact HERE; `mk repair` \
+                 returns Ok(2) from its own bypass and never reaches this arm",
+            ),
+            (
+                CliError::MdCodec(md_codec::Error::WireVersionMismatch { got: 9 }),
+                1,
+                "an md1 the --from-md1 binding cannot read is an invalid artifact",
+            ),
+            (CliError::FutureFormat("v9".into()), 3, "future format"),
+            (
+                CliError::ContentMismatch {
+                    field: "xpub".into(),
+                    expected: "a".into(),
+                    actual: "b".into(),
+                },
+                4,
+                "a verify mismatch",
+            ),
+            (CliError::UsageError("bad flags".into()), 64, "usage"),
+            (CliError::IoError(std::io::Error::other("boom")), 1, "io"),
+            (
+                CliError::SetReassemblyMismatch {
+                    group: "chunk_set_id 0x12345".into(),
+                    detail: "does not reassemble".into(),
+                },
+                2,
+                "THE FUNDS FIX: a miscorrection rejection stays 2",
+            ),
+        ];
+        for (e, want, why) in cases {
+            assert_eq!(e.exit_code(), want, "{why} ({:?})", e.kind());
+        }
+    }
+}

@@ -19,7 +19,6 @@ use std::io::Write;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use serde_json::json;
 
 use error::{CliError, Result};
 
@@ -124,17 +123,7 @@ fn emit_error(e: &CliError, json_mode: bool) {
     if json_mode {
         // JSON-mode errors go to stdout (one stream) -- a CLI convention pinned by
         // tests; the format SPEC has no section on it (see error.rs).
-        let envelope = json!({
-            "schema_version": 1,
-            "error": {
-                "kind": e.kind(),
-                "message": e.message(),
-                "exit_code": e.exit_code(),
-                "details": e.details(),
-            },
-        });
-        let s = serde_json::to_string(&envelope).expect("error envelope serializes");
-        println!("{s}");
+        println!("{}", e.json_envelope(e.exit_code()));
     } else {
         let mut stderr = std::io::stderr().lock();
         writeln!(stderr, "{e}").ok();

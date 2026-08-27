@@ -7,8 +7,10 @@
 //!
 //! Single-HRP context (always `mk`): no `--hrp` flag and no Levenshtein
 //! "did you mean" suggestion — `decode_string` validates HRP internally
-//! against `mk_codec::consts::HRP`. HRP mismatches surface as exit 2
-//! (`CliError::Codec(mk_codec::Error::InvalidHrp(_))`).
+//! against `mk_codec::consts::HRP`. An HRP mismatch surfaces as exit 2 **on
+//! `repair`** — through the bypass in [`run`], not through
+//! `CliError::Codec(_)`, which SPEC §6f moved to 1. On `mk decode` the same
+//! string is 1.
 //!
 //! Exit codes (D26 cross-CLI parity):
 //!   - 0 — every input was already valid (no corrections applied)
@@ -18,7 +20,10 @@
 //!     group (documented per-plate workflow) — an UNVERIFIED advisory is
 //!     printed to stderr in the latter case (Cycle E, `mk1-repair-set-level-
 //!     reverify`, F4)
-//!   - 2 — unrepairable input (`CliError::Codec(_)`), OR a corrected
+//!   - 2 — unrepairable input, OR any other codec error out of the
+//!     correcting decode (an HRP mismatch, a bad length): returned as an
+//!     explicit `Ok(2)` from the bypass in [`run`], NOT via
+//!     `CliError::Codec(_)`, which is **1** as of SPEC §6f — OR a corrected
 //!     `chunk_set_id` group is complete-and-consistent but does NOT
 //!     reassemble (`CliError::SetReassemblyMismatch` — THE FUNDS FIX: a
 //!     per-chunk BCH correction aliased to a DIFFERENT valid codeword, not
@@ -113,10 +118,48 @@ pub fn run(args: RepairArgs) -> Result<u8> {
         Vec::with_capacity(strings.len());
 
     for (idx, original) in strings.iter().enumerate() {
+        // THE REPAIR EXIT-CODE BYPASS (SPEC §6f, F-291).
+        //
         // `decode_string` performs BCH correction internally; HRP/length/
-        // BCH-uncorrectable rejections surface as `mk_codec::Error` and
-        // route to exit 2 via `CliError::Codec(_) => 2` in error.rs.
-        let decoded = mk_codec::string_layer::decode_string(original)?;
+        // BCH-uncorrectable rejections surface as `mk_codec::Error`. Those used
+        // to route to exit 2 through `CliError::Codec(_) => 2` in error.rs --
+        // and that arm now returns **1**, because §6f rules an invalid artifact
+        // to be 1 on every CLI.
+        //
+        // `repair`'s 2 is a different contract and it survives here instead, as
+        // an explicit `Ok(2)` that bypasses the error route entirely. This is
+        // `md repair`'s shape, transplanted at ITS TRUE WIDTH: a bare `Err(e)`
+        // arm covering **any** codec error out of the correcting decode, not
+        // only an uncorrectable one. Narrowing it to `BchUncorrectable` would
+        // send an HRP-swapped card -- an invalid artifact that happens to arrive
+        // at `repair` -- to 1, and break a parity `md`, `ms` and `mnemonic` all
+        // hold at 2. The split is by VERB, not by error kind.
+        //
+        // NO stdout output in this branch: a repair that failed must not emit a
+        // partial report.
+        let decoded = match mk_codec::string_layer::decode_string(original) {
+            Ok(d) => d,
+            Err(e) => {
+                // SPEC §6b: `--json` is UNCHANGED and out of scope this cycle.
+                // Transplanting `md`'s bare `eprintln!` would have deleted this
+                // envelope -- measured: before the arm moved,
+                // `mk repair --json <uncorrectable>` emitted
+                // `{"error":{...,"exit_code":2,...},"schema_version":1}` on
+                // stdout. `md repair` DOES have `--json` and drops its envelope
+                // on this exact path (measured: exit 2, empty stdout,
+                // `md: repair: ...` on stderr), so copying the shape verbatim
+                // would have made `mk` match `md` by LOSING behaviour. Filed
+                // against `md`. The envelope here is rebuilt with the code the
+                // bypass actually returns, so it is byte-identical to before.
+                let err = CliError::from(e);
+                if args.json {
+                    println!("{}", err.json_envelope(2));
+                } else {
+                    eprintln!("mk: repair: {}", err.message());
+                }
+                return Ok(2);
+            }
+        };
         let (corrected_chunk, corrected_positions) = reconstruct_corrected(original, &decoded);
         header_results.push(
             StringLayerHeader::from_5bit_symbols(decoded.data())
