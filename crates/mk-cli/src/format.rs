@@ -87,16 +87,41 @@ pub fn write_engraving_card<W: std::io::Write>(
     let _ = writeln!(w, "separator: {}", separator_name(separator));
 }
 
-/// Parse `--separator`: keyword (`space|hyphen|comma`) or literal (`" "|-|,`).
-/// SPEC §5. clap value-parser; rejection is an exit-64 parse error (mk-cli maps
-/// all clap errors to 64, `main.rs`).
+/// Parse `--separator`: the keyword `space`, or the literal `" "`.
+///
+/// **`hyphen` and `comma` were removed (SPEC §6c: whitespace only, everywhere).**
+/// The argument is cross-tool rather than per-tool, and that distinction is the
+/// whole of it: `mk`'s own intake strips `-` and `,` as happily as whitespace
+/// (see [`strip_display_separators`]), so a hyphen-grouped mk1 round-trips
+/// through `mk` at exit 0 -- measured. But `mt` strips whitespace and NOTHING
+/// else, so an operator who carries the habit between tools has a card `mt`'s own
+/// verbs refuse, discovered after the plates are cut. The cost of the uniform
+/// rule is two cosmetic options; the cost of getting it wrong is a plate.
+///
+/// The shared display-grouping conformance corpus still carries `hyphen` and
+/// `comma` rows and is untouched by this: its consumer is the [`conformance`]
+/// test below, which maps each keyword to a `char` itself and calls
+/// [`render_grouped`], which takes a `char` and has no keyword vocabulary at all.
+/// The narrowing is at the CLI's parser, one layer up.
+///
+/// clap value-parser; rejection is an exit-64 parse error (mk-cli maps all clap
+/// errors to 64, `main.rs`).
 pub fn parse_separator(s: &str) -> Result<char, String> {
     match s {
         "space" | " " => Ok(' '),
-        "hyphen" | "-" => Ok('-'),
-        "comma" | "," => Ok(','),
+        // Named separately from the catch-all so the refusal can say what
+        // replaced them. A message that only said "invalid" would leave an
+        // operator with a working command line and no next step (SPEC §6h:
+        // remedy text must be executable).
+        "hyphen" | "-" | "comma" | "," => Err(format!(
+            "separator {s:?} was removed: display grouping is whitespace-only across the \
+             constellation, because a hyphen- or comma-grouped card is refused by tools that \
+             strip whitespace and nothing else. Use `--separator space` (the default), or drop \
+             the flag."
+        )),
         other => Err(format!(
-            "invalid separator {other:?}; expected one of: space|hyphen|comma (or the literal char)"
+            "invalid separator {other:?}; expected `space` (or the literal \" \") -- display \
+             grouping is whitespace-only"
         )),
     }
 }
@@ -125,12 +150,24 @@ mod tests {
     }
 
     #[test]
-    fn parse_separator_keyword_and_literal() {
+    fn parse_separator_accepts_whitespace_only() {
         assert_eq!(parse_separator("space").unwrap(), ' ');
         assert_eq!(parse_separator(" ").unwrap(), ' ');
-        assert_eq!(parse_separator("hyphen").unwrap(), '-');
-        assert_eq!(parse_separator("comma").unwrap(), ',');
         assert!(parse_separator("bogus").is_err());
+    }
+
+    /// The retired keywords are refused, and the refusal NAMES what replaced
+    /// them -- an "invalid separator" message alone would leave an operator with
+    /// a command line that does not work and no next step (SPEC §6h).
+    #[test]
+    fn retired_separator_keywords_name_their_replacement() {
+        for retired in ["hyphen", "-", "comma", ","] {
+            let e = parse_separator(retired).expect_err("must be refused");
+            assert!(
+                e.contains("space"),
+                "refusal for {retired:?} must name `space`; got {e:?}"
+            );
+        }
     }
 }
 

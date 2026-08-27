@@ -77,7 +77,8 @@ pub struct EncodeArgs {
     #[arg(long, default_value_t = 5)]
     pub group_size: u16,
 
-    /// Separator: space|hyphen|comma (keyword) or the literal " "|-|, . SPEC §5.
+    /// Separator for the stderr engraving card: `space`, or the literal " ".
+    /// Whitespace only (SPEC §6c); `hyphen` and `comma` were removed.
     #[arg(long, default_value = "space", value_parser = crate::format::parse_separator)]
     pub separator: char,
 

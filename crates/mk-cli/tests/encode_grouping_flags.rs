@@ -194,3 +194,48 @@ fn encode_rejects_bad_separator() {
     let out = encode(&["--separator", "bogus"]);
     assert_eq!(out.status.code(), Some(64), "bad separator → exit 64");
 }
+// ──────────────────────────────────────────────────────────────────────────
+// §6c — the separator narrows to whitespace.
+// ──────────────────────────────────────────────────────────────────────────
+
+/// `hyphen` and `comma` are gone, and the refusal says what to use instead
+/// (§6h: remedy text must be executable).
+///
+/// Exit 64: `mk` maps every clap parse error to 64 (`main.rs`), and
+/// `--separator` is a clap `value_parser`.
+#[test]
+fn retired_separator_keywords_are_refused() {
+    for retired in ["hyphen", "comma", "-", ","] {
+        let out = encode(&["--separator", retired]);
+        assert_eq!(
+            out.status.code(),
+            Some(64),
+            "--separator {retired} must be refused; stderr={}",
+            stderr_of(&out)
+        );
+        let stderr = stderr_of(&out);
+        assert!(
+            stderr.contains("space"),
+            "the refusal must name what replaced it; stderr={stderr:?}"
+        );
+    }
+}
+
+/// The control: whitespace grouping still works, by keyword and by literal.
+#[test]
+fn whitespace_separator_still_accepted_both_spellings() {
+    for spelling in ["space", " "] {
+        let out = encode(&["--separator", spelling]);
+        assert!(
+            out.status.success(),
+            "--separator {spelling:?} must still work; stderr={}",
+            stderr_of(&out)
+        );
+        let artifact = first_line(&out);
+        let stderr = stderr_of(&out);
+        assert!(
+            stderr.lines().any(|l| l == regroup(&artifact, 5, ' ')),
+            "space-grouped card; stderr={stderr:?}"
+        );
+    }
+}
