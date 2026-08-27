@@ -69,6 +69,12 @@ pub struct RepairArgs {
     /// one string per line from stdin.
     pub mk1_strings: Vec<String>,
 
+    /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+    /// the positional arguments. Display separators are stripped, so a card
+    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
+    #[arg(long = "in", value_name = "FILE")]
+    pub in_file: Option<String>,
+
     /// Emit a single JSON envelope on stdout instead of the text-form
     /// report. Schema byte-matches `mnemonic repair --json`'s
     /// `RepairJson` shape (cross-CLI parser reuse).
@@ -90,7 +96,7 @@ struct RepairDetail {
 
 /// Run `mk repair`.
 pub fn run(args: RepairArgs) -> Result<u8> {
-    let strings = read_mk1_strings(&args.mk1_strings)?;
+    let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let mut reports: Vec<RepairDetail> = Vec::with_capacity(strings.len());
     let mut corrected_chunks: Vec<String> = Vec::with_capacity(strings.len());
     // Cycle E: the post-correction string-layer header, parsed from the

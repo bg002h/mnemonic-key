@@ -21,7 +21,7 @@ use crate::error::{CliError, Result};
 pub struct EncodeArgs {
     /// BIP 32 extended public key (xpub-prefixed string). Required unless
     /// `--keys` supplies the keys in a file.
-    #[arg(long, required_unless_present = "keys")]
+    #[arg(long, required_unless_present_any = ["keys", "in_file"])]
     pub xpub: Option<String>,
 
     /// 8-hex-char master fingerprint. Mutually exclusive with `--privacy-preserving`.
@@ -30,7 +30,7 @@ pub struct EncodeArgs {
 
     /// Derivation path (e.g., `m/48'/0'/0'/2'`). Required unless `--keys`
     /// supplies the origins in a file.
-    #[arg(long, required_unless_present = "keys")]
+    #[arg(long, required_unless_present_any = ["keys", "in_file"])]
     pub origin_path: Option<String>,
 
     /// Mint ONE card per key record in FILE (`-` for stdin), instead of the
@@ -42,6 +42,21 @@ pub struct EncodeArgs {
     /// receives the same `--policy-id-stub`/`--from-md1` binding.
     #[arg(long, value_name = "FILE")]
     pub keys: Option<String>,
+
+    /// Read the key records from FILE (`-` for stdin) -- `mk encode`'s own
+    /// input material, so the same reader `--keys` uses. SPEC §6b. `--keys` is
+    /// retained and the two are mutually exclusive.
+    #[arg(long = "in", value_name = "FILE")]
+    pub in_file: Option<String>,
+
+    /// Write the mk1 artifact to FILE, created 0600, instead of to stdout.
+    /// OVERWRITES an existing file (operator ruling, 2026-08-26). SPEC §6b.
+    ///
+    /// NOTE: `mk vectors --out` and `mk gen-man --out` already exist on this
+    /// binary and mean a DIRECTORY. Both meanings are correct for their verbs
+    /// and P3 does not unify them; do not "tidy" them together.
+    #[arg(long = "out", value_name = "FILE")]
+    pub out_file: Option<String>,
 
     /// Repeatable. Each value is 8 lowercase hex chars (4 bytes).
     #[arg(long)]
@@ -95,7 +110,24 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         ));
     }
 
-    if args.keys.is_some() {
+    if args.keys.is_some() && args.in_file.is_some() {
+        return Err(CliError::UsageError(
+            "--in and --keys are mutually exclusive; both name the key-record file, so \
+             supplying two would leave it ambiguous which one minted the cards. Use --in."
+                .into(),
+        ));
+    }
+    // From here the two channels are ONE source, so every check below (the
+    // single-card flag refusals, the batch mint path, the JSON envelope shape)
+    // sees `--in` exactly as it has always seen `--keys`.
+    let key_source: Option<(&str, &str)> = match (&args.in_file, &args.keys) {
+        (Some(p), None) => Some((p.as_str(), "--in")),
+        (None, Some(p)) => Some((p.as_str(), "--keys")),
+        (None, None) => None,
+        (Some(_), Some(_)) => unreachable!("guarded above"),
+    };
+
+    if key_source.is_some() {
         // Each --keys record carries its own origin, so a global one would have
         // to either override it (engraving an origin the key was not derived
         // at) or be ignored. Both are worse than refusing.
@@ -108,14 +140,15 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             ("--privacy-preserving", args.privacy_preserving),
         ] {
             if present {
+                let given = key_source.expect("guarded by the enclosing if").1;
                 return Err(CliError::UsageError(format!(
-                    "--keys and {flag} are mutually exclusive; {}",
+                    "{given} and {flag} are mutually exclusive; {}",
                     if flag == "--privacy-preserving" {
-                        "a --keys record always declares a fingerprint, and dropping it \
+                        "a key record always declares a fingerprint, and dropping it \
                          silently is how a card gets engraved wrong -- mint \
                          privacy-preserving cards one at a time"
                     } else {
-                        "each --keys record carries its own origin"
+                        "each key record carries its own origin"
                     }
                 )));
             }
@@ -161,8 +194,8 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         (Some(_), true) => unreachable!("guarded above"),
     };
 
-    let cards: Vec<(Option<Fingerprint2>, DerivationPath2, Xpub2)> = match &args.keys {
-        Some(path) => crate::keyfile::read_key_records(path)?
+    let cards: Vec<(Option<Fingerprint2>, DerivationPath2, Xpub2)> = match key_source {
+        Some((path, flag)) => crate::keyfile::read_key_records(path, flag)?
             .into_iter()
             .map(|r| {
                 // --privacy-preserving is refused alongside --keys (guarded
@@ -304,9 +337,9 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         // operator has to bisect an 11-line key file to find which cosigner
         // broke (R1, 2026-08-21).
         let strings = encoded.map_err(|e| {
-            if args.keys.is_some() {
+            if let Some((_, flag)) = key_source {
                 CliError::UsageError(format!(
-                    "--keys record {} ([{}/{}]): {}",
+                    "{flag} record {} ([{}/{}]): {}",
                     i + 1,
                     fp.as_ref()
                         .map(fmt_fingerprint)
@@ -325,31 +358,45 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         });
     }
 
-    if args.json {
-        if args.keys.is_some() {
-            emit_json_batch(&minted)?;
+    // SPEC §6a: the artifact is UNGROUPED and stdout carries nothing else --
+    // so `me sysw pack` can read what `mk encode` wrote with no
+    // `--group-size 0` and no `grep` in between. No blank line between cards
+    // either: a blank line is not an artifact. The grouped form a human
+    // transcribes, and the card boundary, both move to the stderr engraving
+    // card below (§6b: the grouping flags "affect the stderr card only").
+    //
+    // Built as ONE string rather than printed line by line, because §6b's
+    // `--out` writes the same bytes to a file and a second emitter is a second
+    // place for the two to drift.
+    let artifact = if args.json {
+        if key_source.is_some() {
+            json_batch(&minted)?
         } else {
-            emit_json(&minted[0])?;
+            json_single(&minted[0])?
         }
     } else {
-        // SPEC §6a: stdout is the canonical artifact, UNGROUPED, and nothing
-        // else -- so `me sysw pack` can read what `mk encode` wrote with no
-        // `--group-size 0` and no `grep` in between. The grouped form a human
-        // transcribes moves to the stderr engraving card below (§6b: the
-        // grouping flags "affect the stderr card only").
-        // No blank line between cards: §6a's `encode` rule admits the artifact
-        // and NOTHING else, and a blank line is not an artifact. The card
-        // boundary moves to the stderr engraving card below, which is where a
-        // human reading it needs it -- and it is worth keeping there rather than
-        // simply dropping, because a key file carrying the same BIP-380 record
-        // twice is accepted at exit 0 and mints two byte-identical cards under
-        // one chunk-set id (F-311), so the boundary is not recoverable from the
-        // headers.
+        let mut body = String::new();
         for card in &minted {
             for s in &card.strings {
-                println!("{s}");
+                body.push_str(s);
+                body.push('\n');
             }
         }
+        body
+    };
+
+    // SPEC §6b: "stdout is used when --out is not given." When it IS given the
+    // artifact goes to the file ONLY -- writing both would put on stdout the
+    // material `--out` exists to keep off it.
+    match &args.out_file {
+        Some(path) => crate::write::write_private(std::path::Path::new(path), artifact.as_bytes())
+            .map_err(|e| CliError::UsageError(format!("--out {path}: {e}")))?,
+        None => print!("{artifact}"),
+    }
+
+    // The card is a display of the artifact, so `--json` (which is explicitly
+    // out of scope this cycle) does not get one.
+    if !args.json {
         let grouped: Vec<Vec<String>> = minted.iter().map(|c| c.strings.clone()).collect();
         crate::format::write_engraving_card(
             &mut std::io::stderr(),
@@ -388,7 +435,7 @@ fn parse_chunk_set_id(s: &str) -> Result<u32> {
 /// JSON for `--keys`: a `cards` array whose entries are exactly the object
 /// single-card `--json` emits. Additive, so a consumer of the single form can
 /// read a batch entry without changes.
-fn emit_json_batch(minted: &[MintedCard]) -> Result<()> {
+fn json_batch(minted: &[MintedCard]) -> Result<String> {
     let cards: Vec<_> = minted.iter().map(card_json).collect();
     let envelope = json!({
         "schema_version": 1,
@@ -397,8 +444,7 @@ fn emit_json_batch(minted: &[MintedCard]) -> Result<()> {
     });
     let s = serde_json::to_string(&envelope)
         .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
-    println!("{s}");
-    Ok(())
+    Ok(format!("{s}\n"))
 }
 
 /// The per-card JSON object, shared by the single and batch emitters.
@@ -432,11 +478,10 @@ pub struct MintedCard {
     pub strings: Vec<String>,
 }
 
-fn emit_json(card: &MintedCard) -> Result<()> {
+fn json_single(card: &MintedCard) -> Result<String> {
     let mut envelope = card_json(card);
     envelope["schema_version"] = json!(1);
     let s = serde_json::to_string(&envelope)
         .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
-    println!("{s}");
-    Ok(())
+    Ok(format!("{s}\n"))
 }

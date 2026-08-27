@@ -96,14 +96,20 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
 /// Errors name the source and the 1-based LINE NUMBER. A key list is edited by
 /// hand and a rejected record is the common case, so "which line" is the whole
 /// value of the message.
-pub fn read_key_records(path: &str) -> Result<Vec<KeyRecord>> {
+///
+/// `flag` is the flag the CALLER was given -- `--keys` or, as of P3, `--in`.
+/// It is a parameter rather than a constant because printing one flag's name
+/// out of another flag's mouth sends an operator to edit a command line they
+/// did not type: the same defect F-294 files against the shared crate's refusal
+/// text, one binary smaller.
+pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     let (buf, source) = if path == "-" {
         let mut buf = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
         (buf, "<stdin>".to_string())
     } else {
         let buf = std::fs::read_to_string(path)
-            .map_err(|e| CliError::UsageError(format!("--keys {path}: {e}")))?;
+            .map_err(|e| CliError::UsageError(format!("{flag} {path}: {e}")))?;
         (buf, path.to_string())
     };
 
@@ -122,7 +128,7 @@ pub fn read_key_records(path: &str) -> Result<Vec<KeyRecord>> {
     let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
     if buf.contains('\r') && !buf.contains('\n') {
         return Err(CliError::UsageError(format!(
-            "--keys {source}: the file uses CR-only line endings (classic Mac), so every \
+            "{flag} {source}: the file uses CR-only line endings (classic Mac), so every \
              record after the first would be read as part of line 1. Convert it to LF or \
              CRLF."
         )));
@@ -140,7 +146,7 @@ pub fn read_key_records(path: &str) -> Result<Vec<KeyRecord>> {
     }
     if out.is_empty() {
         return Err(CliError::UsageError(format!(
-            "--keys {source}: no key records found (blank lines and `#` comments are ignored)"
+            "{flag} {source}: no key records found (blank lines and `#` comments are ignored)"
         )));
     }
     Ok(out)

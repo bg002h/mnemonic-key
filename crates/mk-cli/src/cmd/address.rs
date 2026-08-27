@@ -23,6 +23,12 @@ pub struct AddressArgs {
     /// One or more mk1 strings. Use `-` to read one string per line from stdin.
     pub mk1_strings: Vec<String>,
 
+    /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+    /// the positional arguments. Display separators are stripped, so a card
+    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
+    #[arg(long = "in", value_name = "FILE")]
+    pub in_file: Option<String>,
+
     /// Address type. Defaults to the origin-path heuristic at account depth
     /// (m/44'→p2pkh, 49'→p2sh-p2wpkh, 84'→p2wpkh, 86'→p2tr); required otherwise.
     #[arg(long, value_enum)]
@@ -71,7 +77,7 @@ impl ChainSel {
 
 /// Run `mk address`.
 pub fn run(args: AddressArgs) -> Result<u8> {
-    let strings = read_mk1_strings(&args.mk1_strings)?;
+    let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
 

@@ -13,6 +13,7 @@ mod keyfile;
 mod output_advisory;
 mod process_hardening;
 mod slip132;
+mod write;
 
 use std::io::Write;
 use std::process::ExitCode;

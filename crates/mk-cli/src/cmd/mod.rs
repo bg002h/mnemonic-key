@@ -201,25 +201,28 @@ pub fn fmt_fingerprint(fp: &Fingerprint) -> String {
     hex::encode(fp.to_bytes())
 }
 
-/// Read a list of mk1 strings: positional `args` minus a leading `"-"`,
-/// which means "read one string per line from stdin." `"-"` may appear
-/// as any positional value but is processed once across the list.
-pub fn read_mk1_strings(args: &[String]) -> Result<Vec<String>> {
+/// Read a list of mk1 strings from `--in FILE`, from positional `args`, and
+/// from stdin via a positional `"-"`.
+///
+/// `"-"` may appear as any positional value but is processed once across the
+/// list. `--in` is read FIRST so a mixed invocation has one obvious order, and
+/// every channel goes through the same per-line strip: mstring display-grouping
+/// (SPEC §3.2) means a grouped card and an unbroken card must both re-ingest,
+/// which is exactly what a human transcribing from the engraving card produces.
+pub fn read_mk1_strings(args: &[String], in_file: Option<&str>) -> Result<Vec<String>> {
     let mut out = Vec::with_capacity(args.len());
+    if let Some(path) = in_file {
+        let buf = std::fs::read_to_string(path)
+            .map_err(|e| CliError::UsageError(format!("--in {path}: {e}")))?;
+        push_stripped_lines(&mut out, &buf);
+    }
     let mut consumed_stdin = false;
     for a in args {
         if a == "-" && !consumed_stdin {
             consumed_stdin = true;
             let mut buf = String::new();
             std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
-            for line in buf.lines() {
-                // mstring display-grouping (SPEC §3.2): strip ALL whitespace + `-`
-                // + `,` so a grouped or unbroken card both re-ingest.
-                let s = crate::format::strip_display_separators(line);
-                if !s.is_empty() {
-                    out.push(s);
-                }
-            }
+            push_stripped_lines(&mut out, &buf);
         } else if a == "-" {
             // Already consumed stdin; ignore additional `-` markers.
         } else {
@@ -227,11 +230,29 @@ pub fn read_mk1_strings(args: &[String]) -> Result<Vec<String>> {
         }
     }
     if out.is_empty() {
+        // SPEC §6h: the remedy must be executable, so it names only channels
+        // that exist. `--in FILE` is one of them as of P3.
         return Err(CliError::UsageError(
-            "expected at least one mk1 string (positional or via stdin with '-')".into(),
+            "expected at least one mk1 string (positional, via --in FILE, or via stdin with '-')"
+                .into(),
         ));
     }
     Ok(out)
+}
+
+/// Push each non-empty line of `buf`, with display separators stripped.
+///
+/// mstring display-grouping (SPEC §3.2): strip ALL whitespace + `-` + `,` so a
+/// grouped or unbroken card both re-ingest. A line that strips to empty --- a
+/// blank, or a run of separators --- contributes nothing rather than becoming an
+/// empty "string" the codec would then reject.
+fn push_stripped_lines(out: &mut Vec<String>, buf: &str) {
+    for line in buf.lines() {
+        let s = crate::format::strip_display_separators(line);
+        if !s.is_empty() {
+            out.push(s);
+        }
+    }
 }
 
 /// Detect the BCH code variant for a single mk1 string by its length.

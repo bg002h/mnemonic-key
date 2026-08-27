@@ -20,6 +20,12 @@ pub struct DecodeArgs {
     /// One or more mk1 strings. Use `-` to read one string per line from stdin.
     pub mk1_strings: Vec<String>,
 
+    /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+    /// the positional arguments. Display separators are stripped, so a card
+    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
+    #[arg(long = "in", value_name = "FILE")]
+    pub in_file: Option<String>,
+
     /// Emit a structured JSON object on stdout instead of multi-line text.
     #[arg(long)]
     pub json: bool,
@@ -27,7 +33,7 @@ pub struct DecodeArgs {
 
 /// Run `mk decode`.
 pub fn run(args: DecodeArgs) -> Result<u8> {
-    let strings = read_mk1_strings(&args.mk1_strings)?;
+    let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
     let variant = strings
