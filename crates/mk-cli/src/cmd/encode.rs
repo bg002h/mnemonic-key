@@ -337,13 +337,15 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         // `--group-size 0` and no `grep` in between. The grouped form a human
         // transcribes moves to the stderr engraving card below (§6b: the
         // grouping flags "affect the stderr card only").
-        for (i, card) in minted.iter().enumerate() {
-            // Blank line BETWEEN cards, never before the first or after the
-            // last: single-card output stays byte-identical to what it was
-            // before --keys existed.
-            if i > 0 {
-                println!();
-            }
+        // No blank line between cards: §6a's `encode` rule admits the artifact
+        // and NOTHING else, and a blank line is not an artifact. The card
+        // boundary moves to the stderr engraving card below, which is where a
+        // human reading it needs it -- and it is worth keeping there rather than
+        // simply dropping, because a key file carrying the same BIP-380 record
+        // twice is accepted at exit 0 and mints two byte-identical cards under
+        // one chunk-set id (F-311), so the boundary is not recoverable from the
+        // headers.
+        for card in &minted {
             for s in &card.strings {
                 println!("{s}");
             }

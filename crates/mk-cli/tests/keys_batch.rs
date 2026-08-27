@@ -133,32 +133,56 @@ fn batch_matches_per_key_loop() {
     assert!(!loop_cards.is_empty(), "fixture produced no cards");
 }
 
-/// Cards are separated by a blank line, and a SINGLE card's plain output is
-/// unchanged -- no leading or trailing blank. Pins the boundary convention so a
-/// consumer can split on it.
+/// **stdout carries mk1 lines and NOTHING else** -- SPEC §6a: `encode`'s stdout
+/// is the canonical artifact and nothing else, so the blank line that used to
+/// separate cards is gone from it.
+///
+/// The assertion is the FIXTURE-INDEPENDENT shape -- every line begins `mk1`,
+/// and the blank count is 0 -- because the LINE count is not a fact about the
+/// defect: records chunk to different lengths, so mk-cli's own three-record
+/// fixture and a two-record file give different totals while the blank count
+/// reproduces invariantly.
+///
+/// The card boundary moves to the stderr engraving card, asserted here too. That
+/// is not decoration: a key file carrying the same BIP-380 record twice is
+/// accepted at exit 0 and emits two byte-identical cards sharing one chunk-set
+/// id (F-311), so the boundary is NOT recoverable from the headers, and the
+/// blank line was the only signal the duplicate had been accepted.
 #[test]
-fn blank_line_separates_cards_only_between() {
+fn stdout_carries_mk1_lines_only_and_the_boundary_moves_to_the_card() {
     let body = keyfile_body(&KEYS);
     let kf = write_keyfile(&body);
-    let out = stdout_of(
-        &mk()
-            .args([
-                "encode",
-                "--keys",
-                kf.to_str().unwrap(),
-                "--policy-id-stub",
-                STUB,
-                "--group-size",
-                "0",
-            ])
-            .output()
-            .unwrap(),
-    );
-    assert!(!out.starts_with('\n'), "no leading blank line");
+    let output = mk()
+        .args([
+            "encode",
+            "--keys",
+            kf.to_str().unwrap(),
+            "--policy-id-stub",
+            STUB,
+        ])
+        .output()
+        .unwrap();
+    let out = stdout_of(&output);
+    let card = String::from_utf8(output.stderr.clone()).unwrap();
+    for line in out.lines() {
+        assert!(
+            line.starts_with("mk1"),
+            "every stdout line is an mk1 string (SPEC §6a); got {line:?}"
+        );
+    }
     assert_eq!(
-        out.matches("\n\n").count(),
+        out.lines().filter(|l| l.is_empty()).count(),
+        0,
+        "no blank line survives on stdout; got {out:?}"
+    );
+
+    // ...and the boundary it carried is now on the human-facing card, once per
+    // pair of cards. `card` also ends with the output-class advisory, which is
+    // not blank, so a trailing blank cannot be miscounted here.
+    assert_eq!(
+        card.lines().filter(|l| l.is_empty()).count(),
         KEYS.len() - 1,
-        "one blank line BETWEEN each pair of cards"
+        "one blank line BETWEEN each pair of cards, on stderr; got {card:?}"
     );
 
     let single = stdout_of(
@@ -399,27 +423,35 @@ fn json_batch_wraps_the_single_card_object() {
 fn record_order_follows_file_order() {
     let body = keyfile_body(&KEYS);
     let kf = write_keyfile(&body);
-    let batch = stdout_of(
-        &mk()
-            .args([
-                "encode",
-                "--keys",
-                kf.to_str().unwrap(),
-                "--policy-id-stub",
-                STUB,
-                "--group-size",
-                "0",
-            ])
-            .output()
-            .unwrap(),
-    );
-    let first_batch_card: Vec<&str> = batch
+    let output = mk()
+        .args([
+            "encode",
+            "--keys",
+            kf.to_str().unwrap(),
+            "--policy-id-stub",
+            STUB,
+            "--group-size",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    let batch = stdout_of(&output);
+    // SPEC §6a took the blank line off stdout, so a consumer can no longer
+    // `split("\n\n")` the ARTIFACT into cards. The boundary lives on the stderr
+    // engraving card now, and with `--group-size 0` its lines are the same
+    // unbroken strings -- so the first card is still recoverable, from the card.
+    let card = String::from_utf8(output.stderr.clone()).unwrap();
+    let first_batch_card: Vec<&str> = card
         .split("\n\n")
         .next()
         .unwrap()
         .lines()
         .filter(|l| l.starts_with("mk1"))
         .collect();
+    assert!(
+        !first_batch_card.is_empty(),
+        "the card must still delimit the first record; stderr={card:?}"
+    );
 
     let (fp, path, x) = KEYS[0];
     let single = stdout_of(
@@ -445,6 +477,13 @@ fn record_order_follows_file_order() {
     assert_eq!(
         first_batch_card, single_card,
         "the FIRST card out must be the FIRST record in the file"
+    );
+    // ...and the same thing measured on stdout POSITIONALLY, which needs no
+    // boundary at all: the artifact's leading lines are the first record's.
+    assert_eq!(
+        batch.lines().take(single_card.len()).collect::<Vec<_>>(),
+        single_card,
+        "stdout's leading lines must be the FIRST record's card"
     );
 }
 
