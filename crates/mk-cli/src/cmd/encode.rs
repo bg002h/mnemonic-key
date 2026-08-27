@@ -331,6 +331,11 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             emit_json(&minted[0])?;
         }
     } else {
+        // SPEC §6a: stdout is the canonical artifact, UNGROUPED, and nothing
+        // else -- so `me sysw pack` can read what `mk encode` wrote with no
+        // `--group-size 0` and no `grep` in between. The grouped form a human
+        // transcribes moves to the stderr engraving card below (§6b: the
+        // grouping flags "affect the stderr card only").
         for (i, card) in minted.iter().enumerate() {
             // Blank line BETWEEN cards, never before the first or after the
             // last: single-card output stays byte-identical to what it was
@@ -339,12 +344,16 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
                 println!();
             }
             for s in &card.strings {
-                println!(
-                    "{}",
-                    crate::format::render_grouped(s, args.group_size as usize, args.separator)
-                );
+                println!("{s}");
             }
         }
+        let grouped: Vec<Vec<String>> = minted.iter().map(|c| c.strings.clone()).collect();
+        crate::format::write_engraving_card(
+            &mut std::io::stderr(),
+            &grouped,
+            args.group_size as usize,
+            args.separator,
+        );
     }
     crate::output_advisory::emit_output_class_advisory(
         crate::output_advisory::OutputClass::WatchOnly,

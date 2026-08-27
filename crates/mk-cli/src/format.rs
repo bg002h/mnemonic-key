@@ -34,6 +34,59 @@ pub fn strip_display_separators(s: &str) -> String {
     s.chars().filter(|&c| !is_display_separator(c)).collect()
 }
 
+/// Human-readable name for a display separator, for the engraving card's
+/// `separator:` line. A card that reported `separator: ' '` would be telling an
+/// operator to type a quote mark.
+pub fn separator_name(c: char) -> &'static str {
+    match c {
+        ' ' => "space",
+        '-' => "hyphen",
+        ',' => "comma",
+        '\t' => "tab",
+        _ => "whitespace",
+    }
+}
+
+/// Write the stderr **engraving card** (SPEC §6c).
+///
+/// §6a rules that `encode`'s stdout is the canonical artifact ungrouped and
+/// nothing else, which evicts the grouped form; §6c requires `md` and `mk` --
+/// which had no card at all, only a one-line `note:` -- to grow one, *"since
+/// after D4 that is the only place it exists"*. stdout is what a pipeline reads;
+/// this is what a human transcribes onto a plate.
+///
+/// Shape follows **`ms`'s** card, measured: plain `label: value` lines on stderr
+/// with no prefix character, grouped string first because that is the thing being
+/// transcribed. `mnemonic bundle`'s `#`-prefixed card is the other
+/// in-constellation precedent and is deliberately NOT followed -- its `#` mirrors
+/// the comment headers on its own stdout, a surface `mk` does not have.
+///
+/// The caller emits the existing output-class advisory AFTER this, so that
+/// advisory stays the last stderr line it has always been.
+pub fn write_engraving_card<W: std::io::Write>(
+    w: &mut W,
+    cards: &[Vec<String>],
+    group_size: usize,
+    separator: char,
+) {
+    for (i, strings) in cards.iter().enumerate() {
+        // A blank line BETWEEN cards, never before the first or after the last.
+        // It used to sit on stdout, where §6a no longer admits it -- and it was
+        // the only signal that `mk encode --keys` had silently accepted the same
+        // BIP-380 record twice (F-311: duplicates mint two byte-identical cards
+        // that share one chunk-set id, so the boundary is not recoverable from
+        // the headers). The human-facing card is where that signal belongs.
+        if i > 0 {
+            let _ = writeln!(w);
+        }
+        for s in strings {
+            let _ = writeln!(w, "{}", render_grouped(s, group_size, separator));
+        }
+    }
+    let _ = writeln!(w, "group size: {group_size}");
+    let _ = writeln!(w, "separator: {}", separator_name(separator));
+}
+
 /// Parse `--separator`: keyword (`space|hyphen|comma`) or literal (`" "|-|,`).
 /// SPEC §5. clap value-parser; rejection is an exit-64 parse error (mk-cli maps
 /// all clap errors to 64, `main.rs`).
