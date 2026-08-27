@@ -9,6 +9,66 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Changed — P3, the constellation CLI-uniformity cycle (SPEC §6a/§6b/§6c/§6f/§10)
+
+- **BREAKING: `mk encode`'s stdout is the artifact, ungrouped, and nothing
+  else.** It used to print space-5 grouped strings and, on the `--keys` path, a
+  blank line between cards — so `mk encode | me sysw pack` could not read what
+  `mk encode` had just written. Measured: the old default exits **4 on record 0**
+  in `me sysw pack`; the new default exits **0**. If you were parsing the grouped
+  form off stdout, take it from the new stderr card instead, or keep using
+  `--json` (unchanged).
+
+- **New: a stderr ENGRAVING CARD.** `mk` had no card, only the one-line
+  output-class `note:`. `--group-size` / `--separator` now shape that card and no
+  longer touch stdout. Its shape follows `ms`'s — the grouped string(s) first,
+  then `group size:` and `separator:`, then the existing advisory, which is still
+  the last line. The card also carries the blank line between cards that stdout
+  gave up, so a `--keys` batch is still readable as N cards.
+
+- **BREAKING: `--separator` is whitespace-only.** `hyphen` and `comma` (and the
+  literals `-` and `,`) are refused at exit 64, with a message naming `space` as
+  the replacement. `mk`'s own intake strips `-` and `,` happily, so a
+  hyphen-grouped mk1 round-trips through `mk` — but `mt` strips whitespace and
+  nothing else, and an operator carrying the habit between tools ends up with a
+  card `mt` refuses, after the plates are cut.
+
+- **BREAKING: an invalid artifact exits 1, not 2.** `md`, `ms` and `mnemonic`
+  already do. **`mk repair` still exits 2** on any codec error — including an HRP
+  mismatch, not only a BCH-uncorrectable card — and now returns it from its own
+  bypass rather than through `CliError::Codec`. The miscorrection rejection
+  (`SetReassemblyMismatch`, the funds fix) is untouched at **2**. `--json`
+  envelopes are unchanged, including `mk repair --json`'s, which reports
+  `exit_code: 2` to match the process.
+
+### Added
+
+- **`--in FILE`** on `encode`, `decode`, `inspect`, `verify`, `repair`,
+  `address` and `derive`. On the reading verbs it is mk1 strings, one per line,
+  with display separators stripped — so a card transcribed in grouped form
+  re-ingests. On `encode` it is the key-record file, the same reader `--keys`
+  uses; `--keys` is retained and the two are mutually exclusive.
+
+- **`--out FILE`** on `encode`. Writes the artifact to a file **created 0600**,
+  and **overwrites** an existing one — including tightening a target already at
+  0644, which `OpenOptions::mode()` alone does not do. stdout is used when
+  `--out` is not given. Note `mk vectors --out` and `mk gen-man --out` already
+  existed and mean a **directory**; the two meanings are not unified.
+
+- **`--from-md1-set FILE`** on `encode`, repeatable. Reads md1 strings from what
+  `md encode` writes and binds their stubs exactly as repeated `--from-md1`
+  does. Every line that is not an md1 string is skipped and display separators
+  are stripped, so a file carrying a `chunk-set-id:` header, comments or grouped
+  output all work. A file with no md1 string in it is refused rather than bound
+  as nothing. Stubs bind in flag order: `--policy-id-stub`, then `--from-md1`,
+  then `--from-md1-set`.
+
+### Fixed
+
+- `--in` on `encode` reports its own flag name. `keyfile::read_key_records`
+  hard-coded `--keys` in three messages, which would have sent an operator to
+  edit a flag they never typed.
+
 ### Fixed — the Minor/Nit pass from the six-lens review (2026-08-21)
 
 - **`mk verify --from-md1` no longer reports a CORRECT card as failing.** Stub
