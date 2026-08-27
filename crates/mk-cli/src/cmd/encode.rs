@@ -66,6 +66,21 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub from_md1: Vec<String>,
 
+    /// Repeatable. Read md1 strings from FILE -- what `md encode --out` writes
+    /// -- and bind their stubs exactly as repeated `--from-md1` does. SPEC §10.
+    ///
+    /// Every line that is not an md1 string is SKIPPED, so a file carrying
+    /// `md encode`'s `chunk-set-id:` header, blank lines or `#` comments works,
+    /// and so will one written after that header moves to stderr. Display
+    /// separators are stripped, so a grouped file works too. A file containing
+    /// no md1 string at all is refused rather than bound as nothing.
+    ///
+    /// Stubs bind in flag order -- `--policy-id-stub`, then `--from-md1`, then
+    /// `--from-md1-set` -- not in argv order. Stub order is on the wire, so
+    /// mixing the channels in a different sequence mints a different card.
+    #[arg(long, value_name = "FILE")]
+    pub from_md1_set: Vec<String>,
+
     /// Encode without master fingerprint. Mutually exclusive with `--origin-fingerprint`.
     #[arg(long)]
     pub privacy_preserving: bool,
@@ -169,11 +184,19 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // intake already strips those separators -- so a copy-pasted md1 string was
     // refused by the one flag that exists to consume it. Normalize first
     // (R1, 2026-08-21).
-    let from_md1: Vec<String> = args
+    let mut from_md1: Vec<String> = args
         .from_md1
         .iter()
         .map(|s| crate::format::strip_display_separators(s))
         .collect();
+    // SPEC §10: `--from-md1-set FILE` is the repeated flag, read from what
+    // `md encode` wrote. Files append in the order they were given, AFTER any
+    // `--from-md1` values -- flag order, not argv order, which is the rule
+    // `--policy-id-stub`-before-`--from-md1` already followed. Stub order is on
+    // the wire, so this is pinned by a test rather than left to clap.
+    for path in &args.from_md1_set {
+        from_md1.extend(read_md1_set(path)?);
+    }
 
     let mut policies: Vec<crate::cmd::Md1Card> = Vec::new();
     for card in group_md1_cards(&from_md1) {
@@ -410,6 +433,41 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         &mut std::io::stderr(),
     );
     Ok(0)
+}
+
+/// Read the md1 strings out of a `--from-md1-set` file.
+///
+/// **Every line that is not an md1 string is skipped**, which is what makes this
+/// flag independent of which era wrote the file: today `md encode` prints a
+/// `chunk-set-id: 0x…` header on stdout ahead of the artifact, and after SPEC
+/// §6a that header is on stderr. Blank lines, `#` comments and an operator's own
+/// annotations are skipped for the same reason. Display separators are stripped
+/// first, so a grouped file and an unbroken file bind identically -- measured on
+/// a real four-chunk set, byte-identical mk1 out.
+///
+/// **A file with NO md1 string in it is refused**, naming the file. Skipping is
+/// what makes the flag tolerant; unguarded, it is also what would let a mistyped
+/// path to a README bind zero stubs and then fail with a message about flags the
+/// operator did supply -- or mint against a `--policy-id-stub` they also passed,
+/// silently dropping the wallet they meant to bind.
+fn read_md1_set(path: &str) -> Result<Vec<String>> {
+    let buf = std::fs::read_to_string(path)
+        .map_err(|e| CliError::UsageError(format!("--from-md1-set {path}: {e}")))?;
+    let mut out = Vec::new();
+    for line in buf.lines() {
+        let s = crate::format::strip_display_separators(line);
+        if s.len() >= 3 && s[..3].eq_ignore_ascii_case("md1") {
+            out.push(s);
+        }
+    }
+    if out.is_empty() {
+        return Err(CliError::UsageError(format!(
+            "--from-md1-set {path}: no md1 strings found (every line that does not start \
+             with `md1` is skipped, so check the path and that the file holds `md encode` \
+             output)"
+        )));
+    }
+    Ok(out)
 }
 
 /// Parse `--chunk-set-id`: hex, `0x` prefix optional, and it must FIT.
