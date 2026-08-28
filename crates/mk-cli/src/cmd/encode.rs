@@ -412,8 +412,13 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // artifact goes to the file ONLY -- writing both would put on stdout the
     // material `--out` exists to keep off it.
     match &args.out_file {
-        Some(path) => crate::write::write_private(std::path::Path::new(path), artifact.as_bytes())
-            .map_err(|e| CliError::UsageError(format!("--out {path}: {e}")))?,
+        Some(path) => {
+            // The one item P3's boundary table has `mk` ADOPT from the shared
+            // crate. `write` has no root re-export, so the path is qualified --
+            // the unqualified form is an E0425.
+            mnemonic_io_lib::write::write_private(std::path::Path::new(path), artifact.as_bytes())
+                .map_err(|e| CliError::UsageError(format!("--out {path}: {e}")))?
+        }
         None => print!("{artifact}"),
     }
 
