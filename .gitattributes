@@ -10,6 +10,15 @@ crates/mk-codec/src/test_vectors/*.json text eol=lf
 # their preferred line endings on Rust source.
 * text=auto
 
+# The four-repo shared conformance corpus, whose SHA-256 is pinned by
+# `crates/mk-cli/tests/p3_declines.rs` and by CI in three sibling repos. It
+# lives outside `crates/`, so the rule above never covered it and `* text=auto`
+# left it native-eol -- which reds all three Windows jobs and nothing else.
+# Measured 2026-08-27: Linux, macOS, musl and FreeBSD green, windows-latest
+# RED on 1.85, stable and beta, all three at the same byte-level assertion.
+# MUST sort after `* text=auto` (last-match-wins per attribute).
+design/display-grouping-vectors.tsv text eol=lf
+
 # Committed `cargo vendor` tree (reproducible-builds-musl cycle, P3b) — store
 # EVERY vendored file VERBATIM, byte-for-byte. `cargo vendor` writes a
 # `.cargo-checksum.json` per crate carrying the SHA-256 of each file's ORIGINAL
