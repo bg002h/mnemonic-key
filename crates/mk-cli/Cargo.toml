@@ -44,26 +44,28 @@ hex = "0.4"
 # crate -- `write::write_private`, which `mk encode --out FILE` uses to create
 # its artifact owner-only. The other ten items are declined (see the plan).
 #
-# PINNED BY REV, not by `path =`: a path does not resolve in a fresh CI checkout
-# and this constellation exists at more than one filesystem location. The crate
-# is not on crates.io.
+# TAKEN FROM THE REGISTRY, not by `path =`: a path does not resolve in a fresh
+# CI checkout and this constellation exists at more than one filesystem
+# location. And deliberately NOT by `git`+`rev` any more, now that
+# `mnemonic-io-lib 0.1.0` is on crates.io.
 #
-# `version` IS REQUIRED HERE even though the source is git. Without it
-# `cargo package -p mk-cli` exits 101 with "all dependencies must have a version
-# specified when packaging" -- and mk-cli IS published (17 versions on
-# crates.io). With it, packaging fails only on the pre-existing unpublished
-# `mk-codec 0.5.0`, byte-identical to the no-pin control. Measured both ways.
-# It does mean `mnemonic-io-lib 0.1.0` must reach crates.io before the next
-# `mk-cli-v*` publish.
+# WHY THE REGISTRY AND NOT A REV. A git source has no published tarball, so both
+# `Cargo.lock`'s `checksum` and the vendored `.cargo-checksum.json`'s `package`
+# digest are null: nothing but bespoke hand-grounding in
+# `ci/repro/vendor-freshness.sh` could vouch for the vendored bytes. A registry
+# dependency is anchored by cargo itself, against an immutable tarball, on every
+# build -- and it removes the LAST `source = "git+..."` entry from mk's
+# Cargo.lock, so the gate's block list degrades to its two-block form.
+#
+# It also retires the packaging hazard the rev carried: a git source needs an
+# explicit `version` or `cargo package -p mk-cli` exits 101 with "all
+# dependencies must have a version specified when packaging", and mk-cli IS
+# published (17 versions on crates.io). A registry dep cannot hit that class at
+# all.
 #
 # `write` has NO root re-export in the crate's `lib.rs`, so the call is written
 # `mnemonic_io_lib::write::write_private`; the unqualified path is an E0425.
-#
-# A GIT SOURCE IN Cargo.lock IS LOAD-BEARING FOR TWO CI SURFACES. Re-run
-# `cargo vendor vendor/` whenever this rev moves, and see F-341: the tag-time
-# reproducible musl build passes a TWO-block `--config` source list that cannot
-# redirect this source, and the fix is in another repo's shared workflow.
-mnemonic-io-lib = { git = "https://github.com/bg002h/mnemonic-engrave", rev = "6c24e62823e6c1ac02aa3862cd6020674bf58544", version = "0.1.0" }
+mnemonic-io-lib = "0.1.0"
 
 [dev-dependencies]
 assert_cmd = "2"
