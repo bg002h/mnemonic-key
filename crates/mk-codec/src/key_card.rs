@@ -138,9 +138,11 @@ impl KeyCard {
 
 /// Encode a `KeyCard` into one or more `mk1`-prefixed strings.
 ///
-/// Multi-chunk encodings draw a fresh 20-bit `chunk_set_id` from the
-/// system CSPRNG. Use [`encode_with_chunk_set_id`] for byte-deterministic
-/// output (vector regeneration, conformance tests).
+/// Multi-chunk encodings DERIVE the 20-bit `chunk_set_id` from the
+/// payload (`top20(SHA-256(canonical_bytecode))`, MSB-first — see
+/// [`crate::derive_chunk_set_id`]), so encoding the same card twice produces
+/// byte-identical strings. Use [`encode_with_chunk_set_id`] to pin an
+/// explicit value instead (collision fixtures, legacy re-encodings).
 pub fn encode(card: &KeyCard) -> Result<Vec<String>> {
     crate::string_layer::encode(card)
 }
