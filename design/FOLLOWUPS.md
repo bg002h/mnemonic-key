@@ -484,3 +484,30 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Why deferred:** (a) and (b) are pre-BIP-submission polish, not correctness bugs in shipped code (V19 decodes fine; it's a documentation/test-vector-hygiene nit against BIP-32's own MUST). (c) is pure notation cleanup, batchable with any future doc pass rather than urgent.
 - **Status:** OPEN. Tier `pre-bip-submission` per this repo's existing tier convention — MUST be resolved before formal BIP submission, not blocking any release.
 - **Tier:** `pre-bip-submission`.
+
+### `stub-keyed-wallet-binding-at-mint` — bind key cards to the KEYED wallet identity, not just the policy shape (pre-v1.0 window: no compat burden)
+
+- **Surfaced:** 2026-08-30, the wallet-form-converter R0 (descriptor-mnemonic
+  `design/agent-reports/R0-converter-spec-r1.md` C1, measured): cards minted
+  via `--from-md1` against a KEYLESS md1 carry a stub invariant to keys,
+  origins and fingerprints — two different wallets both minted stub
+  `a235ee75`. (Distinct from `stub-formula-divergence`, RESOLVED v0.8.0:
+  the FORMULA is WalletPolicyId-rooted; the keyless mint path simply has no
+  keys to feed it, so the binding collapses to policy SHAPE.)
+- **The upgrade:** at mint time, when all cosigner pubkeys are available
+  (they normally are — backup creation), derive the stub from the full
+  keyed WalletPolicyId so a foreign same-shape card can NEVER seat in the
+  converter or on the device. Changes `--from-md1`'s inputs (needs the key
+  set or the keyed card) and the stub's meaning; the converter's seating
+  rule 1 and its CE-1 accepted-limitation vector row are the waiting
+  consumers — CE-1's row flips from "seats, address differs" to "refused"
+  when this lands.
+- **Operator ruling 2026-08-30, verbatim: "there are no engraved plates
+  besides test plates and backward compatibility will not matter until
+  v1.0 is launched."** So: landed BEFORE v1.0, this change carries NO
+  compat burden — no migration story, no dual-stub acceptance window, no
+  re-engraving of real backups. The cheap window closes at v1.0; after
+  that this becomes a dual-acceptance design. Schedule accordingly.
+- **Status:** OPEN.
+- **Tier:** `feature` / cross-repo.
+- **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `stub-keyed-wallet-binding-at-mint` (converter leg).
