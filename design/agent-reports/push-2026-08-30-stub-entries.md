@@ -39,3 +39,28 @@
 ## Result
 
 Ritual completed exactly as documented, no deviations, no bypass message. `main` on `origin` now points at `9fbbe36`. Staging ref cleaned up.
+
+## Second push (doc fix)
+
+### Pre-flight
+
+- `git -C /scratch/code/shibboleth/mnemonic-key status`: clean working tree, branch `main` ahead of `origin/main` by **2 commits**.
+- HEAD SHA: `40efcc7a592b1b47c6071672b07cadf0b8b0c4ae`.
+- Commits pushed (newest first):
+  - `40efcc7` docs: encode() doc caught up to 0.5.0 -- chunk_set_id is derived, not CSPRNG-drawn
+  - `c41770a` report: persist push-agent report -- stub entries + parked draft pushed via staging, 14/14 green
+
+### Staging ritual
+
+1. `git push origin main:refs/heads/ci/staging` — succeeded, `* [new branch] main -> ci/staging`.
+2. Two workflows fired for this push, both matched on the full 40-char SHA `40efcc7a592b1b47c6071672b07cadf0b8b0c4ae` (verified via `gh run view --json headSha` before watching):
+   - `CI`, run id **33328011150** — `gh run watch 33328011150 --repo bg002h/mnemonic-key --exit-status` run to completion in the foreground, exit code 0. Per-job conclusions (`gh run view --json jobs`): all 14 substantive jobs `success` (freebsd compile-gate, fmt pinned 1.95.0, build × 10 (stable/beta/1.85 × ubuntu/macos/windows), musl compile/test × 2, vectors-roundtrip), `release-on-tag`: `skipped` (expected — not a tag push).
+   - `fuzz-smoke`, run id **33328011216** — watched to completion, exit code 0 (`gh run watch` reported "already completed with 'success'" by the time it was checked). Jobs: `cargo fuzz build (compile gate)`: `success`; `cargo fuzz run (60s smoke)`: `skipped`. Verified the skip is expected and not a hidden failure by reading `.github/workflows/fuzz-smoke.yml` lines 74-77 — the `smoke` job carries `if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'`, deliberately excluding `push`/`pull_request` ("off the critical path"); the `build` compile-gate job has no such restriction and ran normally.
+
+   All required jobs green, 0 failures, 0 unexplained skips.
+3. `git push origin main` — output: `9fbbe36..40efcc7  main -> main`. **No "Bypassed rule violations" message** — satisfied by the CI check on the staged SHA.
+4. `git push origin --delete ci/staging` — output: `- [deleted]         ci/staging`.
+
+### Result
+
+Ritual completed exactly as documented, no deviations, no bypass message. `main` on `origin` now points at `40efcc7`. Staging ref cleaned up.
