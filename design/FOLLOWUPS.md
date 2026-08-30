@@ -491,9 +491,15 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   `design/agent-reports/R0-converter-spec-r1.md` C1, measured): cards minted
   via `--from-md1` against a KEYLESS md1 carry a stub invariant to keys,
   origins and fingerprints — two different wallets both minted stub
-  `a235ee75`. (Distinct from `stub-formula-divergence`, RESOLVED v0.8.0:
-  the FORMULA is WalletPolicyId-rooted; the keyless mint path simply has no
-  keys to feed it, so the binding collapses to policy SHAPE.)
+  `a235ee75`. (This entry deliberately restates NO formula internals —
+  its first draft did, and the converter R0 r3 measured both claims
+  false (r3 I4: a live mint stamps `559e64b2` where the story
+  predicted otherwise, and mk's own test suite names the template-mode
+  WalletPolicyId value BUGGY). The OBSERVED behaviour the converter
+  spec builds on: one fixture wallet yielded keyless-mint stub
+  `5b48af35`, keyed-mint stub `232214e4`, and composed-under-split-set
+  WalletPolicyId `ced22709` — three values, one wallet, all
+  legitimate.)
 - **The upgrade:** at mint time, when all cosigner pubkeys are available
   (they normally are — backup creation), derive the stub from the full
   keyed WalletPolicyId so a foreign same-shape card can NEVER seat in the
@@ -508,6 +514,14 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   compat burden — no migration story, no dual-stub acceptance window, no
   re-engraving of real backups. The cheap window closes at v1.0; after
   that this becomes a dual-acceptance design. Schedule accordingly.
+- **DESIGN OBLIGATION (r3 M4, recorded while cheap):** a keyed stub
+  binds a wallet PLUS ONE ORIGIN DECLARATION (`232214e4` ≠ `ced22709`
+  for one wallet, measured), so the mint-time upgrade MUST define a
+  canonical origin treatment (or stamp multiple stubs) — otherwise the
+  "legitimate card, different declaration" refusal this upgrade exists
+  to prevent reappears at mint time.
 - **Status:** OPEN.
-- **Tier:** `feature` / cross-repo.
+- **Tier:** `feature` / cross-repo — **THREE-repo lockstep (r3 I4):
+  `mnemonic-toolkit` mints the same stubs and flips with mk and md
+  together.**
 - **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `stub-keyed-wallet-binding-at-mint` (converter leg).
