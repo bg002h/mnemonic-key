@@ -154,3 +154,16 @@ change is earned only if silence is worse.
 Open: does the ENGRAVER (on-device scan grouping keyed by ChunkSetID)
 adopt the same warning shape, and in what UI form? (fork leg,
 three-repo lockstep scheduling).
+
+## Step 6 — closing rulings
+
+- W11 (operator, verbatim: "Same warning everywhere"): one warning
+  content on every reassembly surface — mk decode/inspect/verify, md
+  seating, me bundle, the engraver's scan flow.
+- W12 (operator, verbatim: "Yes, on device same warning…let's treat
+  it as part of post-cycle burndown along with the 'One genuine
+  side-discovery from the probe, logged as a follow-up candidate'"):
+  the DEVICE leg of W11 and the mk silent-correction discovery are
+  scheduled as post-cycle burndown followups; they do not gate the
+  cycle. me bundle stays in-cycle (unmoved by the ruling).
+Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.

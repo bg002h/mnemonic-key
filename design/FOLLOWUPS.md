@@ -525,3 +525,33 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   `mnemonic-toolkit` mints the same stubs and flips with mk and md
   together.**
 - **Companion:** `descriptor-mnemonic/design/FOLLOWUPS.md` → `stub-keyed-wallet-binding-at-mint` (converter leg).
+
+### `device-csid-mismatch-warning` — engraver scan flow surfaces the R6 warning
+
+- **Surfaced:** 2026-08-31, the chunk_set_id walk (W11/W12,
+  `design/WALK_chunk_set_id_2026-08-31.md`). Operator ruled "Same
+  warning everywhere", then scheduled the device leg as post-cycle
+  burndown.
+- **What:** when the device's scan accumulator (fork `gui/`, grouping
+  keyed by `ChunkSetID`) completes a reassembled set whose stamped id
+  differs from the content-derived id, surface the same warning
+  content as `mk decode` (spec contract 2's (declared, derived) pair
+  + remedy), fork-native UI form. Content parity is the acceptance.
+- **Owning phase:** post-cycle burndown of the chunk_set_id cycle
+  (operator ruling W12). Depends on R4 vectors landing in the Go port.
+- **Status:** OPEN. **Tier:** `ux` / fork leg.
+
+### `mk-decode-silent-correction-reporting` — decode corrects engraving damage without a word
+
+- **Surfaced:** 2026-08-31, measured during the chunk_set_id walk
+  (step 4): one flipped character in a chunk; `mk decode` returned the
+  intact card with NO note or count; only `mk repair` names the
+  correction ("1 correction at position 6: 'x' -> 'p'"). Same class as
+  the mt "error-budget consumed silently" lesson — a plate near its
+  correction limit passes as pristine.
+- **What:** surface correction counts on the decode/verify paths (form
+  TBD — likely a stderr note with per-chunk counts, echoing mk repair's
+  report), so budget consumption is visible before it is exhausted.
+- **Owning phase:** post-cycle burndown of the chunk_set_id cycle
+  (operator ruling W12, paired with the device leg).
+- **Status:** OPEN. **Tier:** `diagnostics` / mk-cli.
