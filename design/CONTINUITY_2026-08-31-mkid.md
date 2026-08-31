@@ -94,3 +94,17 @@ the plan's baseline rev. In-cycle surfaces only: mk-cli (6 verbs +
 mint + inspect print + verify json), md-cli (seat warning + R5 refusal
 rewrite + retain per-chunk headers), fork Go derivation-parity test,
 extension vector corpus (incl. table-pin row + <0x10000 row).
+
+## Status update 3 (2026-08-31, plan GREEN — implementation begins)
+
+PLAN done and GREEN 0C/0I at 1cc4c66:
+- r1 opus 0C/2I/3M/2N (I1 verify text-mode verdict uncovered; I2
+  classification-order row missing) -> fold bdd2349 -> r2 sonnet 0C/0I
+  (one fold-introduced Minor: M1 Go/include_str contradiction) -> fixed
+  inline 1cc4c66. Reports plan-r1/r2 in agent-reports/.
+Baselines re-validated at dispatch: STANDARD_PATHS=14, gen_mk_vectors
+feature-gated, V0_1_SHA256 pin enforced, both named guarantees present.
+
+IMPLEMENTATION (UC off, one implementer/phase, TDD, worktree):
+P0 extension corpus -> P1 mk-cli read -> P2 mk-cli write+repair ->
+P3 md-cli seat -> P4 fork parity. NOW DISPATCHING P0.
