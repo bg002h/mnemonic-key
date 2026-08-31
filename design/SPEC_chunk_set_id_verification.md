@@ -98,7 +98,7 @@ matching the existing "chunk-set 12345" diagnostic surface.
    verb's decode call) so "every mk surface" is structural, not an
    enumeration that decays (r1 C1). On declared ≠ derived, chunked
    input only: one stderr warning, exit unchanged. Draft:
-   > `warning: this key card's stamped chunk-set id (12345) was not derived from its content, which computes ef12f. The card decodes fine, but diagnostics that name plates by id will call it 12345; if it mismatches because it was pinned at mint time, prefer re-minting before engraving copies.`
+   > `warning: this key card's stamped chunk-set id (12345) was not derived from its content, which computes ef12f. The card decodes fine, but diagnostics that name plates by id will call it 12345. To fix it, re-mint: run mk encode again without --chunk-set-id and the id is derived from the key data automatically.` (Wording per operator walk W13.)
    `mk repair`'s warning fires on its re-verified (blessed) output;
    the repair report itself is unchanged.
 3. **`mk inspect` additionally prints the stamped chunk-set id

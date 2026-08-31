@@ -167,3 +167,18 @@ three-repo lockstep scheduling).
   scheduled as post-cycle burndown followups; they do not gate the
   cycle. me bundle stays in-cycle (unmoved by the ruling).
 Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.
+
+## Step 7 — post-GREEN wording walk (spec at e9e332b)
+
+- W13 (moment 1, the R2 warning on mk decode, operator cold read):
+  threat level read correctly ("I presume it is fine"), cause
+  self-attributed to mint time ("must have made a mistake at encode
+  time by giving it as test name"), action correct ("carry on").
+  Remedy clause ruled inadequate — operator, verbatim: "it would be
+  better to say something like recreating mk1 string without the
+  —chunkset-id flag set will automatically encode a chunk set id set
+  by the key data only." Fold: the clause becomes constructive
+  how-to-fix ("re-mint: run mk encode again without --chunk-set-id
+  and the id is derived from the key data automatically"). Gloss
+  calibration: message carried without glosses for this operator
+  (who has walked the vocabulary); gloss rule stays for fresh users.
