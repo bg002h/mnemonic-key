@@ -55,3 +55,20 @@ md-cli 0.14.0 released; mdcli-mini cycle shipped (its N1 taxonomy +
 seating diagnostics are the freshest adjacent ground); md-codec
 publish BLOCKED (derive needs fork-only miniscript APIs) — F-424
 twice-blocked, remedy needs re-deriving; mk installed at v0.13.0.
+
+## Status update (2026-08-31, later same day)
+
+Recon DONE (report committed a2b8850, all headline claims re-verified).
+Walk DONE with the operator, W1-W12 (design/WALK_chunk_set_id_2026-08-31.md,
+committed 9ff8922): warnings not refusals; loud mint warning; vectors;
+same warning content everywhere; device + me-cli + Go-ingestion +
+silent-correction legs = post-cycle burndown followups (filed, both
+repos). SPEC re-grounded and GREEN 0C/0I at e9e332b after three R0
+rounds (r1 opus 4C/6I/5M/3N, r2 sonnet C3 partial, r3 sonnet clean);
+reports + folds committed pairwise per process. LENSES STILL UNRUN on
+the spec (r1 closure note): adversarial defeat-the-warning, repair
+exit-5 bless interaction, and the live operator walk of the NEW message
+wordings (W5 lens). NEXT: operator decides walk-of-wordings now vs
+straight to IMPLEMENTATION_PLAN (then plan R0, then one implementer;
+staleness rule applies -- re-validate plan against tree before
+dispatch).
