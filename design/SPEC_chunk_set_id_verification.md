@@ -123,23 +123,28 @@ matching the existing "chunk-set 12345" diagnostic surface.
    with the same content. Composition, stdout, wallet id, address
    notes, exit code: unchanged.
 7. **R5 — the refusal rewrite.** The seat path retains per-chunk
-   headers (today `group_key_of` discards them — r1 C3) and classifies
-   each failed group IN THIS ORDER; the situations are disjoint and
-   total by construction:
-   1. **duplicate chunk index, or chunks disagreeing on total_chunks**
-      → *merged cards*: "these strings are pieces of two different key
-      cards that share one stamped id — separate the scans; only if
-      both plates truly carry the same id, re-engrave one."
+   headers (today `group_key_of` discards them — r1 C3). First fork:
+   does the group reassemble AND bytecode-decode cleanly? If YES →
+   situation 4. If NO → the first matching arm of 1–3, where arm 3
+   has NO precondition, so the classification is total by
+   construction (r2 C3):
+   1. **duplicate chunk index, chunks disagreeing on total_chunks, or
+      more chunks than any declared total (received > declared, or
+      any chunk_index ≥ its declared total)** → *merged cards*:
+      "these strings are pieces of two different key cards that share
+      one stamped id — separate the scans; only if both plates truly
+      carry the same id, re-engrave one."
    2. **received < declared** (no duplicates, totals agree) →
       *incomplete scan*: "the pieces carrying this id say there should
       be N; you supplied K — scan the missing piece(s)." (Wording
       avoids asserting a single card — r1 M3.)
-   3. **received = declared, headers consistent, but reassembly or
-      bytecode decode fails** (measured live: chunk 1 of plate A +
-      chunk 2 of plate B, both pinned 12345 → `cross-chunk integrity
-      hash mismatch`) → *terminal otherwise*: carry the codec error
-      verbatim plus a neutral remedy: "these pieces carry one id but
-      do not form one key card; re-scan each plate separately."
+   3. **terminal otherwise — every remaining failure, no
+      precondition** (measured exemplar: chunk 1 of plate A + chunk 2
+      of plate B, both pinned 12345 → `cross-chunk integrity hash
+      mismatch`; also covers `MixedHeaderTypes` and post-reassembly
+      bytecode decode errors): carry the codec error verbatim plus a
+      neutral remedy: "these pieces carry one id but do not form one
+      key card; re-scan each plate separately."
    4. **group reassembles cleanly but derived ≠ declared** → the R2
       warning (contract 6), not a refusal.
    The retired message ("Two DIFFERENT cards pinned … re-mint one of
@@ -192,9 +197,10 @@ FOLLOWUPS V19-re-pin nit is unaffected (no v0.1 churn here).
   mixed-halves cross-chunk case); the retired message string appears
   in none; classification order is asserted by a row that satisfies
   two situations' raw predicates and must land in the earlier one.
-- **Per-surface mutation gates** (r1 M2): deleting the recompute in
-  mk-cli, and separately in md-cli, each fails that surface's rows —
-  with evidence the mutated line RAN, not merely landed.
+- **Per-surface mutation gates** (r1 M2, r2 M2): deleting the
+  recompute in mk-cli, separately in md-cli, and perturbing the Go
+  derivation under test, each fails that surface's rows — with
+  evidence the mutated line RAN, not merely landed.
 - `cargo nextest run --locked` green in mnemonic-key and
   descriptor-mnemonic; fork `go test ./mk/` green including the new
   derivation-parity test. (me-cli joins when its followup lands.)
