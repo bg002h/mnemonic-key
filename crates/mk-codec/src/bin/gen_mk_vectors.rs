@@ -43,10 +43,13 @@ use std::str::FromStr;
 use bitcoin::NetworkKind;
 use bitcoin::bip32::{ChainCode, ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use mk_codec::bytecode::STANDARD_PATHS;
 use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
 use mk_codec::string_layer::chunk::split_into_chunks;
 use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
-use mk_codec::{KeyCard, bytecode::encode_bytecode, encode_with_chunk_set_id};
+use mk_codec::{
+    KeyCard, bytecode::encode_bytecode, derive_chunk_set_id, encode_with_chunk_set_id,
+};
 use serde_json::{Value, json};
 
 /// One fixture spec — abstract enough to drop a new vector by adding
@@ -1094,6 +1097,306 @@ fn negative_fixture_to_value(name: &str, description: &str, input: &NegativeInpu
     })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// chunk_set_id extension corpus (`csid_ext_v0.1.json`) — Phase P0 of
+// `design/IMPLEMENTATION_PLAN_chunk_set_id_verification.md`.
+//
+// The legacy corpus above (`v0.1.json`) is UNTOUCHED by this section: all 19
+// of its chunked vectors carry pre-0.5 pinned ids that mismatch their
+// content-derived id by construction (declared != derived), and it stays the
+// pinned-by-design MISMATCH half (spec "Vectors (R4)"). This section adds a
+// SEPARATE file supplying the CLEAN half plus warning content, per row:
+// `canonical_bytecode_hex`, the mk1 string set (`strings`), `declared_csid`,
+// `derived_csid`, `expect_mismatch_warning`, `warning_text`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The contract-2 warning draft (`design/SPEC_chunk_set_id_verification.md`
+/// §"Behavior contracts" item 2), with the row's real (declared, derived)
+/// pair substituted for the spec draft's example values (`12345`, `ef12f`).
+/// This is the ONLY place this wording is generated from — vectors carry the
+/// normative content, not prose (R4).
+fn contract2_warning_text(declared_hex: &str, derived_hex: &str) -> String {
+    format!(
+        "warning: this key card's stamped chunk-set id ({declared_hex}) was not derived \
+         from its content, which computes {derived_hex}. The card decodes fine, but \
+         diagnostics that name plates by id will call it {declared_hex}. To fix it, \
+         re-mint: run mk encode again without --chunk-set-id and the id is derived from \
+         the key data automatically."
+    )
+}
+
+/// Build one csid_ext row. `declared` and `derived` are both already-known
+/// `u32` ids (the caller either derived them naturally from `card`, or is
+/// deliberately forcing `declared` to differ — the pinned-mismatch seed row).
+/// `expect_mismatch_warning` and `warning_text` are computed here, never
+/// passed in, so a row can't declare a mismatch flag inconsistent with its
+/// own (declared, derived) pair.
+fn csid_row(name: &str, description: String, card: &KeyCard, declared: u32, derived: u32) -> Value {
+    let bytecode = encode_bytecode(card).expect("csid_ext row: encode_bytecode");
+    // Sanity: the caller's `derived` must actually be this card's derivation
+    // — never hand-picked. Every row's ground truth is the real function.
+    debug_assert_eq!(
+        derive_chunk_set_id(&bytecode),
+        derived,
+        "[{name}] caller-supplied `derived` disagrees with derive_chunk_set_id(encode_bytecode(card))"
+    );
+    let strings =
+        encode_with_chunk_set_id(card, declared).expect("csid_ext row: encode_with_chunk_set_id");
+    let mismatch = declared != derived;
+    let declared_hex = format!("{declared:05x}");
+    let derived_hex = format!("{derived:05x}");
+    let warning_text = if mismatch {
+        contract2_warning_text(&declared_hex, &derived_hex)
+    } else {
+        String::new()
+    };
+    json!({
+        "canonical_bytecode_hex": lowercase_hex(&bytecode),
+        "declared_csid": declared_hex,
+        "derived_csid": derived_hex,
+        "description": description,
+        "expect_mismatch_warning": mismatch,
+        "name": name,
+        "strings": strings,
+        "warning_text": warning_text,
+    })
+}
+
+/// Brute-force search over `policy_id_stubs[0]` (as a big-endian `u32`
+/// nonce, tried in order `0, 1, 2, ...`) for a card whose derived
+/// `chunk_set_id` satisfies `target`. All other fields are held fixed.
+/// Deterministic — re-running the generator reproduces the same card,
+/// matching the corpus's byte-determinism discipline. `derive_chunk_set_id`
+/// takes the top 20 bits of a SHA-256 digest, so an exact-value target is
+/// expected to resolve within roughly 2^20 tries; the budget below gives an
+/// exact-target failure probability of ~1e-8.
+fn search_card(
+    origin_fingerprint: Option<[u8; 4]>,
+    origin_path: &str,
+    network: NetworkKind,
+    seed_byte: u8,
+    target: impl Fn(u32) -> bool,
+) -> (KeyCard, u32) {
+    let path = DerivationPath::from_str(origin_path).expect("search_card: path parses");
+    let xpub = synthetic_xpub(network, seed_byte, &path);
+    const BUDGET: u32 = 20_000_000;
+    for nonce in 0..BUDGET {
+        let stub = nonce.to_be_bytes();
+        let card = KeyCard::new(
+            vec![stub],
+            origin_fingerprint.map(Fingerprint::from),
+            path.clone(),
+            xpub,
+        );
+        let bytecode = encode_bytecode(&card).expect("search_card: encode_bytecode");
+        let derived = derive_chunk_set_id(&bytecode);
+        if target(derived) {
+            return (card, derived);
+        }
+    }
+    panic!("search_card: no matching nonce found within {BUDGET} tries");
+}
+
+/// One `legacy_twin_rows` fixture spec: `(name, description, stubs,
+/// origin_fingerprint, origin_path, network, seed_byte)`.
+type LegacyTwinSpec = (&'static str, &'static str, [[u8; 4]; 1], Option<[u8; 4]>, &'static str, NetworkKind, u8);
+
+/// Clean twins of three legacy shapes (V1/V2/V3): same `KeyCard` content as
+/// their `fixtures()` counterparts, minted via the auto-derive `encode`
+/// entry point (the production default-mint path) instead of a pinned
+/// `chunk_set_id`, so `declared_csid == derived_csid` by construction.
+fn legacy_twin_rows() -> Vec<Value> {
+    let specs: [LegacyTwinSpec; 3] = [
+        (
+            "CT1_twin_of_V1_bip48_mainnet_1_stub_with_fp",
+            "Clean twin of V1 (1-stub mainnet, BIP 48 segwit-v0 multisig): same \
+             shape, declared_csid == derived_csid instead of a pinned legacy id.",
+            [[0x11, 0x22, 0x33, 0x44]],
+            Some([0xAA, 0xBB, 0xCC, 0xDD]),
+            "48'/0'/0'/2'",
+            NetworkKind::Main,
+            0x01,
+        ),
+        (
+            "CT2_twin_of_V2_bip84_mainnet_1_stub_with_fp",
+            "Clean twin of V2 (1-stub mainnet, BIP 84 native-segwit single-sig): \
+             same shape, declared_csid == derived_csid instead of a pinned legacy id.",
+            [[0xC0, 0xFF, 0xEE, 0x00]],
+            Some([0xDE, 0xAD, 0xBE, 0xEF]),
+            "84'/0'/0'",
+            NetworkKind::Main,
+            0x02,
+        ),
+        (
+            "CT3_twin_of_V3_bip48_testnet_1_stub_with_fp",
+            "Clean twin of V3 (1-stub testnet, BIP 48 testnet multisig): same \
+             shape, declared_csid == derived_csid instead of a pinned legacy id.",
+            [[0x77, 0x88, 0x99, 0xAA]],
+            Some([0x10, 0x20, 0x30, 0x40]),
+            "48'/1'/0'/2'",
+            NetworkKind::Test,
+            0x03,
+        ),
+    ];
+    specs
+        .into_iter()
+        .map(|(name, description, stubs, fp, path_str, network, seed_byte)| {
+            let path = DerivationPath::from_str(path_str).expect("legacy twin path parses");
+            let xpub = synthetic_xpub(network, seed_byte, &path);
+            let card = KeyCard::new(stubs.to_vec(), fp.map(Fingerprint::from), path, xpub);
+            let bytecode = encode_bytecode(&card).expect("legacy twin: encode_bytecode");
+            let derived = derive_chunk_set_id(&bytecode);
+            csid_row(name, description.to_string(), &card, derived, derived)
+        })
+        .collect()
+}
+
+/// The walk's three seed cards (`design/WALK_chunk_set_id_2026-08-31.md`,
+/// `design/SPEC_chunk_set_id_verification.md` "Vectors (R4)"): plate A
+/// (`1b1ba`/`1b1ba`, clean), plate B (`ef12f`/`ef12f`, clean), and the
+/// pinned crux card — the SAME content as plate B, re-minted with
+/// `--chunk-set-id 0x12345` (`12345`/`ef12f`, mismatch) — the exact scenario
+/// the walk measured seating SILENTLY on the happy path.
+fn seed_card_rows() -> Vec<Value> {
+    let (plate_a_card, plate_a_derived) = search_card(
+        Some([0xA1, 0xA1, 0xA1, 0xA1]),
+        "48'/0'/0'/2'",
+        NetworkKind::Main,
+        0x14,
+        |id| id == 0x1B1BA,
+    );
+    let (plate_b_card, plate_b_derived) = search_card(
+        Some([0xB2, 0xB2, 0xB2, 0xB2]),
+        "48'/0'/0'/2'",
+        NetworkKind::Main,
+        0x15,
+        |id| id == 0xEF12F,
+    );
+
+    let plate_a_row = csid_row(
+        "SEED_plate_a_1b1ba",
+        "Walk seed card 'plate A' — clean, content naturally derives 1b1ba."
+            .to_string(),
+        &plate_a_card,
+        plate_a_derived,
+        plate_a_derived,
+    );
+    let plate_b_row = csid_row(
+        "SEED_plate_b_ef12f",
+        "Walk seed card 'plate B' — clean, content naturally derives ef12f."
+            .to_string(),
+        &plate_b_card,
+        plate_b_derived,
+        plate_b_derived,
+    );
+    // The crux: plate B's IDENTICAL content, re-minted with an explicit
+    // --chunk-set-id override that does not match its own derivation —
+    // measured in the walk to seat SILENTLY on the happy path.
+    let pinned_row = csid_row(
+        "SEED_pinned_12345_ef12f",
+        "Walk seed card 'pinned' — plate B's identical content, re-minted \
+         with --chunk-set-id 0x12345 (mismatch; content still derives ef12f). \
+         This is THE CRUX case the R2 warning exists for."
+            .to_string(),
+        &plate_b_card,
+        0x12345,
+        plate_b_derived,
+    );
+
+    vec![plate_a_row, plate_b_row, pinned_row]
+}
+
+/// One row per entry of `mk_codec::bytecode::STANDARD_PATHS` (currently 14:
+/// 7 mainnet + 7 testnet), named `SP##_std_path_0x..` so
+/// `tests/csid_ext_vectors.rs::standard_paths_table_fully_covered` can
+/// assert 1:1 coverage against the live table length — a future 15th entry
+/// trips THAT test rather than going silently uncovered (spec r4 L1-I1).
+/// Each row is clean (declared_csid == derived_csid); the point is
+/// coverage, not a mismatch story.
+fn standard_path_rows() -> Vec<Value> {
+    STANDARD_PATHS
+        .iter()
+        .enumerate()
+        .map(|(i, (indicator, path_str))| {
+            let path = DerivationPath::from_str(path_str).expect("STANDARD_PATHS entry parses");
+            let network = if i < 7 { NetworkKind::Main } else { NetworkKind::Test };
+            let seed_byte = 0x40u8.wrapping_add(i as u8);
+            let xpub = synthetic_xpub(network, seed_byte, &path);
+            let stub = [0x53, 0x50, i as u8, *indicator];
+            let card = KeyCard::new(
+                vec![stub],
+                Some(Fingerprint::from([0x50, 0x50, i as u8, *indicator])),
+                path,
+                xpub,
+            );
+            let bytecode = encode_bytecode(&card).expect("standard-path row: encode_bytecode");
+            let derived = derive_chunk_set_id(&bytecode);
+            let name = format!("SP{:02}_std_path_0x{indicator:02x}", i + 1);
+            let description = format!(
+                "STANDARD_PATHS coverage row {} of {} — indicator 0x{indicator:02x} -> {path_str}. \
+                 Clean (declared_csid == derived_csid); exists so a future table entry trips \
+                 standard_paths_table_fully_covered.",
+                i + 1,
+                STANDARD_PATHS.len()
+            );
+            csid_row(&name, description, &card, derived, derived)
+        })
+        .collect()
+}
+
+/// At least one row whose derived id is `< 0x10000` (r4 L1-I2), so
+/// `{:05x}`'s leading-zero rendering is exercised — none of the named seed
+/// cards (`1b1ba`/`ef12f`/`12345`) has a leading zero digit.
+fn leading_zero_row() -> Value {
+    let (card, derived) = search_card(
+        Some([0x70, 0x71, 0x72, 0x73]),
+        "86'/0'/0'",
+        NetworkKind::Main,
+        0x22,
+        |id| id < 0x10000,
+    );
+    csid_row(
+        "LZ1_derived_below_0x10000",
+        format!(
+            "Clean row whose derived id ({derived:05x}) is below 0x10000, exercising the \
+             {{:05x}} leading-zero rendering path (r4 L1-I2)."
+        ),
+        &card,
+        derived,
+        derived,
+    )
+}
+
+fn csid_ext_document() -> Value {
+    let mut rows: Vec<Value> = Vec::new();
+    rows.extend(legacy_twin_rows());
+    rows.extend(seed_card_rows());
+    rows.extend(standard_path_rows());
+    rows.push(leading_zero_row());
+    json!({
+        "family_token": mk_codec::GENERATOR_FAMILY,
+        "rows": rows,
+        "schema": 1,
+    })
+}
+
+/// Serialize a pre-built `Value` document with the corpus's canonicality
+/// discipline (2-space indent, lowercase hex already enforced upstream,
+/// LF line endings, trailing newline) and write it to `path`.
+fn write_json_document(document: &Value, path: &PathBuf) -> usize {
+    let mut buf: Vec<u8> = Vec::new();
+    serde_json::to_writer_pretty(&mut buf, document)
+        .expect("serializing pre-built Value cannot fail");
+    buf.push(b'\n');
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create vector output directory");
+    }
+    let mut out = fs::File::create(path).expect("create output file");
+    out.write_all(&buf).expect("write vector JSON");
+    out.flush().expect("flush vector JSON");
+    buf.len()
+}
+
 fn main() {
     // Resolve --output (default: crates/mk-codec/src/test_vectors/v0.1.json
     // relative to the workspace root, which is the cwd when run via cargo).
@@ -1118,29 +1421,28 @@ fn main() {
         "family_token": mk_codec::GENERATOR_FAMILY,
         "vectors": vectors_json,
     });
-
-    // Pretty-print with 2-space indent + lowercase hex (already enforced
-    // upstream in `lowercase_hex`). `serde_json::Map` is BTreeMap-backed
-    // by default so keys sort alphabetically at every level. Default
-    // `PrettyFormatter` uses a 2-space indent, matching the canonicality
-    // discipline pinned in the module-level docs.
-    let mut buf: Vec<u8> = Vec::new();
-    serde_json::to_writer_pretty(&mut buf, &document)
-        .expect("serializing pre-built Value cannot fail");
-    // Trailing newline at EOF, LF line endings.
-    buf.push(b'\n');
-
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent).expect("create vector output directory");
-    }
-    let mut out = fs::File::create(&output_path).expect("create output file");
-    out.write_all(&buf).expect("write vector JSON");
-    out.flush().expect("flush vector JSON");
-
+    let v01_bytes = write_json_document(&document, &output_path);
     eprintln!(
         "wrote {} vectors to {} ({} bytes)",
         fixtures().len(),
         output_path.display(),
-        buf.len()
+        v01_bytes
+    );
+
+    // csid_ext_v0.1.json — always a sibling of the primary output file,
+    // regardless of --output overrides.
+    let csid_ext_path = output_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("csid_ext_v0.1.json");
+    let csid_ext_doc = csid_ext_document();
+    let csid_ext_row_count = csid_ext_doc["rows"]
+        .as_array()
+        .expect("csid_ext rows is array")
+        .len();
+    let csid_ext_bytes = write_json_document(&csid_ext_doc, &csid_ext_path);
+    eprintln!(
+        "wrote {csid_ext_row_count} csid_ext rows to {} ({csid_ext_bytes} bytes)",
+        csid_ext_path.display()
     );
 }

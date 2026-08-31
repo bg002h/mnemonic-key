@@ -14,3 +14,7 @@
 /// `include_str!`-baked at compile time. Consumers may parse via
 /// `serde_json::from_str` or `mk-cli`'s `vectors` subcommand emit.
 pub const V0_1_JSON: &str = include_str!("v0.1.json");
+
+/// The `chunk_set_id` extension corpus (clean-derivation half + mismatch
+/// warning content) — see [`csid_ext`] module docs.
+pub mod csid_ext;
