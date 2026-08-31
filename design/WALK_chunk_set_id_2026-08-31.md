@@ -182,3 +182,15 @@ Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.
   and the id is derived from the key data automatically"). Gloss
   calibration: message carried without glosses for this operator
   (who has walked the vocabulary); gloss rule stays for fresh users.
+
+- W14 (moment 2, the R3 mint warning, operator cold read): clarity
+  confirmed ("clear"), but the plausible next action is the hazard —
+  operator, verbatim: "I might re-run command with —chunkset-id=ef21f
+  (but I would not notice the typo) instead of dropping the flag
+  entirely." THE TYPO OCCURRED IN THE REPLY ITSELF: ef21f vs the real
+  ef12f — a live transposition, proving the near-miss-transcription
+  class in the walk. Finding: displaying the derived value invites
+  re-typing it into the flag; one slipped character mints exactly the
+  mismatched plate the warning exists to prevent. Fold: the
+  constructive clause steers to DROPPING the flag (typo-proof) and
+  explicitly forbids re-typing the value.

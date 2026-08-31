@@ -111,7 +111,7 @@ matching the existing "chunk-set 12345" diagnostic surface.
    `schema_version` stays 1 (additive field, absent for single-string
    input). Still non-fatal. No `--strict` this cycle.
 5. **`mk encode --chunk-set-id`:** stderr warning at mint. Draft:
-   > `warning: --chunk-set-id pins 12345 in place of the content-derived id ef12f. Cards minted this way trip a mismatch warning in every conforming decoder, forever. For test fixtures only — never engrave this on a real plate.`
+   > `warning: --chunk-set-id pins 12345 in place of the content-derived id ef12f. Cards minted this way trip a mismatch warning in every conforming decoder, forever. For test fixtures only — never engrave this on a real plate. To mint a real plate, drop --chunk-set-id entirely and the id is derived from the key data automatically. Do not re-type the derived value into the flag: one mistyped character mints a mismatched plate.` (Constructive clause per W13; anti-transcription clause per W14 — the operator produced a live transposition, ef21f for ef12f, in the walk itself.)
    mk-cli computes the derived value itself via the public pair (the
    codec's pinned arm skips derivation — r1 M5; small, real work).
 
