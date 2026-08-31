@@ -226,3 +226,16 @@ Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.
   diagnostic follows on its own labeled line (operator's shape:
   "error: <computer sentence>"). Scene B carried no complaint and its
   wording is the W5-endorsed floor verbatim — covered.
+
+- W16 correction (operator, verbatim: "2) I'm most confused"): "I'm
+  most" completed as "I'm most confused", numbered as the answer to
+  walk question 2 (how would you check whether two cards share a
+  stamped id) — NOT "I'm lost" as first parsed. The operator had no
+  move for the id-check at all, confirming W15(d): a check the message
+  does not name as a command is decoration. Folds unchanged (both
+  parses land on the same two requirements: cards-never-plates
+  vocabulary, and the id-check named as a runnable command).
+
+Walk steps 7 CLOSED (W13-W16). All six message shapes walked: R2
+warning (W13), mint warning (W14), merged-cards (W15/W16), incomplete
+(W5 floor, no complaint), terminal-otherwise ordering (W16).
