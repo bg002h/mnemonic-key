@@ -194,3 +194,22 @@ Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.
   mismatched plate the warning exists to prevent. Fold: the
   constructive clause steers to DROPPING the flag (typo-proof) and
   explicitly forbids re-typing the value.
+
+- W15 (moment 3 scene A, merged-cards refusal, operator cold read):
+  PARALYSIS — operator, verbatim: "I feel a little paralyzed because I
+  don't know if the split is 2 and 2 or 3 and 1. If 2 and 2, that
+  means I could pick 4*3 ways to try 2 keys (because I'm not sure if
+  order is important) and gear up to try 12 laborious commands…but it
+  could be 3 and 1 so I try one key at a time first (at most 4)."
+  Findings: (a) the tool KNOWS the split (per-string piece-number/
+  total headers; duplicate piece number = proof of two cards) and must
+  print it; (b) the message must state piece order does not matter;
+  (c) "separate the scans" is abstract — the actionable remedy is
+  physical: re-scan ONE PLATE AT A TIME; (d) the "check whether both
+  plates truly carry the same id" move must name its command
+  (mk inspect per plate — the operator went to trial commands instead,
+  so the clause was decoration). Deeper candidate filed
+  (descriptor-mnemonic followup `seat-merged-group-auto-partition`):
+  for small merged groups the tool could trial-partition and verify
+  via the cross-chunk hash, turning the refusal into a success —
+  normative pipeline change, needs an operator ruling, NOT folded.

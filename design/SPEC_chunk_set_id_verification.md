@@ -130,10 +130,17 @@ matching the existing "chunk-set 12345" diagnostic surface.
    construction (r2 C3):
    1. **duplicate chunk index, chunks disagreeing on total_chunks, or
       more chunks than any declared total (received > declared, or
-      any chunk_index ≥ its declared total)** → *merged cards*:
-      "these strings are pieces of two different key cards that share
-      one stamped id — separate the scans; only if both plates truly
-      carry the same id, re-engrave one."
+      any chunk_index ≥ its declared total)** → *merged cards*. The
+      message MUST carry (W15): the per-string evidence the tool
+      already holds (each string's declared piece number and total —
+      "two strings declare piece 1 of 2 and two declare piece 2 of 2";
+      a duplicate piece number is proof of two cards), a note that
+      piece order does not matter, the physical remedy "re-scan one
+      plate at a time — each plate's own pieces seat by themselves",
+      and the id-check named as a command ("only if two plates truly
+      show the same id — check each alone with mk inspect — re-engrave
+      one"). Draft rendering is the implementer's; the four elements
+      are normative and frozen by the vector rows.
    2. **received < declared** (no duplicates, totals agree) →
       *incomplete scan*: "the pieces carrying this id say there should
       be N; you supplied K — scan the missing piece(s)." (Wording
