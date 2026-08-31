@@ -56,8 +56,17 @@ be consulted. A clean mismatch is only ever MINTED:
 - (2) encoder drift between implementations — the F-212 shape; the
   warning is a standing field tripwire;
 - (3) beyond-budget miscorrection (rare; payload damage is largely
-  caught by the existing 4-byte cross-chunk hash);
-- (4) deliberate tamper.
+  caught by the existing 4-byte cross-chunk hash — measured, r4 L2-M1:
+  in practice every miscorrection is absorbed by the cross-chunk hash
+  or the group split BEFORE the warning could fire, so the warning is
+  not itself a miscorrection tripwire);
+- (4) deliberate tamper — **BUT the warning is NOT a tamper/authenticity
+  control and must never be read as one (r4 L1-M1):** it is a
+  consistency check on how the id was CHOSEN, never on who chose the
+  content. A re-minted substitute card always passes (declared == derived
+  by construction), and the 20-bit id can be ground onto any target id
+  in ~2^20 work — measured 0.20 s. A future `--strict` cycle must not
+  treat this warning as tamper-evidence.
 
 None of these are the scanning operator's fault; refusal would strand
 a perfectly restorable wallet. **Deliberate cross-format asymmetry,
@@ -73,20 +82,44 @@ CANONICAL RE-ENCODE of the successfully decoded card, not the raw
 reassembled bytes. Chosen deliberately: a foreign encoder whose
 bytecode canonicalization drifts stamps an id consistent with its own
 bytes; only the re-encode route detects that drift (the F-212 channel
-this warning exists for). A card whose payload does not re-encode to
-the bytes on the plates is therefore IN scope for the warning. Both
-functions are public mk-codec 0.5 API, so **no mk-codec change is
-required this cycle** (r1 C2's publish pressure dissolves); every
-in-cycle surface computes the same operand, which is what makes R6
-parity testable.
+this warning exists for). A card whose STAMPED ID disagrees with the
+re-encode is in scope; a non-conforming plate whose id was itself
+computed from the canonical re-encode is NOT, and is out of the
+warning's reach by design (r4 L1-M2, measured — the raw plate bytes
+are never hashed). Both functions are public mk-codec 0.5 API, so
+**no mk-codec change is required this cycle** (r1 C2's publish pressure
+dissolves); every in-cycle surface computes the same operand, which is
+what makes R6 parity testable.
+
+**The operand is FROZEN for id purposes from mk-codec 0.5 (r4 L1-I1).**
+`encode_bytecode` is not a fixed function: the `STANDARD_PATHS` table
+already grew once (`0x16 = m/48'/1'/0'/1'`, mk-codec v0.2.0, commit
+`fd6a407`), and the two encodings of one card derive DIFFERENT ids
+(measured `91ff6` vs `94b47`). Therefore any future change to
+`encode_bytecode`'s output — **including adding a `STANDARD_PATHS`
+entry** — is a mismatch-generating WIRE-COMPAT event, not a minor
+additive change: it would make genuine, correctly-minted 0.5.x plates
+of the affected shape warn forever and send the operator to re-engrave
+a plate that is fine (the exact defect this seat path already names at
+`descriptor-mnemonic seat/input.rs:106`). The extension corpus MUST
+carry a row pinning the current 14-entry table so a future addition
+trips a TEST, not a field warning.
 
 ## Behavior contracts, per surface
 
 The normative warning content lives in the vector corpus's
 `warning_text` field (below), not in this prose; drafts here are
 R0-reviewable wording, frozen when the rows are. One rendering rule
-(r1 N2): the id appears as bare lowercase hex (e.g. `12345`, `ef12f`),
-matching the existing "chunk-set 12345" diagnostic surface. Two rules
+(r1 N2, corrected r4 L1-I2): the id appears as **exactly five
+lowercase hex digits, zero-padded (`{:05x}`)** — the token
+`GroupId::Display` prints (`seat/input.rs:59`) and `md --seat @i=`
+ACCEPTS (it refuses any token whose digit count ≠ 5, `directive.rs:68`);
+never `{:x}`. (Measured: 3 of the 19 legacy corpus rows carry a derived
+or declared id `< 0x10000` — V7 `03994`, V9 `04cf9`, V16 `01789` — so
+`{:x}` would hand the operator a 4-digit token the sibling CLI rejects.
+The extension corpus MUST include at least one row whose derived id is
+`< 0x10000`, since none of the named new rows `1b1ba`/`ef12f`/`12345`
+exercises the leading-zero path.) Two rules
 from the wording walk bind every refusal and warning (W16): the HUMAN
 sentence leads and the machine diagnostic follows on its own labeled
 line (operator's shape: `error: <codec sentence>`; label frozen in the
@@ -102,10 +135,25 @@ know how many physical plates the pieces came from).
    the recompute seats at that chokepoint (or equivalently at each
    verb's decode call) so "every mk surface" is structural, not an
    enumeration that decays (r1 C1). On declared ≠ derived, chunked
-   input only: one stderr warning, exit unchanged. Draft:
+   input only: **one warning per mismatching group, in the surface's
+   existing group order** (r4 L2-M2 — repair and md seat are batch-
+   capable; the other verbs decode one card). Exit unchanged. Draft:
    > `warning: this key card's stamped chunk-set id (12345) was not derived from its content, which computes ef12f. The card decodes fine, but diagnostics that name plates by id will call it 12345. To fix it, re-mint: run mk encode again without --chunk-set-id and the id is derived from the key data automatically.` (Wording per operator walk W13.)
-   `mk repair`'s warning fires on its re-verified (blessed) output;
-   the repair report itself is unchanged.
+   **`mk repair` coverage, stated explicitly (r4 L2-I1, measured):**
+   repair decodes a card ONLY on the blessed re-verify (a group that
+   was corrected, complete and reassembled — `repair.rs`), so the
+   warning fires ONLY there. An already-valid supply (exit 0) and a
+   partial/single-plate Candidate supply (exit 5, UNVERIFIED advisory)
+   do NOT decode and do NOT warn — the operator reaches the warning via
+   the `mk decode` that advisory already sends them to. The repair
+   report itself is unchanged, and the blessed decode plumbs its
+   `Ok(card)` out rather than decoding twice (r4 L2-N1). **On the
+   blessed path the warning MUST carry a mint-time clause (r4 L2-I2 —
+   this surface was never walked; without it the report's "I corrected
+   your card" reads as "the repair changed the id"):** e.g. append "this
+   id was set when the card was minted; the repair did not change it."
+   Acceptance already permits per-surface framing, so R6 is not
+   violated.
 3. **`mk inspect` additionally prints the stamped chunk-set id
    unconditionally** (r1 M4) — matched or not — so the warning's value
    has a cross-check surface.
@@ -113,8 +161,16 @@ know how many physical plates the pieces came from).
    stdout format (content: the pair + remedy). `--json` gains an
    optional additive field
    `"chunk_set_id": {"declared": "12345", "derived": "ef12f", "matches": false}`;
-   `schema_version` stays 1 (additive field, absent for single-string
-   input). Still non-fatal. No `--strict` this cycle.
+   verify's integer `schema_version` stays `1` (additive field, absent
+   for single-string input). Still non-fatal. No `--strict` this cycle.
+   **All OTHER JSON envelopes are UNCHANGED this cycle (r4 L2-I3):**
+   `mk repair --json` is a byte-match cross-CLI contract with
+   `mnemonic repair --json` (D27; its `schema_version` is the STRING
+   `"1"`, unlike verify's integer) and this cycle does NOT renegotiate
+   it — the mismatch reaches machine consumers only via
+   `mk verify --json`. `mk inspect`'s unconditional stamped-id print
+   (contract 3) is TEXT MODE only; its `--json` envelope gains nothing
+   this cycle.
 5. **`mk encode --chunk-set-id`:** stderr warning at mint. Draft:
    > `warning: --chunk-set-id pins 12345 in place of the content-derived id ef12f. Cards minted this way trip a mismatch warning in every conforming decoder, forever. For test fixtures only — never engrave this on a real plate. To mint a real plate, drop --chunk-set-id entirely and the id is derived from the key data automatically. Do not re-type the derived value into the flag: one mistyped character mints a mismatched plate.` (Constructive clause per W13; anti-transcription clause per W14 — the operator produced a live transposition, ef21f for ef12f, in the walk itself.)
    mk-cli computes the derived value itself via the public pair (the
@@ -194,16 +250,27 @@ normative content — r1 I1). It is generated by
 `cargo run --bin gen_mk_vectors --features gen-vectors` (extended;
 `mk vectors` is a read-only printer — r1 M1), and includes at minimum:
 clean twins of three legacy shapes, plus this walk's three seed cards
-(plate A `1b1ba/1b1ba`, plate B `ef12f/ef12f`, pinned `12345/ef12f`).
-Rust and Go conformance = reproducing every row's `derived_csid`; the
-in-cycle Go assertion covers the clean rows (contract 8). The open
-FOLLOWUPS V19-re-pin nit is unaffected (no v0.1 churn here).
+(plate A `1b1ba/1b1ba`, plate B `ef12f/ef12f`, pinned `12345/ef12f`),
+plus TWO required by r4: (i) a row pinning the current 14-entry
+`STANDARD_PATHS` table so a future addition trips a test not a field
+warning (r4 L1-I1), and (ii) at least one row whose derived id is
+`< 0x10000` so the `{:05x}` leading-zero rendering is exercised
+(r4 L1-I2). Rust and Go conformance = reproducing every row's
+`derived_csid`; the in-cycle Go assertion covers the clean rows
+(contract 8). The open FOLLOWUPS V19-re-pin nit is unaffected (no v0.1
+churn here).
 
 ## Acceptance
 
-- **Per-surface golden rows** (all six mk verbs of contract 2, verify's
-  two modes, mint contract 5, seat contract 6): the warning fires on
-  the mismatch rows and is ABSENT on their clean twins. Warning
+- **Per-surface golden rows** (decode/inspect/verify/derive/address of
+  contract 2, verify's two modes, mint contract 5, seat contract 6):
+  the warning fires on the mismatch rows and is ABSENT on their clean
+  twins. **`mk repair` is scoped to its blessed path (r4 L2-I1):** its
+  golden row supplies a DAMAGED pinned card (so a correction occurs and
+  the group re-verifies), asserts the warning + mint-time clause fire
+  on exit 5, AND asserts an undamaged pinned supply (exit 0) and a
+  single-chunk Candidate supply are SILENT — repair's warning is not
+  asserted on the plain mismatch rows, which it never decodes. Warning
   content asserts the corpus row's `warning_text` — the (declared,
   derived) pair and remedy sentence must appear; surface framing may
   differ (R6 parity, testable because the operand is pinned).
