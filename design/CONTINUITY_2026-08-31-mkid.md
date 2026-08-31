@@ -72,3 +72,25 @@ wordings (W5 lens). NEXT: operator decides walk-of-wordings now vs
 straight to IMPLEMENTATION_PLAN (then plan R0, then one implementer;
 staleness rule applies -- re-validate plan against tree before
 dispatch).
+
+## Status update 2 (2026-08-31, spec question-exhausted)
+
+SPEC done and CLOSED across four lenses at fcf3971:
+- contract-completeness: r1 opus 4C/6I/5M/3N -> r2 sonnet (C3 partial)
+  -> r3 sonnet clean 0C/0I.
+- wording walk WITH operator: W13-W16, six message shapes, folds
+  b694005/208efee/7e0d1b3/c4900a7.
+- adversarial + failure-states: r4 opus 0C/5I/4M/1N (operand version-
+  freeze, {:05x} rendering, mk repair blessed-path coverage, JSON
+  scoping, tamper non-goal) -> r5 sonnet clean 0C/0I/0M/0N (fcf3971).
+Reports r1-r5 + lenses-r4 persisted in design/agent-reports/.
+Post-cycle burndown followups filed (device, me-cli leg, go corpus
+ingestion, mk silent-correction, seat auto-partition candidate).
+
+NEXT: IMPLEMENTATION_PLAN_chunk_set_id_verification.md. Risk set applies
+(normative-adjacent, three-repo). Plan gets its own R0 to 0C/0I, then
+one implementer per phase, staleness re-check before dispatch. Record
+the plan's baseline rev. In-cycle surfaces only: mk-cli (6 verbs +
+mint + inspect print + verify json), md-cli (seat warning + R5 refusal
+rewrite + retain per-chunk headers), fork Go derivation-parity test,
+extension vector corpus (incl. table-pin row + <0x10000 row).
