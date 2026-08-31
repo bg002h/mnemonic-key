@@ -1,146 +1,168 @@
-# SPEC — verify `chunk_set_id` against the payload it is derived from
+# SPEC — chunk_set_id: recompute-and-report (warnings, vectors, no admission change)
 
-**Status: DRAFT for R0. 2026-08-19.** Normative admission change — no code
-before 0C/0I.
+**Status: DRAFT for R0. Re-grounded 2026-08-31** from the operator walk
+(`design/WALK_chunk_set_id_2026-08-31.md`, rulings W1–W10) and the recon
+(`design/agent-reports/recon-chunk-set-id-spec-2026-08-31.md`). Supersedes
+the 2026-08-19 parked draft (git `9fbbe36`) whose central question — reject
+non-derived ids at decode time? — the operator has now RULED. Baselines:
+mnemonic-key `9ff8922`, descriptor-mnemonic `7eca44b6`, seedhammer
+`5f02773c`, mnemonic-engrave `1103d9ee`.
 
-## The gap
+## The ruling (operator, 2026-08-31, walk steps 4–5)
 
-`mk-codec` 0.5.0 made `chunk_set_id` **derived**: the top 20 bits of
-`SHA-256(canonical_bytecode)`, MSB-first. **Nothing verifies that derivation.**
+Position A stands: **the chunk-set id remains opaque to content in
+mk-codec. No decode-time rejection, ever, in this cycle.** The named
+guarantee (`an_explicit_chunk_set_id_still_wins`, "the id is opaque to
+content") survives untouched, and the 19-test design fork in the old
+draft never happens. Instead:
 
-Both decoders use the csid only to check that all chunks in a *set* carry the
-same value — reassembly matching. The fork says so in its own test:
-*"the decoder does not validate the csid value."* `DECISIONS.md` D-15 still
-describes the field as *"per-encoding random … used for reassembly mismatch
-detection, nothing more"*, which D-16 now contradicts.
+- **R2 — reassembly warning:** tools that reassemble a chunked card
+  recompute the id from content and WARN on stamped ≠ computed. Exit
+  codes and stdout are unchanged.
+- **R3 — mint warning:** `mk encode --chunk-set-id` warns loudly on
+  stderr. Measured today: it mints in total silence.
+- **R4 — cross-language executable vectors** pin the derivation so
+  Rust, Go, and the device can never drift apart silently (operator,
+  verbatim endorsement). No prose formula appears in this spec.
+- **R5 — grouping-refusal rewrite** in the md seat path: three
+  distinguishable situations get three messages with three remedies.
+- **R6 — one warning, everywhere** (operator, verbatim: "Same warning
+  everywhere"): the same warning content renders on every surface that
+  reassembles a card — mk, md seating, me bundle, and the engraver's
+  on-device scan flow.
 
-So the id became a checkable property of the payload, and nothing checks it.
+Why warnings and not refusals (measured, walk step 4): a mismatch
+cannot arise from engraving damage — one flipped character is silently
+BCH-corrected (`mk decode` returned the intact card; `mk repair` named
+the correction), and an id wrong on only some chunks splits the group
+and refuses as incomplete before any derivation could be consulted. A
+clean mismatch is only ever MINTED: (1) `--chunk-set-id` leakage,
+(2) encoder drift between implementations (the F-212 shape — the
+warning is a standing field tripwire), (3) beyond-budget miscorrection
+(rare; payload damage is caught by the existing 4-byte cross-chunk
+hash), (4) deliberate tamper. None of these are the scanning
+operator's fault; refusal would strand a perfectly restorable wallet.
 
-## Why it is worth closing
+**Deliberate cross-format asymmetry, stated as fact:** md-codec
+already verifies its csid unconditionally and refuses on mismatch
+(`descriptor-mnemonic crates/md-codec/src/chunk.rs` — "the content-id
+oracle; P0.2 funds-load-bearing invariant", present since 2026-04).
+Policy cards refuse; key cards warn. This spec does not touch
+md-codec.
 
-Operator intent, stated 2026-08-19: *"We want to match things back up someday
-and want ids to be deterministic."* A derived id only supports matching if
-something verifies the match. Comparing
-`csid == derive_chunk_set_id(reassembled_payload)` is one line and catches:
+## Behavior contracts, per surface
 
-- a card whose **payload was altered** after engraving — any edit moves the hash;
-- **chunks of different cards** assembled together, even on a csid collision
-  (20 bits is only ~1e6, so collisions are not negligible at corpus scale);
-- a card that did **not** come from a conforming encoder.
+Warning text is normative-by-vector: the exact strings live in the
+acceptance rows below, not in prose. Drafts here are R0-reviewable
+wording, frozen only when the rows are.
 
-It costs nothing: the chunk layer already computes that hash for its cross-chunk
-integrity suffix.
+### mnemonic-key (Rust leads)
 
-## BLOCKED — this collides with a deliberate, tested guarantee
+1. **mk-codec:** expose the comparison non-breakingly — decode of a
+   chunked set also reports (declared_csid, derived_csid) to callers.
+   No error variant is added to the decode path; admission semantics
+   and every existing test are unchanged. (Mechanism — new API vs.
+   enriched return — is the implementer's choice at plan time.)
+2. **`mk decode` / `mk inspect` (chunked input only):** on
+   declared ≠ derived, stderr gains one warning; exit stays 0:
+   > `warning: this card's stamped chunk-set id (0x12345) does not match the id computed from its content (0xef12f). The card decodes fine, but it was not minted normally, and tools that name plates by id will call it 12345 — expect confusing diagnostics until it is re-minted.`
+3. **`mk verify`:** same detection, reported in verify's own output
+   format. Still non-fatal. No `--strict` mode this cycle.
+4. **`mk encode --chunk-set-id`:** stderr warning at mint:
+   > `warning: --chunk-set-id pins 0x12345 in place of the content-derived id (0xef12f). Cards minted this way trip a mismatch warning in every conforming decoder, forever. For test fixtures only — never engrave this on a real plate.`
+   (Requires computing the derived id at mint; it is already computed
+   on the unpinned path.)
 
-**Implemented, measured, and reverted 2026-08-19.** The change is 20 lines and
-works. It also breaks **19 tests**, and the important ones are not fixtures:
+### descriptor-mnemonic (seat path, `crates/md-cli/src/seat/`)
 
-```
-mk-codec::chunk_set_id_determinism  an_explicit_chunk_set_id_still_wins
-mk-codec::canonical_payload         canonical_payload_is_chunk_set_id_invariant
-```
+5. **After successful group reassembly** in `md descriptor` /
+   `md address` seating: recompute; on mismatch add one stderr note in
+   the R2 shape. Composition, stdout, wallet id, address notes, exit
+   code: unchanged (measured baseline: today this seats silently).
+6. **R5 — the refusal rewrite.** The current message ("Two DIFFERENT
+   cards pinned to one chunk-set id … re-mint one of them") was
+   measured firing on three distinct situations; it is replaced by
+   header forensics the tool already possesses:
+   - received < declared, no duplicate chunk indexes → *incomplete
+     scan*: name the missing piece(s) ("this card says it has 2
+     pieces; you supplied 1 — scan the missing piece").
+   - duplicate chunk indexes, or chunks disagreeing on total_chunks →
+     *merged cards*: "these strings are pieces of two different cards
+     that share one stamped id — separate the scans; only if both
+     plates truly carry the same id, re-engrave one."
+   - group reassembles but derived ≠ declared → the R2 warning (not a
+     refusal).
+   Terms are defined at point of use (W1): "card", "chunk", "stamped
+   id" appear with one-clause glosses the first time each message uses
+   them.
 
-The first was written by the 0.5.0 cycle itself and says, in a comment:
+### seedhammer fork (Go, strictly downstream)
 
-> Both must still decode to the same card: **the id is opaque to content.**
+7. **R4 convergence (in cycle):** the Go `mk/` port consumes the
+   same vector corpus and must reproduce every derived id. **R6 on
+   the device — post-cycle burndown (operator scheduling ruling):**
+   the scan flow (grouping keyed by `ChunkSetID`) will surface the
+   same warning content when a completed, reassembled set has
+   declared ≠ derived — content parity with contract 2, fork-native
+   UI form. Filed as FOLLOWUPS `device-csid-mismatch-warning`; does
+   not gate this cycle (R1 means no normative codec change
+   locksteps, so the vectors are the in-cycle fork surface).
 
-So the codebase does not merely tolerate explicit csids — it **guarantees** them,
-by name, in a test. Verifying the derivation deletes that guarantee. My original
-estimate of "10 call sites, regenerate the fixtures" was wrong: this is a design
-fork, not a fixture refresh.
+### mnemonic-engrave (me-cli)
 
-### The two coherent positions
+8. `me bundle` emits the same warning (R6) when a bundled chunked
+   group's declared id differs from the recomputed one — engrave leg,
+   this cycle.
 
-**A — the id is OPAQUE to content (today, and tested).**
-`encode()` is deterministic, so re-encoding a card reproduces its strings
-byte-for-byte; that is what makes cards matchable. `--chunk-set-id` produces
-ordinary valid cards with a chosen id. The id groups chunks; it does not attest
-to them.
+## Vectors (R4) — the derivation is pinned by rows, not prose
 
-**B — the id is BOUND to content (this spec).**
-The id becomes a verifiable integrity property: an altered payload no longer
-matches its own id. `--chunk-set-id` inverts into a way to build deliberately
-non-conforming cards for negative tests. 19 tests change and one named guarantee
-is deleted.
+The corpus extends mk-codec's SHA-pinned vector corpus (`mk vectors`)
+with, per chunked vector: the canonical payload (hex), the mk1 string
+set, `derived_csid`, `declared_csid`, and `expect_mismatch_warning`.
+Conformance = reproducing every row; both the Rust suite and the fork
+Go suite consume the same JSON. Seed rows, measured live this session
+(policy `md15p8dsssfdsssj5qqcyxppgtcfh4dhmh72lmcq638s7y9fyu5u6s`,
+fixture keys per the walk record):
 
-### What decides it
+| card | declared | derived | warn |
+| --- | --- | --- | --- |
+| plate A (deadbeef, m/48'/0'/0') | 1b1ba | 1b1ba | no |
+| plate B (cafef00d, m/48'/0'/0'/2') | ef12f | ef12f | no |
+| plate B pinned `--chunk-set-id 0x12345` | 12345 | ef12f | **yes** |
 
-**Position A already delivers the stated goal.** The operator requirement was
-*"we want to match things back up someday and want ids to be deterministic"* —
-deterministic `encode()` satisfies that: re-encode the card and compare. B adds
-**tamper-evidence**, which is a different and smaller property: it catches a
-payload altered after engraving, which the cross-chunk hash (already verified,
-4 bytes) largely covers too.
-
-So B's marginal gain over A is: catching a card whose payload AND cross-chunk
-hash were both rewritten consistently but whose csid was not. That is a narrow
-threat, and it costs a documented feature.
-
-**Recommendation: do NOT adopt B on current evidence.** Keep A. If tamper
-evidence is wanted, the honest place is a `mk verify --strict` that reports
-whether the id is derived, without making non-derived cards undecodable.
-
-**Operator decision required before any code lands.**
-
-## If B is chosen anyway: it is a HARD rejection
-
-**Operator ruling 2026-08-19: "We don't care about old cards. None exist."**
-
-That removes the only real objection. Pre-0.5.0 cards carry a random csid and
-would fail verification with probability ≈ 1; none are in circulation, so the
-check can reject rather than warn. No advisory mode, no `--strict` flag, no
-version gate — those exist to protect a population that does not exist.
-
-## The contradiction this creates, and its resolution
-
-The same release added `mk encode --chunk-set-id <HEX>` and
-`encode_with_chunk_set_id`, whose stated purpose is pinning a value for
-"vector regeneration and conformance fixtures". **A strict decoder rejects
-exactly the cards those produce**, unless the pinned value happens to equal the
-derived one.
-
-Measured blast radius:
-
-| where | count | what |
-| --- | --- | --- |
-| `mnemonic-key` Rust tests | 10 | `encode_with_chunk_set_id(&card, 0x12345 / 0xABCDE)` |
-| `mnemonic-engrave` me-cli | 6 | golden `bundle-md1-mk1.json` + `manifest.rs` fixture, csid `0x12345` |
-| `seedhammer` | 2 | golden vectors using explicit csids |
-
-**Resolution: the pin's legitimate purpose INVERTS.** It stops being a way to
-make ordinary cards with a chosen id and becomes the way to construct a
-**deliberately non-conforming card** — which is precisely what is needed to test
-the new rejection. Its doc comment must say so, and every fixture that used it
-as if the result were valid must be regenerated from `encode()`.
-
-## Normative change
-
-1. `mk_codec::decode` (and the chunked reassembly path) computes
-   `derive_chunk_set_id(canonical_bytecode)` over the reassembled payload and
-   compares it to the header's `chunk_set_id`.
-2. Mismatch → a new `Error::ChunkSetIdNotDerived { expected, found }`, distinct
-   from the existing `ChunkSetIdMismatch` (which means *chunks disagree with each
-   other*, a different failure the operator fixes differently).
-3. **Single-string (unchunked) encodings carry no csid and are unaffected.**
-4. `encode_with_chunk_set_id` is documented as producing a card the decoder will
-   refuse unless the value matches the derivation.
+Corpus regeneration happens at implementation time via `mk vectors`;
+the three rows above are the executable anchor this spec is checked
+against.
 
 ## Acceptance
 
-- A card from `encode()` round-trips; a card from
-  `encode_with_chunk_set_id(card, wrong)` is REFUSED with
-  `ChunkSetIdNotDerived`, and the error names both values.
-- `ChunkSetIdMismatch` still fires for chunks that disagree with each other, and
-  is not shadowed by the new check.
-- Mutation: deleting the comparison makes a wrong-csid card decode again.
-- All three repos' fixtures regenerated; `me bundle`'s golden shows a derived
-  csid, not `0x12345`.
-- **Go port converges** (fork `mk/`), per the Rust-primary rule — Rust first with
-  vectors, then the port.
+- Golden-stderr rows for contracts 2–6: each warning fires byte-exact
+  on its vector and is ABSENT on the unpinned twins. A warning that
+  cannot fire is the false-PASS class: mutation gate — removing the
+  recompute comparison must fail the pinned rows.
+- Contract 6's three refusal situations each have a vector row (we
+  measured all three shapes live: 4-strings-one-id, 1-of-2, mixed-id
+  chunks); the retired message string appears in none of them.
+- `cargo nextest run --locked` green in mnemonic-key and
+  descriptor-mnemonic with zero changes to existing csid tests; fork
+  `mk/` Go tests consume the extended corpus and pass.
+- R6 parity: `me bundle`'s warning carries the same content as
+  contract 2's — rendering may differ; the (declared, derived) pair
+  and the remedy sentence may not. Firing row + absent-on-clean row.
+  The device leg asserts the same parity when its post-cycle
+  followup lands.
+- Existing guarantees re-asserted, not weakened:
+  `an_explicit_chunk_set_id_still_wins` and
+  `canonical_payload_is_chunk_set_id_invariant` unchanged.
 
 ## Not in scope
 
-- `md-codec`'s csid. It has always been derived, but whether *it* verifies is a
-  separate question and a separate cycle.
-- The `D-15` wording fix ("per-encoding random"), which is a docs follow-up.
+- md-codec (already ships its check; asymmetry is deliberate, above).
+- Device warning surface: ruled same-content (R6), scheduled
+  post-cycle burndown — FOLLOWUPS `device-csid-mismatch-warning`.
+- `mk decode` silent BCH auto-correction reporting: walk discovery,
+  post-cycle burndown — FOLLOWUPS
+  `mk-decode-silent-correction-reporting`.
+- Any `--strict`/refusal mode; any change to `Error::ChunkSetIdMismatch`
+  naming (the mk-vs-md naming collision is recorded in the recon;
+  resolving it is a docs/API question for a future major).
