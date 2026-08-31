@@ -86,7 +86,12 @@ The normative warning content lives in the vector corpus's
 `warning_text` field (below), not in this prose; drafts here are
 R0-reviewable wording, frozen when the rows are. One rendering rule
 (r1 N2): the id appears as bare lowercase hex (e.g. `12345`, `ef12f`),
-matching the existing "chunk-set 12345" diagnostic surface.
+matching the existing "chunk-set 12345" diagnostic surface. Two rules
+from the wording walk bind every refusal and warning (W16): the HUMAN
+sentence leads and the machine diagnostic follows on its own labeled
+line (operator's shape: `error: <codec sentence>`; label frozen in the
+vector rows) — and messages count CARDS, never plates (the tool cannot
+know how many physical plates the pieces came from).
 
 ### mnemonic-key (in cycle)
 
@@ -135,12 +140,14 @@ matching the existing "chunk-set 12345" diagnostic surface.
       already holds (each string's declared piece number and total —
       "two strings declare piece 1 of 2 and two declare piece 2 of 2";
       a duplicate piece number is proof of two cards), a note that
-      piece order does not matter, the physical remedy "re-scan one
-      plate at a time — each plate's own pieces seat by themselves",
-      and the id-check named as a command ("only if two plates truly
-      show the same id — check each alone with mk inspect — re-engrave
-      one"). Draft rendering is the implementer's; the four elements
-      are normative and frozen by the vector rows.
+      piece order does not matter, the remedy "re-scan one card's
+      pieces alone" WITHOUT asserting a plate count (W16: the tool
+      counts cards from headers; a card's pieces may span plates, so
+      any plate count is a guess the tool must not print), and the
+      id-check named as a command ("only if two cards truly show the
+      same stamped id — check each alone with mk inspect — re-engrave
+      one of them"). Draft rendering is the implementer's; the four
+      elements are normative and frozen by the vector rows.
    2. **received < declared** (no duplicates, totals agree) →
       *incomplete scan*: "the pieces carrying this id say there should
       be N; you supplied K — scan the missing piece(s)." (Wording
@@ -149,9 +156,10 @@ matching the existing "chunk-set 12345" diagnostic surface.
       precondition** (measured exemplar: chunk 1 of plate A + chunk 2
       of plate B, both pinned 12345 → `cross-chunk integrity hash
       mismatch`; also covers `MixedHeaderTypes` and post-reassembly
-      bytecode decode errors): carry the codec error verbatim plus a
-      neutral remedy: "these pieces carry one id but do not form one
-      key card; re-scan each plate separately."
+      bytecode decode errors): the neutral remedy leads — "these
+      pieces carry one id but do not form one key card; re-scan one
+      card's pieces alone" — and the codec error follows verbatim on
+      its own labeled line.
    4. **group reassembles cleanly but derived ≠ declared** → the R2
       warning (contract 6), not a refusal.
    The retired message ("Two DIFFERENT cards pinned … re-mint one of

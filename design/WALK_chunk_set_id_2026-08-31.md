@@ -213,3 +213,16 @@ Walk CLOSED. Spec re-grounded on W1-W12; next gate: R0.
   for small merged groups the tool could trial-partition and verify
   via the cross-chunk hash, turning the refusal into a success —
   normative pipeline change, needs an operator ruling, NOT folded.
+
+- W16 (moment 3 scenes A+C, operator, verbatim: "Both plates? I have 4
+  plates? I'm most. Human sentence first. Computer sentence labeled
+  something like error: computer sentence" — "I'm most" read as "I'm
+  lost"): two rulings. (a) CARD/PLATE vocabulary: the tool counts
+  CARDS from headers; it can never know the plate count (one card's
+  pieces may span plates). Messages must count cards, never plates —
+  "two cards are mixed here" — and instruct scanning one card's
+  pieces in isolation without asserting how many plates exist.
+  (b) ORDERING: in every refusal the human sentence leads; the codec
+  diagnostic follows on its own labeled line (operator's shape:
+  "error: <computer sentence>"). Scene B carried no complaint and its
+  wording is the W5-endorsed floor verbatim — covered.
