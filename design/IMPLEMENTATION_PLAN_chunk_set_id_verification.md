@@ -57,7 +57,11 @@ that assert on it. Extend `gen_mk_vectors` to emit a SECOND file
   `{:05x}` zero-padding.
 Tests: a Rust test reads the file and asserts every `derived_csid` reproduces
 `derive_chunk_set_id(encode_bytecode(decode(strings)))`; SHA-pin the new file
-separately from `V0_1_SHA256`; assert v0.1.json byte-unchanged.
+separately from `V0_1_SHA256`; assert v0.1.json byte-unchanged. **Access
+mechanism (plan r1 M1): bake the file via `include_str!` into a
+`test_vectors::csid_ext` module mirroring the existing `V0_1_JSON` pattern, so
+mk-cli/md-cli tests and the Go parity test all read the same pinned bytes;
+name it in the module so P1/P3/P4 do not each invent an access path.**
 Gate note: this is the ONE phase whose "test can fail" claim needs the
 mutation check — corrupt a row's `derived_csid` and the reader test must fail.
 
@@ -67,12 +71,18 @@ RED: golden-stderr tests (one per verb: decode/inspect/verify/derive/address,
 plus repair deferred to P2) asserting the warning fires on a pinned-card row
 and is ABSENT on its clean twin; exit code unchanged; `{:05x}` rendering; the
 W13 remedy wording; content asserts the corpus `warning_text`.
-IMPL: compute `derived` at the shared decode point feeding
-`read_mk1_strings`' consumers (or each verb's decode call), emit one warning
-per mismatching group in existing group order (r4 L2-M2). `mk inspect` also
-prints the stamped id unconditionally (r1 M4). `mk verify --json` gains the
-additive `chunk_set_id` object, integer `schema_version` held at 1 (L2-I3);
-NO other JSON envelope changes.
+IMPL: compute `derived` per-verb at each verb's own decode call (NOT a
+single shared mutation of `read_mk1_strings`, which only reads strings and
+does not decode — r1 M2 wants per-surface comparisons that are independently
+deletable; see M2 below). Emit one warning per mismatching group in existing
+group order (r4 L2-M2). `mk inspect` also prints the stamped id
+unconditionally (r1 M4).
+**`mk verify` reports the mismatch in BOTH modes (spec contract 4, plan r1
+I1):** text mode's `emit_ok` stdout verdict (`crates/mk-cli/src/cmd/verify.rs:190`,
+today prints `OK: mk1 string(s) decode cleanly`) must carry the pair + remedy
+on a mismatch — a P1 RED asserts verify's STDOUT changes, not only stderr;
+`--json` gains the additive `chunk_set_id` object, integer `schema_version`
+held at 1 (L2-I3). NO other JSON envelope changes.
 MUTATION: delete the mk-cli comparison → P1 rows fail, with evidence the line
 ran (r1 M2/r2 M2).
 
@@ -91,19 +101,31 @@ warning carries the mint-time clause (r4 L2-I2). `repair --json` UNCHANGED
 
 RED: seat warning after clean reassembly with a pinned card (contract 6); the
 four-situation classification (r2 C3 — arm 3 unconditioned/total), each with a
-vector incl. the mixed-halves cross-chunk case; the retired "re-mint one of
-them" string appears in NO test; the W15/W16 elements (piece-number evidence,
+vector incl. the mixed-halves cross-chunk case; **plus a classification-ORDER
+row (spec Acceptance, plan r1 I2): a supply matching TWO arms' raw predicates
+(e.g. incomplete AND duplicate-index) must land in the EARLIER arm — this is
+what catches an arm-precedence bug that per-situation rows miss.** The retired
+"re-mint one of them" string appears in NO test; the W15/W16 elements (piece-number evidence,
 order-doesn't-matter, one-card-at-a-time, named `mk inspect` id-check,
 cards-never-plates, human-sentence-first + labeled codec line).
 IMPL: `group_key_of` must RETAIN per-chunk `chunk_index`/`total_chunks`
 (today discarded — r1 C3) to drive the classifier; add the warning at the
 post-reassembly success point in `md descriptor`/`md address`. Update the
-enumerated churn sites (spec contract 7: `seat/input.rs:310-313` assert,
-`tests/seating_vectors.rs:845-846`, module doc `:1-25`/`:106`, doc `:107`).
+enumerated churn sites: the PRODUCTION emission site
+`seat/input.rs:206` (the `map_err` that builds the retired message — the
+actual R5 rewrite target, plan r1 N1), plus the spec contract-7 sites
+(`seat/input.rs:310-313` assert, `tests/seating_vectors.rs:845-846`, module
+doc `:1-25`/`:106`, doc `:107`). **Use `mk_codec::derive_chunk_set_id`
+explicitly (plan r1 N2 — `md_codec` exports a same-named function; the seat
+path handles both formats, so an unqualified import is a live footgun).**
 MUTATION: delete the md-cli comparison → P3 rows fail.
 
 ### P4 — seedhammer fork: derivation-parity test only
 
+**Repo/checkout (plan r1 M3):** edit the canonical
+`/scratch/code/shibboleth/seedhammer` working tree (`mk/` package), baseline
+`5f02773c` — NOT any of the scratch/worktree copies
+(`seedhammer-corpus-sync`, `wt-s5-skeptic-copy`, `seedhammer-ref-v1.4.2`).
 RED+IMPL: a Go unit test asserting `top20(sha256(bytecode))` reproduces the
 extension corpus's clean pinned rows (hand-carried like existing
 `parityVectors`). NO device UI, NO JSON ingestion (both post-cycle followups).
