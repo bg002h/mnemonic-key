@@ -61,7 +61,12 @@ separately from `V0_1_SHA256`; assert v0.1.json byte-unchanged. **Access
 mechanism (plan r1 M1): bake the file via `include_str!` into a
 `test_vectors::csid_ext` module mirroring the existing `V0_1_JSON` pattern, so
 mk-cli/md-cli tests and the Go parity test all read the same pinned bytes;
-name it in the module so P1/P3/P4 do not each invent an access path.**
+name it in the module so P1 (mk-cli) and P3 (md-cli) read the same pinned
+bytes. P4 (Go) does NOT read this file — it hand-carries the clean pinned
+rows as literals, matching the existing `parityVectors` pattern (see P4);
+"same corpus" there means same VALUES, transcribed, per the Rust-primary
+convergence rule (plan r2 M1 — the earlier "all three read the same bytes"
+wording contradicted P4 and is corrected here).**
 Gate note: this is the ONE phase whose "test can fail" claim needs the
 mutation check — corrupt a row's `derived_csid` and the reader test must fail.
 
