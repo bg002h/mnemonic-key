@@ -152,6 +152,60 @@ pub fn warn_chunk_set_id_mismatch(comparison: Option<(u32, u32)>) {
     }
 }
 
+/// BCH `t = 4` per-chunk correction ceiling (SPEC-cited on
+/// `mk_codec::string_layer::decode_string`'s own doc comment: "up to four
+/// substitutions ... BCH(93, 80, 8) regular code and ... BCH(108, 93, 8)
+/// long code"), named in [`warn_corrections_applied`]'s note so budget
+/// consumption is legible against the real ceiling, not just "it decoded".
+const BCH_CORRECTION_CEILING: usize = 4;
+
+/// Per-chunk BCH correction counts for a decoded mk1 set (diagnostics
+/// followup `mk-decode-silent-correction-reporting`, `design/FOLLOWUPS.md`):
+/// `mk decode`/`mk verify` apply BCH error-correction silently today, so a
+/// plate near its `t = 4` per-chunk budget passes as pristine with no
+/// signal -- only `mk repair` names a correction. Returns one `(chunk
+/// index, corrections_applied)` entry per input string whose count is
+/// nonzero, in input order; empty when every chunk decoded clean.
+///
+/// Re-runs `mk_codec::string_layer::decode_string` on each RAW input
+/// string. Cheap (the same string-layer decode `mk_codec::decode` already
+/// performs internally) and gives per-chunk counts the aggregate decode
+/// path (`KeyCard`) discards. `.ok()` mirrors `declared_chunk_set_id`
+/// above: every string here already round-tripped through the SAME
+/// decode inside the caller's successful `mk_codec::decode(&refs)` call,
+/// so a `None` here is defensive, not expected.
+pub fn correction_counts(strings: &[String]) -> Vec<(usize, usize)> {
+    strings
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| {
+            let decoded = mk_codec::string_layer::decode_string(s).ok()?;
+            (decoded.corrections_applied > 0).then_some((i, decoded.corrections_applied))
+        })
+        .collect()
+}
+
+/// Emit the diagnostics-followup stderr note when ANY chunk in `counts`
+/// required BCH correction. No-op on an empty slice (silent on clean
+/// input). Non-fatal, additive: mirrors `warn_chunk_set_id_mismatch`'s own
+/// placement and pattern -- one line at each read verb's own decode call,
+/// independently deletable per verb (mutation gate: delete the call site).
+pub fn warn_corrections_applied(counts: &[(usize, usize)]) {
+    if counts.is_empty() {
+        return;
+    }
+    let breakdown = counts
+        .iter()
+        .map(|(i, n)| format!("chunk {i}: {n} correction(s)"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    eprintln!(
+        "note: BCH error-correction repaired this card while decoding -- {breakdown}. The card \
+         is intact, but a plate consuming its correction budget (max {BCH_CORRECTION_CEILING} \
+         per chunk) is degrading; run `mk repair` for the per-position detail."
+    );
+}
+
 /// Partition `--from-md1` values into CARDS, preserving first-appearance order.
 ///
 /// One `--from-md1` value is one md1 STRING, but one card may be several

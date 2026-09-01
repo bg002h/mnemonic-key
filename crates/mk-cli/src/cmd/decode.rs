@@ -12,8 +12,8 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    chunk_set_id_comparison, classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings,
-    warn_chunk_set_id_mismatch,
+    chunk_set_id_comparison, classify_code_variant, correction_counts, fmt_fingerprint, fmt_stub,
+    read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied,
 };
 use crate::error::{CliError, Result};
 
@@ -43,6 +43,10 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
     // plan P1, seated here at this verb's own decode call -- deleting this
     // one line is the P1 mutation gate for `decode`.
     warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
+    // Diagnostics followup `mk-decode-silent-correction-reporting`: same
+    // placement/pattern as the R2 warning above -- non-fatal, additive,
+    // independently deletable (mutation gate: delete this one line).
+    warn_corrections_applied(&correction_counts(&strings));
     let variant = strings
         .first()
         .map(|s| classify_code_variant(s))

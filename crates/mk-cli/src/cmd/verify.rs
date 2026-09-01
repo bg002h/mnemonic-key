@@ -14,9 +14,9 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    chunk_set_id_comparison, derive_stub_from_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards,
-    parse_derivation_path, parse_fingerprint, parse_stub_hex, parse_xpub_normalized,
-    read_mk1_strings, warn_chunk_set_id_mismatch,
+    chunk_set_id_comparison, correction_counts, derive_stub_from_md1_card, fmt_fingerprint,
+    fmt_stub, group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
+    parse_xpub_normalized, read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied,
 };
 use crate::error::{CliError, Result};
 
@@ -69,6 +69,10 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     // stdout verdict / `--json` envelope below (contract 4 -- BOTH modes).
     let csid = chunk_set_id_comparison(&strings, &card);
     warn_chunk_set_id_mismatch(csid);
+    // Diagnostics followup `mk-decode-silent-correction-reporting`: same
+    // placement/pattern as the R2 warning above -- non-fatal, additive,
+    // independently deletable (mutation gate: delete this one line).
+    warn_corrections_applied(&correction_counts(&strings));
 
     // Parse origin_path once; both the xpub normalization check and the
     // content-match block below consume it (no double-parse).
