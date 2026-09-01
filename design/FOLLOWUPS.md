@@ -554,4 +554,7 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   report), so budget consumption is visible before it is exhausted.
 - **Owning phase:** post-cycle burndown of the chunk_set_id cycle
   (operator ruling W12, paired with the device leg).
-- **Status:** OPEN. **Tier:** `diagnostics` / mk-cli.
+- **Status:** DONE 2026-08-31 — mk decode/verify emit a per-chunk
+  correction-count stderr note naming the t=4 ceiling (merge on main;
+  impl report design/agent-reports/impl-mk-decode-correction.md).
+  **Tier:** `diagnostics` / mk-cli.
