@@ -152,3 +152,22 @@ ci/staging ref dance (push master:refs/heads/ci/staging, watch test
 (rust+go), push master, delete staging; FREEZE tip for the window).
 Confirm seedhammer's branch/protection (fork bg002h/seedhammer; DCO on P4).
 Then reconcile burndown (5 post-cycle followups filed).
+
+## Status update 6 (2026-08-31, SHIPPED)
+
+All three repos on origin/main, verified local==origin, staging refs deleted:
+- mnemonic-key   8ae8dd4  (CI run 33458632887 fully green, incl. fmt)
+- descriptor-mnemonic d41950fe  (CI run 33459077932, 9/9 green)
+- seedhammer     195df90  (unprotected, direct)
+Push via staging ritual (ci/staging earns the SHA's checks, then main, no
+bypass). First staging attempt HALTED red on the pinned fmt job (required
+context passed but standard is no-red-CI); fixed with cargo fmt + a style
+commit per repo, re-staged green. Lesson recorded: run cargo fmt --check
+in the phase gate, not at push (memory fmt-check-belongs-in-the-phase-gate).
+
+CYCLE COMPLETE. Burndown: 5 post-cycle followups filed + owned, none due
+this session — device-csid-mismatch-warning, me-cli-csid-warning-surface,
+go-mk-vector-corpus-ingestion, md-cli-seat-warning-corpus-binding,
+mk-decode-silent-correction-reporting, seat-merged-group-auto-partition
+(candidate, needs operator ruling). This continuity + push report are a
+local doc-tail ahead of origin; they ride the next push.
