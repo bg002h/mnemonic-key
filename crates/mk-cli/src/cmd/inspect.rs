@@ -18,7 +18,10 @@ use clap::Args;
 use mk_codec::KeyCard;
 use serde_json::json;
 
-use crate::cmd::{classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings};
+use crate::cmd::{
+    chunk_set_id_comparison, classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings,
+    warn_chunk_set_id_mismatch,
+};
 use crate::error::{CliError, Result};
 
 /// `mk inspect` arguments.
@@ -43,13 +46,22 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2): recompute-and-warn, chunked input only. Also
+    // contract 3: the stamped id prints unconditionally in text mode below
+    // (matched or not), so the warning's value has a cross-check surface.
+    let csid = chunk_set_id_comparison(&strings, &card);
+    warn_chunk_set_id_mismatch(csid);
+    let declared_csid = csid.map(|(declared, _)| declared);
 
     let per_chunk_variants: Vec<&str> = strings.iter().map(|s| classify_code_variant(s)).collect();
 
     if args.json {
+        // Contract 3: the unconditional stamped-id print is TEXT MODE
+        // only; `--json` gains nothing this cycle (SPEC "Behavior
+        // contracts" item 4).
         emit_json(&card, &strings, &per_chunk_variants)?;
     } else {
-        emit_text(&card, &strings, &per_chunk_variants);
+        emit_text(&card, &strings, &per_chunk_variants, declared_csid);
     }
     crate::output_advisory::emit_output_class_advisory(
         crate::output_advisory::OutputClass::WatchOnly,
@@ -72,7 +84,7 @@ fn path_components_text(card: &KeyCard) -> Vec<String> {
         .collect()
 }
 
-fn emit_text(card: &KeyCard, strings: &[String], variants: &[&str]) {
+fn emit_text(card: &KeyCard, strings: &[String], variants: &[&str], declared_csid: Option<u32>) {
     println!("xpub:                {}", card.xpub);
     match &card.origin_fingerprint {
         Some(fp) => println!("origin_fingerprint:  {}", fmt_fingerprint(fp)),
@@ -88,6 +100,12 @@ fn emit_text(card: &KeyCard, strings: &[String], variants: &[&str]) {
     println!("chunks:              {}", strings.len());
     for (i, v) in variants.iter().enumerate() {
         println!("  chunk[{i}]:           {v} (BCH variant)");
+    }
+    // SPEC contract 3: printed UNCONDITIONALLY (matched or not) so the R2
+    // warning's value has a cross-check surface. `None` on single-string
+    // (unchunked) input, which has no chunk_set_id field.
+    if let Some(id) = declared_csid {
+        println!("chunk_set_id:        {id:05x} (stamped)");
     }
 }
 

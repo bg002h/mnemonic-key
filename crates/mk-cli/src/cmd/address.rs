@@ -14,7 +14,7 @@ use serde_json::json;
 use crate::cmd::derive_support::{
     AddressType, AddressTypeInference, CliNetwork, infer_address_type, render_address, secp_verify,
 };
-use crate::cmd::read_mk1_strings;
+use crate::cmd::{chunk_set_id_comparison, read_mk1_strings, warn_chunk_set_id_mismatch};
 use crate::error::{CliError, Result};
 
 /// `mk address` arguments.
@@ -80,6 +80,8 @@ pub fn run(args: AddressArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
 
     let addr_type = resolve_address_type(&card.origin_path, args.address_type)?;
     let network = resolve_network(&card.xpub, args.network)?;
