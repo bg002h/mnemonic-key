@@ -247,7 +247,7 @@ fn repair_blessed_damaged_pinned_card_warns_with_mint_time_clause() {
         "stderr must name the content-derived id; stderr={stderr:?}"
     );
     assert!(
-        stderr.contains("this id was set when the card was minted; the repair did not change it."),
+        stderr.contains("This id was set when the card was minted; the repair did not change it."),
         "stderr must carry the mint-time clause (r4 L2-I2), or the repair report reads as \
          \"I changed your card\"; stderr={stderr:?}"
     );
@@ -284,7 +284,7 @@ fn repair_json_byte_unchanged_no_chunk_set_id_field() {
     // unchanged, not the whole invocation's output.
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("this id was set when the card was minted"),
+        stderr.contains("This id was set when the card was minted"),
         "stderr={stderr:?}"
     );
 }
