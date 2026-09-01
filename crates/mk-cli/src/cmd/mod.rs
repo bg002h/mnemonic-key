@@ -115,10 +115,7 @@ fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
 /// otherwise, REGARDLESS of whether they agree -- `mk verify --json`
 /// reports the pair even on a match (contract 4), so callers decide what a
 /// match vs. a mismatch means.
-pub fn chunk_set_id_comparison(
-    strings: &[String],
-    card: &mk_codec::KeyCard,
-) -> Option<(u32, u32)> {
+pub fn chunk_set_id_comparison(strings: &[String], card: &mk_codec::KeyCard) -> Option<(u32, u32)> {
     let declared = declared_chunk_set_id(strings)?;
     let derived = derived_chunk_set_id(card)?;
     Some((declared, derived))

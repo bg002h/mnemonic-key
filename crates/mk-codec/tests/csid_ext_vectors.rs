@@ -76,7 +76,10 @@ fn corpus_is_nonempty_and_every_row_recomputes_live() {
     );
 
     for row in rows {
-        let name = row["name"].as_str().expect("row.name is string").to_string();
+        let name = row["name"]
+            .as_str()
+            .expect("row.name is string")
+            .to_string();
 
         let strings: Vec<String> = row["strings"]
             .as_array()
@@ -127,14 +130,18 @@ fn corpus_is_nonempty_and_every_row_recomputes_live() {
 
         // 5-hex-digit, zero-padded, lowercase per the spec's `{:05x}`
         // rendering rule (the token the sibling md-cli's `@i=` accepts).
-        for (field, val) in [("declared_csid", declared), ("derived_csid", pinned_derived)] {
+        for (field, val) in [
+            ("declared_csid", declared),
+            ("derived_csid", pinned_derived),
+        ] {
             assert_eq!(
                 val.len(),
                 5,
                 "[{name}] {field} must render as exactly 5 hex digits, got {val:?}"
             );
             assert!(
-                val.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+                val.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
                 "[{name}] {field} must be lowercase hex, got {val:?}"
             );
         }

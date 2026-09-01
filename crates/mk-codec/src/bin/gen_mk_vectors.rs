@@ -47,9 +47,7 @@ use mk_codec::bytecode::STANDARD_PATHS;
 use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
 use mk_codec::string_layer::chunk::split_into_chunks;
 use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
-use mk_codec::{
-    KeyCard, bytecode::encode_bytecode, derive_chunk_set_id, encode_with_chunk_set_id,
-};
+use mk_codec::{KeyCard, bytecode::encode_bytecode, derive_chunk_set_id, encode_with_chunk_set_id};
 use serde_json::{Value, json};
 
 /// One fixture spec — abstract enough to drop a new vector by adding
@@ -1199,7 +1197,15 @@ fn search_card(
 
 /// One `legacy_twin_rows` fixture spec: `(name, description, stubs,
 /// origin_fingerprint, origin_path, network, seed_byte)`.
-type LegacyTwinSpec = (&'static str, &'static str, [[u8; 4]; 1], Option<[u8; 4]>, &'static str, NetworkKind, u8);
+type LegacyTwinSpec = (
+    &'static str,
+    &'static str,
+    [[u8; 4]; 1],
+    Option<[u8; 4]>,
+    &'static str,
+    NetworkKind,
+    u8,
+);
 
 /// Clean twins of three legacy shapes (V1/V2/V3): same `KeyCard` content as
 /// their `fixtures()` counterparts, minted via the auto-derive `encode`
@@ -1240,14 +1246,16 @@ fn legacy_twin_rows() -> Vec<Value> {
     ];
     specs
         .into_iter()
-        .map(|(name, description, stubs, fp, path_str, network, seed_byte)| {
-            let path = DerivationPath::from_str(path_str).expect("legacy twin path parses");
-            let xpub = synthetic_xpub(network, seed_byte, &path);
-            let card = KeyCard::new(stubs.to_vec(), fp.map(Fingerprint::from), path, xpub);
-            let bytecode = encode_bytecode(&card).expect("legacy twin: encode_bytecode");
-            let derived = derive_chunk_set_id(&bytecode);
-            csid_row(name, description.to_string(), &card, derived, derived)
-        })
+        .map(
+            |(name, description, stubs, fp, path_str, network, seed_byte)| {
+                let path = DerivationPath::from_str(path_str).expect("legacy twin path parses");
+                let xpub = synthetic_xpub(network, seed_byte, &path);
+                let card = KeyCard::new(stubs.to_vec(), fp.map(Fingerprint::from), path, xpub);
+                let bytecode = encode_bytecode(&card).expect("legacy twin: encode_bytecode");
+                let derived = derive_chunk_set_id(&bytecode);
+                csid_row(name, description.to_string(), &card, derived, derived)
+            },
+        )
         .collect()
 }
 
@@ -1275,16 +1283,14 @@ fn seed_card_rows() -> Vec<Value> {
 
     let plate_a_row = csid_row(
         "SEED_plate_a_1b1ba",
-        "Walk seed card 'plate A' — clean, content naturally derives 1b1ba."
-            .to_string(),
+        "Walk seed card 'plate A' — clean, content naturally derives 1b1ba.".to_string(),
         &plate_a_card,
         plate_a_derived,
         plate_a_derived,
     );
     let plate_b_row = csid_row(
         "SEED_plate_b_ef12f",
-        "Walk seed card 'plate B' — clean, content naturally derives ef12f."
-            .to_string(),
+        "Walk seed card 'plate B' — clean, content naturally derives ef12f.".to_string(),
         &plate_b_card,
         plate_b_derived,
         plate_b_derived,
@@ -1319,7 +1325,11 @@ fn standard_path_rows() -> Vec<Value> {
         .enumerate()
         .map(|(i, (indicator, path_str))| {
             let path = DerivationPath::from_str(path_str).expect("STANDARD_PATHS entry parses");
-            let network = if i < 7 { NetworkKind::Main } else { NetworkKind::Test };
+            let network = if i < 7 {
+                NetworkKind::Main
+            } else {
+                NetworkKind::Test
+            };
             let seed_byte = 0x40u8.wrapping_add(i as u8);
             let xpub = synthetic_xpub(network, seed_byte, &path);
             let stub = [0x53, 0x50, i as u8, *indicator];

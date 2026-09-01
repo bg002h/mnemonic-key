@@ -14,9 +14,9 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    chunk_set_id_comparison, derive_stub_from_md1_card, fmt_fingerprint, fmt_stub,
-    group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
-    parse_xpub_normalized, read_mk1_strings, warn_chunk_set_id_mismatch,
+    chunk_set_id_comparison, derive_stub_from_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards,
+    parse_derivation_path, parse_fingerprint, parse_stub_hex, parse_xpub_normalized,
+    read_mk1_strings, warn_chunk_set_id_mismatch,
 };
 use crate::error::{CliError, Result};
 

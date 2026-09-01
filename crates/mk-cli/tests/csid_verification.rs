@@ -62,7 +62,10 @@ fn pinned_warning_text(doc: &Value) -> String {
         .as_str()
         .expect("warning_text is string")
         .to_string();
-    assert!(!text.is_empty(), "pinned row must carry a non-empty warning_text");
+    assert!(
+        !text.is_empty(),
+        "pinned row must carry a non-empty warning_text"
+    );
     text
 }
 

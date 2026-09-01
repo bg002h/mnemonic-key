@@ -122,7 +122,10 @@ fn derived_id_of_v1_fixture() -> String {
     );
     let stdout = String::from_utf8(out.stdout).unwrap();
     let strings: Vec<&str> = stdout.lines().collect();
-    assert!(strings.len() > 1, "this fixture must chunk or the test proves nothing");
+    assert!(
+        strings.len() > 1,
+        "this fixture must chunk or the test proves nothing"
+    );
 
     let mut cmd = Command::cargo_bin("mk").unwrap();
     cmd.arg("inspect");
@@ -213,7 +216,11 @@ const PRE_P2_REPAIR_JSON: &str = "{\"schema_version\":\"1\",\"kind\":\"mk1\",\"c
 fn repair_blessed_damaged_pinned_card_warns_with_mint_time_clause() {
     let doc = corpus();
     let strings = row_strings(&doc, MISMATCH_ROW);
-    assert_eq!(strings.len(), 2, "pinned mismatch row must be a 2-chunk card");
+    assert_eq!(
+        strings.len(),
+        2,
+        "pinned mismatch row must be a 2-chunk card"
+    );
     let chunk0 = strings[0].clone();
     let chunk1 = strings[1].clone();
     let damaged_chunk1 = flip_at(&chunk1, 20);
