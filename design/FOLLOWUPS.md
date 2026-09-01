@@ -539,7 +539,14 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   + remedy), fork-native UI form. Content parity is the acceptance.
 - **Owning phase:** post-cycle burndown of the chunk_set_id cycle
   (operator ruling W12). Depends on R4 vectors landing in the Go port.
-- **Status:** OPEN. **Tier:** `ux` / fork leg.
+- **Status:** CODE SHIPPED 2026-09-01 (fork merge 169073c): warning on
+  all six gather consumers (host wording verbatim, operator-approved
+  screenshots), spec GREEN after 3 R0 rounds + whole-diff 1C fold
+  (census-marker premise gap -> F-447 in mnemonic-engrave). REMAINING:
+  the on-device flash+tap acceptance (operator; four NDEF tags +
+  procedure committed at mnemonic-engrave design/journeys/csid-tags/).
+  Close fully when the operator records the tap outcomes.
+  **Tier:** `ux` / fork leg.
 
 ### `mk-decode-silent-correction-reporting` — decode corrects engraving damage without a word
 
