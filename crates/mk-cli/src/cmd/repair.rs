@@ -184,8 +184,11 @@ pub fn run(args: RepairArgs) -> Result<u8> {
     // a batch that folds to Reject suppresses ALL output, including any
     // co-batched Bless/clean group).
     let mut unverified_advisory: Option<&'static str> = None;
+    let mut blessed_groups: Vec<(GroupKey, mk_codec::KeyCard)> = Vec::new();
     if any_correction {
-        match classify_mk1_set(&reports, &header_results, &corrected_chunks)? {
+        let (verdict, blessed) = classify_mk1_set(&reports, &header_results, &corrected_chunks)?;
+        blessed_groups = blessed;
+        match verdict {
             SetVerify::Blessed => {}
             SetVerify::Unverified => {
                 unverified_advisory = Some(
@@ -205,6 +208,31 @@ pub fn run(args: RepairArgs) -> Result<u8> {
 
     if let Some(advisory) = unverified_advisory {
         eprintln!("warning: {advisory}");
+    }
+
+    // SPEC contract 2, `mk repair` coverage (r4 L2-I1/I2): the R2
+    // stamped-vs-derived mismatch warning fires ONLY on the blessed
+    // re-verify path above -- an already-valid supply and a Candidate
+    // (partial/single-plate) supply never populate `blessed_groups`, since
+    // `classify_mk1_set` only ever pushes into it on an individual group's
+    // Bless verdict. No second decode (r4 L2-N1): `card` came straight out
+    // of that re-verify's own `mk_codec::decode`.
+    for (key, card) in &blessed_groups {
+        // A blessed `SingleString` group is one whole (unchunked) card that
+        // happened to need correction -- SPEC "The comparison" has no
+        // declared id to compare there (single-string encodings carry no
+        // chunk_set_id field), so it is silent by construction.
+        let GroupKey::Chunked(declared) = key else {
+            continue;
+        };
+        if let Some(derived) = crate::cmd::derived_chunk_set_id(card) {
+            if derived != *declared {
+                eprintln!(
+                    "{} this id was set when the card was minted; the repair did not change it.",
+                    crate::cmd::chunk_set_id_mismatch_warning(*declared, derived)
+                );
+            }
+        }
     }
 
     crate::output_advisory::emit_output_class_advisory(
@@ -333,15 +361,21 @@ fn fold_verdict(acc: Option<GroupVerdict>, v: GroupVerdict) -> GroupVerdict {
 /// only the groups that had at least one chunk actually corrected, then
 /// folds to the dominant outcome.
 ///
-/// Returns `Ok(SetVerify::Blessed)` / `Ok(SetVerify::Unverified)` on
-/// Bless / Candidate; a dominant `Reject` returns
+/// Returns `Ok((SetVerify::Blessed, blessed))` / `Ok((SetVerify::Unverified,
+/// blessed))` on Bless / Candidate; a dominant `Reject` returns
 /// `Err(CliError::SetReassemblyMismatch)` — never `Ok` (a batch that folds
 /// to Reject suppresses ALL output, including any co-batched Bless group).
+///
+/// `blessed` carries every individually-Blessed group's `(GroupKey,
+/// KeyCard)` in group order -- the SPEC contract-2 comparison operand,
+/// plumbed OUT rather than re-decoded by the caller (r4 L2-N1): this is
+/// the ONE `mk_codec::decode` this function already runs per Bless
+/// verdict, and it is never repeated.
 fn classify_mk1_set(
     reports: &[RepairDetail],
     header_results: &[std::result::Result<StringLayerHeader, String>],
     corrected_chunks: &[String],
-) -> Result<SetVerify> {
+) -> Result<(SetVerify, Vec<(GroupKey, mk_codec::KeyCard)>)> {
     let touched: HashSet<usize> = reports
         .iter()
         .filter(|r| !r.corrected_positions.is_empty())
@@ -352,6 +386,7 @@ fn classify_mk1_set(
     let mut members: HashMap<GroupKey, Vec<usize>> = HashMap::new();
     let mut dominant: Option<GroupVerdict> = None;
     let mut first_reject: Option<(String, String)> = None;
+    let mut blessed: Vec<(GroupKey, mk_codec::KeyCard)> = Vec::new();
 
     for (i, res) in header_results.iter().enumerate() {
         match res {
@@ -408,7 +443,10 @@ fn classify_mk1_set(
         } else {
             let refs: Vec<&str> = idxs.iter().map(|&i| corrected_chunks[i].as_str()).collect();
             match mk_codec::decode(&refs) {
-                Ok(_) => GroupVerdict::Bless,
+                Ok(card) => {
+                    blessed.push((*key, card));
+                    GroupVerdict::Bless
+                }
                 Err(e) => {
                     if first_reject.is_none() {
                         first_reject = Some((describe_group_key(*key), e.to_string()));
@@ -421,8 +459,8 @@ fn classify_mk1_set(
     }
 
     match dominant.unwrap_or(GroupVerdict::Bless) {
-        GroupVerdict::Bless => Ok(SetVerify::Blessed),
-        GroupVerdict::Candidate => Ok(SetVerify::Unverified),
+        GroupVerdict::Bless => Ok((SetVerify::Blessed, blessed)),
+        GroupVerdict::Candidate => Ok((SetVerify::Unverified, blessed)),
         GroupVerdict::Reject => {
             let (group, detail) =
                 first_reject.expect("dominant Reject implies a recorded reject detail");

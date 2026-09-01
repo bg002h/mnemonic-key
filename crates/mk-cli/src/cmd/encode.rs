@@ -11,8 +11,9 @@ use mk_codec::string_layer::header::MAX_CHUNK_SET_ID;
 use serde_json::json;
 
 use crate::cmd::{
-    classify_code_variant, decode_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards,
-    parse_derivation_path, parse_fingerprint, parse_stub_hex, parse_xpub_normalized,
+    chunk_set_id_comparison, classify_code_variant, decode_md1_card, fmt_fingerprint, fmt_stub,
+    group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
+    parse_xpub_normalized,
 };
 use crate::error::{CliError, Result};
 
@@ -374,6 +375,21 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
                 CliError::from(e)
             }
         })?;
+
+        // SPEC contract 5: `--chunk-set-id` mint-time warning, on mismatch
+        // only. Reuses the SAME (declared, derived) comparison the P1
+        // read-side verbs use (`crate::cmd::chunk_set_id_comparison`),
+        // read back from the strings JUST MINTED -- `declared` comes out
+        // `None` when the bytecode was short enough for single-string
+        // output, where mk-codec's pinned arm silently ignores
+        // `--chunk-set-id` (`encode_with_chunk_set_id`'s own doc comment:
+        // "only consulted on the chunked path"), so there is no field to
+        // compare and no warning fires there either -- correctly, since
+        // the pin was never written anywhere.
+        if args.chunk_set_id.is_some() {
+            warn_pinned_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
+        }
+
         minted.push(MintedCard {
             fingerprint: fp,
             path,
@@ -493,6 +509,30 @@ fn parse_chunk_set_id(s: &str) -> Result<u32> {
         )));
     }
     Ok(v)
+}
+
+/// SPEC contract 5: the `mk encode --chunk-set-id` mint-time warning.
+/// `comparison` is `None` when there is nothing to compare (single-string
+/// output, where the pin was silently ignored) or when `declared == derived`
+/// (the pin happens to equal what would have been derived anyway -- not a
+/// mismatch).
+///
+/// Wording is frozen per the SPEC contract-5 draft: the drop-the-flag
+/// remedy, and the anti-transcription clause (W14 -- the operator produced
+/// a live transposition, `ef21f` for `ef12f`, in the wording walk itself).
+fn warn_pinned_chunk_set_id_mismatch(comparison: Option<(u32, u32)>) {
+    if let Some((declared, derived)) = comparison {
+        if declared != derived {
+            eprintln!(
+                "warning: --chunk-set-id pins {declared:05x} in place of the content-derived \
+                 id {derived:05x}. Cards minted this way trip a mismatch warning in every \
+                 conforming decoder, forever. For test fixtures only — never engrave this on a \
+                 real plate. To mint a real plate, drop --chunk-set-id entirely and the id is \
+                 derived from the key data automatically. Do not re-type the derived value into \
+                 the flag: one mistyped character mints a mismatched plate."
+            );
+        }
+    }
 }
 
 /// JSON for `--keys`: a `cards` array whose entries are exactly the object
