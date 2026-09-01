@@ -11,7 +11,10 @@ use clap::Args;
 use mk_codec::KeyCard;
 use serde_json::json;
 
-use crate::cmd::{classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings};
+use crate::cmd::{
+    chunk_set_id_comparison, classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings,
+    warn_chunk_set_id_mismatch,
+};
 use crate::error::{CliError, Result};
 
 /// `mk decode` arguments.
@@ -36,6 +39,10 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2): recompute-and-warn, chunked input only. Per
+    // plan P1, seated here at this verb's own decode call -- deleting this
+    // one line is the P1 mutation gate for `decode`.
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
     let variant = strings
         .first()
         .map(|s| classify_code_variant(s))

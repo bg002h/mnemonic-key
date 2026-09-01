@@ -12,7 +12,9 @@ use clap::Args;
 use serde_json::json;
 
 use crate::cmd::derive_support::secp_verify;
-use crate::cmd::{fmt_fingerprint, read_mk1_strings};
+use crate::cmd::{
+    chunk_set_id_comparison, fmt_fingerprint, read_mk1_strings, warn_chunk_set_id_mismatch,
+};
 use crate::error::{CliError, Result};
 
 /// `mk derive` arguments. Exactly one of `--path` / `--index` is required.
@@ -48,6 +50,8 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,

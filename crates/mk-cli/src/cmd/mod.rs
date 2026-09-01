@@ -71,6 +71,90 @@ fn md1_chunk_set_id(s: &str) -> Option<u32> {
         .map(|h| h.chunk_set_id)
 }
 
+/// The chunk-set id declared on the wire header of a CHUNKED mk1 set, or
+/// `None` for single-string (unchunked) input -- there is nothing to compare
+/// there.
+///
+/// Reads only the FIRST string's string-layer header: `strings` has already
+/// decoded cleanly via `mk_codec::decode`, whose `reassemble_from_chunks`
+/// already proved every chunk agrees on `chunk_set_id`
+/// (`Error::ChunkSetIdMismatch` otherwise per SPEC §4 rule 12), so reading
+/// one chunk's header is sufficient -- this is not a shortcut that skips
+/// that check, only a re-read of a value the codec already verified.
+fn declared_chunk_set_id(strings: &[String]) -> Option<u32> {
+    let first = strings.first()?;
+    let decoded = mk_codec::string_layer::decode_string(first).ok()?;
+    let (header, _consumed) =
+        mk_codec::string_layer::StringLayerHeader::from_5bit_symbols(decoded.data()).ok()?;
+    match header {
+        mk_codec::string_layer::StringLayerHeader::Chunked { chunk_set_id, .. } => {
+            Some(chunk_set_id)
+        }
+        // `StringLayerHeader` is `#[non_exhaustive]`; `SingleString` and any
+        // future variant alike carry no `chunk_set_id` to compare.
+        _ => None,
+    }
+}
+
+/// SPEC "The comparison": `derive_chunk_set_id(encode_bytecode(decoded_card))`
+/// -- the canonical RE-ENCODE of the successfully decoded card, not the raw
+/// reassembled bytes (a foreign encoder whose bytecode canonicalization
+/// drifts stamps an id consistent with its own bytes; only the re-encode
+/// route detects that drift -- SPEC "The comparison").
+///
+/// `mk_codec::derive_chunk_set_id` fully qualified: `md_codec` exports a
+/// same-named function and this crate links both.
+fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
+    let bytecode = mk_codec::bytecode::encode_bytecode(card).ok()?;
+    Some(mk_codec::derive_chunk_set_id(&bytecode))
+}
+
+/// Compare the declared vs. content-derived `chunk_set_id` for a decoded
+/// mk1 set (SPEC R2 / contracts 2-4). `None` for single-string input
+/// (nothing declared to compare against). `Some((declared, derived))`
+/// otherwise, REGARDLESS of whether they agree -- `mk verify --json`
+/// reports the pair even on a match (contract 4), so callers decide what a
+/// match vs. a mismatch means.
+pub fn chunk_set_id_comparison(
+    strings: &[String],
+    card: &mk_codec::KeyCard,
+) -> Option<(u32, u32)> {
+    let declared = declared_chunk_set_id(strings)?;
+    let derived = derived_chunk_set_id(card)?;
+    Some((declared, derived))
+}
+
+/// The frozen R2 mismatch-warning content (SPEC contract 2 draft / R6 "same
+/// warning everywhere"): byte-identical to the extension corpus's
+/// `warning_text` for the pinned `12345`/`ef12f` row. `{:05x}`: exactly
+/// five lowercase hex digits, zero-padded -- the rendering
+/// `GroupId::Display` prints and `md --seat @i=` accepts (SPEC "Behavior
+/// contracts, per surface").
+pub fn chunk_set_id_mismatch_warning(declared: u32, derived: u32) -> String {
+    format!(
+        "warning: this key card's stamped chunk-set id ({declared:05x}) was not derived from \
+         its content, which computes {derived:05x}. The card decodes fine, but diagnostics that \
+         name plates by id will call it {declared:05x}. To fix it, re-mint: run mk encode again \
+         without --chunk-set-id and the id is derived from the key data automatically."
+    )
+}
+
+/// Emit the R2 stderr warning for a precomputed `chunk_set_id_comparison`
+/// result. A no-op on a match, or on `None` (single-string input, or a
+/// re-encode that could not be computed).
+///
+/// Independently deletable per verb (P1 mutation gate): each call site
+/// below is this one line, seated at that verb's own decode call, per
+/// plan P1 -- NOT centralized in `read_mk1_strings`, which only reads
+/// strings and never decodes.
+pub fn warn_chunk_set_id_mismatch(comparison: Option<(u32, u32)>) {
+    if let Some((declared, derived)) = comparison {
+        if declared != derived {
+            eprintln!("{}", chunk_set_id_mismatch_warning(declared, derived));
+        }
+    }
+}
+
 /// Partition `--from-md1` values into CARDS, preserving first-appearance order.
 ///
 /// One `--from-md1` value is one md1 STRING, but one card may be several

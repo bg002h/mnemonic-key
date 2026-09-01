@@ -14,8 +14,9 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    derive_stub_from_md1_card, fmt_fingerprint, fmt_stub, group_md1_cards, parse_derivation_path,
-    parse_fingerprint, parse_stub_hex, parse_xpub_normalized, read_mk1_strings,
+    chunk_set_id_comparison, derive_stub_from_md1_card, fmt_fingerprint, fmt_stub,
+    group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
+    parse_xpub_normalized, read_mk1_strings, warn_chunk_set_id_mismatch,
 };
 use crate::error::{CliError, Result};
 
@@ -63,6 +64,11 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2) + contract 4: recompute-and-warn on stderr like
+    // the other four read verbs, AND report the pair on `emit_ok`'s own
+    // stdout verdict / `--json` envelope below (contract 4 -- BOTH modes).
+    let csid = chunk_set_id_comparison(&strings, &card);
+    warn_chunk_set_id_mismatch(csid);
 
     // Parse origin_path once; both the xpub normalization check and the
     // content-match block below consume it (no double-parse).
@@ -183,18 +189,35 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         }
     }
 
-    emit_ok(&card, &strings, args.json)?;
+    emit_ok(&card, &strings, args.json, csid)?;
     Ok(0)
 }
 
-fn emit_ok(card: &KeyCard, strings: &[String], json_mode: bool) -> Result<()> {
+fn emit_ok(
+    card: &KeyCard,
+    strings: &[String],
+    json_mode: bool,
+    csid: Option<(u32, u32)>,
+) -> Result<()> {
     if json_mode {
-        let envelope = json!({
+        let mut envelope = json!({
             "schema_version": 1,
             "ok": true,
             "chunks": strings.len(),
             "policy_id_stubs": card.policy_id_stubs.iter().map(fmt_stub).collect::<Vec<_>>(),
         });
+        // Contract 4: additive `chunk_set_id` object, present for chunked
+        // input (declared vs. content-derived, always -- even on a match),
+        // absent for single-string input (`csid == None`, nothing declared
+        // to report). `schema_version` stays the integer 1; no other
+        // envelope field changes.
+        if let Some((declared, derived)) = csid {
+            envelope["chunk_set_id"] = json!({
+                "declared": format!("{declared:05x}"),
+                "derived": format!("{derived:05x}"),
+                "matches": declared == derived,
+            });
+        }
         let s = serde_json::to_string(&envelope)
             .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
         println!("{s}");
@@ -203,6 +226,17 @@ fn emit_ok(card: &KeyCard, strings: &[String], json_mode: bool) -> Result<()> {
             "OK: mk1 string(s) decode cleanly{}",
             expected_match_suffix(card)
         );
+        // Contract 4: text mode's OK verdict must carry the mismatch on
+        // STDOUT too (not just the stderr R2 warning above) -- same frozen
+        // content (R6), so a consumer reading only stdout still sees it.
+        if let Some((declared, derived)) = csid {
+            if declared != derived {
+                println!(
+                    "{}",
+                    crate::cmd::chunk_set_id_mismatch_warning(declared, derived)
+                );
+            }
+        }
     }
     Ok(())
 }
