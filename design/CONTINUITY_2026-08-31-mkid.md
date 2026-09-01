@@ -108,3 +108,25 @@ feature-gated, V0_1_SHA256 pin enforced, both named guarantees present.
 IMPLEMENTATION (UC off, one implementer/phase, TDD, worktree):
 P0 extension corpus -> P1 mk-cli read -> P2 mk-cli write+repair ->
 P3 md-cli seat -> P4 fork parity. NOW DISPATCHING P0.
+
+## Status update 4 (2026-08-31, implementation COMPLETE — whole-diff review pending)
+
+All 5 phases implemented, TDD, controller-verified live at each gate:
+- P0 mk-codec extension corpus (58c8df4, main) -- 21 rows, recomputed by controller.
+- P1 mk-cli read warnings 5 verbs + inspect print + verify text/json (37a9524).
+- P2 mk-cli mint + repair blessed warnings (1711228) -- boundaries verified live.
+  Branch impl/csid-p0 (mnemonic-key), base 725ccb9, 12 src files 875/41.
+- P3 md-cli seat warning + R5 refusal rewrite (d30b44f9, descriptor-mnemonic
+  impl/csid-p3) -- 4 messages + classification order verified live; retired
+  wording gone from production.
+- P4 fork Go derivation-parity, all 20 clean rows, no drift (a63f1fb,
+  seedhammer impl/csid-p4) -- reran live PASS.
+Reports impl-csid-p0..p4 persisted. Suites: mk 387/387, dm 697/697
+(workspace 1164/1164), fork ./mk green.
+
+PARKED NIT (fix in whole-diff cleanup): repair blessed-path mint-time clause
+starts lowercase after a period ("...automatically. this id was set...").
+
+NEXT: mandatory whole-diff independent review across all 3 repos (risk-set,
+non-deferrable) -> fold -> integrate (staging push ritual per repo) ->
+burndown reconcile.
