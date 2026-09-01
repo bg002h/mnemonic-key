@@ -130,3 +130,25 @@ starts lowercase after a period ("...automatically. this id was set...").
 NEXT: mandatory whole-diff independent review across all 3 repos (risk-set,
 non-deferrable) -> fold -> integrate (staging push ritual per repo) ->
 burndown reconcile.
+
+## Status update 5 (2026-08-31, INTEGRATED locally — origin push PENDING operator go-ahead)
+
+Whole-diff review CLOSED 0C/0I (cc77688): R6 warning parity byte-identical
+across mk-cli/md-cli/corpus, {:05x} everywhere, stdout/exit contracts intact,
+repair --json byte-pinned, all 20 Go rows match. Nit 1 (lowercase clause)
+folded (ea9437f), full suite reverified 387/387. 2 Minors filed post-cycle
+(md-cli-seat-warning-corpus-binding; Go binding = existing
+go-mk-vector-corpus-ingestion).
+
+LOCAL INTEGRATION done, all validated on merged trees:
+- mnemonic-key main @ ab58726 (merge of impl/csid-p0) -- 387/387
+- descriptor-mnemonic main @ 77be9fc8 (merge of impl/csid-p3) -- 697/697
+- seedhammer main @ 195df90 (merge of impl/csid-p4) -- ./mk ok
+Worktrees removed. Ahead of origin: mk 39, dm 6, sh 2.
+
+NEXT (needs operator go-ahead — 3 outward-facing origin pushes):
+push each repo per its ritual. mnemonic-key/descriptor-mnemonic use the
+ci/staging ref dance (push master:refs/heads/ci/staging, watch test
+(rust+go), push master, delete staging; FREEZE tip for the window).
+Confirm seedhammer's branch/protection (fork bg002h/seedhammer; DCO on P4).
+Then reconcile burndown (5 post-cycle followups filed).
