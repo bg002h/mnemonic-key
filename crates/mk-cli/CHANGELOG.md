@@ -9,6 +9,34 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+**Next release: 0.14.0** — the BREAKING entries below take the pre-1.0 minor
+bump. Until it is tagged, `Cargo.toml` carries **`0.14.0-dev`**, so a binary
+built from `main` reports `mk 0.14.0-dev`. It used to report `mk 0.13.0` from a
+tree 83 commits past the `mk-cli-v0.13.0` tag (at `9ccd549`), carrying flags
+that release does not have (`--in`, `--out`, `--keys`, …), and nothing on
+screen told the two apart (F-677).
+`tests/version_is_honest.rs` holds the rule: a release version needs its own
+`## [X.Y.Z]` heading here, and a `-dev` version needs this section to name it.
+
+### Added — chunk_set_id verification and correction reporting (2026-08-31)
+
+- **Read-side verbs warn when a card's stamped `chunk_set_id` disagrees with
+  the id derived from its content.** `decode`, `inspect`, `verify`, `derive`
+  and `address` recompute it on chunked input and warn on stderr, once per
+  group; the exit code is unchanged. `mk inspect` also prints the stamped id,
+  and `mk verify` carries the mismatch on its `OK:` line and in an additive
+  `--json` `chunk_set_id` object (`schema_version` stays 1).
+  `tests/csid_verification.rs`.
+- **`mk encode --chunk-set-id` warns when the pinned value differs from the
+  derived one** (the strings still mint, exit 0), and `mk repair` gives the
+  same warning, with a mint-time clause, on its blessed re-verify path.
+  `repair --json` is byte-identical. `tests/encode_repair_chunk_set_id_p2.rs`.
+- **`mk decode` and `mk verify` report BCH corrections.** When correction fired
+  while decoding, a stderr note names the per-chunk counts against the t=4
+  ceiling and points at `mk repair`; silent otherwise, with exit, stdout and
+  `--json` unchanged. A plate that has spent its correction budget no longer
+  decodes as pristine without a word. `tests/decode_verify_correction_note.rs`.
+
 ### Changed — P3, the constellation CLI-uniformity cycle (SPEC §6a/§6b/§6c/§6f/§10)
 
 - **BREAKING: `mk encode`'s stdout is the artifact, ungrouped, and nothing
