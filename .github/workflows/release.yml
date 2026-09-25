@@ -137,7 +137,11 @@ jobs:
           [ "${{ runner.os }}" = "Windows" ] && BIN="$BIN.exe"
           "$BIN" --version
           "$BIN" --help >/dev/null
-          "$BIN" encode --help | grep -q -- '--policy-id-stub' || {
+          # Capture first, then grep: under `pipefail`, `grep -q` exits at the
+          # first match and the still-writing `--help` dies of SIGPIPE, so the
+          # pipe reports failure on a binary that is fine (flaky on macOS-x86_64).
+          ENCODE_HELP="$("$BIN" encode --help)"
+          grep -q -- '--policy-id-stub' <<<"$ENCODE_HELP" || {
             echo "::error::encode's flag surface is not what this platform built"; exit 1; }
           echo "binary runs; flag surface intact"
 
