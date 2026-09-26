@@ -72,8 +72,20 @@ jobs:
       - name: Build
         run: cargo build --workspace
 
+      # F-696: cargo nextest runs the test binaries CONCURRENTLY; `cargo test`
+      # runs them one at a time. Pinned by commit SHA; install-action checks the
+      # downloaded archive against the sha256 in its own manifest, and
+      # `fallback: none` refuses the unverified cargo-binstall path.
+      - name: Install cargo-nextest (pinned, checksum-verified)
+        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-nextest@0.9.146
+          fallback: none
       - name: Test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace --no-fail-fast
+      # nextest does not run doc-tests; this step keeps them.
+      - name: Doc-tests
+        run: cargo test --workspace --doc
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -190,33 +202,38 @@ jobs:
     # `#[cfg(target_os = "linux")]` path (process_hardening) compiles + is
     # functional on musl with ZERO source change.
     #
-    #   * x86_64-musl — built + tested natively (`cargo test -p mk-cli`). Needs
+    #   * x86_64-musl — built + tested natively (`cargo nextest run -p mk-cli`). Needs
     #     `musl-tools` (`musl-gcc`) + `CC_x86_64_unknown_linux_musl=musl-gcc` so
     #     cc-rs builds the ONLY C dep (the vendored libsecp256k1 in
     #     `secp256k1-sys`) against musl.
-    #   * aarch64-musl — `cross test` under QEMU user-mode emulation (cross
-    #     bundles the musl cross C toolchain AND the qemu-aarch64 runner). This
-    #     RUNS the package test suite on aarch64-Linux so the mk1/xpub golden
+    #   * aarch64-musl — `cargo nextest run` on a NATIVE arm64 runner
+    #     (`ubuntu-24.04-arm`, musl-gcc from musl-tools). Until F-696 this row
+    #     was `cross test` under QEMU user-mode emulation; cross cannot drive
+    #     nextest (cross-rs#716). This RUNS the package test suite on aarch64-Linux so the mk1/xpub golden
     #     vectors are output-verified for the shipped aarch64 binary, not merely
     #     compiled. No `--skip` filter is needed: mk-cli has NO `mlock` module
     #     (only `process_hardening`, whose sole Linux test exercises
-    #     `prctl(PR_SET_DUMPABLE)` — a per-task flag qemu-user forwards to the
-    #     host kernel; the BSD test arms are `#[cfg]`-gated off on Linux).
+    #     `prctl(PR_SET_DUMPABLE)` — a per-task flag; the BSD test arms are
+    #     `#[cfg]`-gated off on Linux).
     #
     # crt-static left at its musl default (ON). NEVER pass
     # `-Ctarget-feature=-crt-static` (rust#135244 silently links host glibc).
     # Toolchain pinned `@master` + `1.85.0` (mk house style; constellation
     # parity with the codec/toolkit `@1.85.0` musl jobs).
     name: musl compile/test (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
             musl_native: true
+          # F-696: native arm64 runner instead of `cross test` under QEMU (cross
+          # cannot drive nextest, cross-rs#716). Same target, same --release.
           - target: aarch64-unknown-linux-musl
-            cross: true
+            runner: ubuntu-24.04-arm
+            arm_native: true
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust 1.85.0 + musl target
@@ -227,32 +244,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: musl-check-${{ matrix.target }}
-      - name: install musl-tools (x86_64-musl native)
-        if: ${{ matrix.musl_native }}
+      # Both rows build natively, so both need musl-gcc for the vendored
+      # libsecp256k1 (on the arm64 runner it targets aarch64-musl).
+      - name: install musl-tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: install cross (aarch64-musl)
-        if: ${{ matrix.cross }}
-        run: cargo install --locked cross
-      # Register QEMU/binfmt_misc for aarch64 so `cross test` tests that spawn
-      # the binary as a subprocess (raw std::Command) don't hit ENOEXEC
-      # ("Exec format error") — cross/QEMU only auto-translates the test
-      # harness, not children it forks, unless binfmt_misc is registered.
-      - name: register binfmt (qemu) for aarch64 subprocess exec
-        if: ${{ matrix.cross }}      # only the aarch64 cross leg, NOT x86_64-native
-        uses: docker/setup-qemu-action@v3
+      # F-696: cargo nextest runs the test binaries CONCURRENTLY; `cargo test`
+      # runs them one at a time. Pinned by commit SHA; install-action checks the
+      # downloaded archive against the sha256 in its own manifest, and
+      # `fallback: none` refuses the unverified cargo-binstall path.
+      - name: Install cargo-nextest (pinned, checksum-verified)
+        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
-          platforms: arm64
-      - name: cargo test -p mk-cli --target x86_64-musl (native)
+          tool: cargo-nextest@0.9.146
+          fallback: none
+      - name: cargo nextest run -p mk-cli --target x86_64-musl (native)
         if: ${{ matrix.musl_native }}
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
-        run: cargo test -p mk-cli --target ${{ matrix.target }}
-      # Run the package test suite on aarch64-Linux under QEMU user-mode so the
-      # mk1/xpub golden vectors are OUTPUT-verified for the shipped aarch64
-      # binary, not merely compiled. No `--skip` needed (no `mlock` module).
-      - name: cross test -p mk-cli --target aarch64-musl (QEMU; output goldens)
-        if: ${{ matrix.cross }}
-        run: cross test --release -p mk-cli --target ${{ matrix.target }}
+        run: cargo nextest run -p mk-cli --target ${{ matrix.target }} --no-fail-fast
+      # Run the package test suite on aarch64-Linux so the mk1/xpub golden
+      # vectors are OUTPUT-verified for the shipped aarch64 binary, not merely
+      # compiled. No `--skip` needed (no `mlock` module).
+      - name: cargo nextest run -p mk-cli --target aarch64-musl (native arm64; output goldens)
+        if: ${{ matrix.arm_native }}
+        env:
+          CC_aarch64_unknown_linux_musl: musl-gcc
+        run: cargo nextest run --release -p mk-cli --target ${{ matrix.target }} --no-fail-fast
 
   release-on-tag:
     name: release-on-tag
