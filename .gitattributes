@@ -31,3 +31,7 @@ design/display-grouping-vectors.tsv text eol=lf
 # the committed bytes match what `cargo vendor` emitted (and what the checksums
 # pin). This rule MUST sort AFTER `* text=auto` (last-match-wins per attribute).
 vendor/** -text
+# ci/docs-only*: LF on every OS (Git Bash cannot run a CRLF script).
+ci/docs-only.sh text eol=lf
+ci/docs-only.test.sh text eol=lf
+ci/docs-only-paths.txt text eol=lf
