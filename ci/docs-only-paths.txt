@@ -14,3 +14,8 @@
 - ^design/SPEC_mk_v0_1\.md$
 # read by tests/p3_declines.rs and src/format.rs; its .sha256 by ci.yml fmt
 - ^design/display-grouping-vectors\.tsv
+# Named in ci/repro/vendor-freshness.sh (ci/code-docs-check.sh).
+- ^docs/verify-reproducibility\.md$
+# Shares its name with crates/mk-cli/CHANGELOG.md, which
+# crates/mk-cli/tests/version_is_honest.rs reads (ci/code-docs-check.sh).
+- ^CHANGELOG\.md$
