@@ -587,3 +587,16 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Surfaced:** 2026-11-02, `design/agent-reports/grade-bughunt-mk.md` §5 (second bullet; noted, not graded).
 - **What:** when stdout was piped, the grouped `mk1qp 22l3p ...` copies and `group size/separator` lines appeared on the terminal (not on stdout). The triage §4 says they are on stdout. Recon should settle where they go.
 - **Status:** open, ownerless. **Owner:** end-of-bughunt batch. **Tier:** `v1+`.
+
+### `bughunt-mk-changelog-breaking` — mk-cli CHANGELOG lacks BREAKING entries for the bug-hunt refusals (`deferred-minor`)
+
+- **Surfaced:** 2026-11-02, `design/agent-reports/whole-diff-mk-bughunt-s1.md` M1.
+- **Where:** `crates/mk-cli/CHANGELOG.md` `[Unreleased]`.
+- **What:** no BREAKING entry for the new exit-64 single-card encode refusal (neither `--origin-fingerprint` nor `--privacy-preserving`) or the 1000000 `mk address` count/range cap. Both fail closed; documentation only.
+- **Status:** `deferred-minor`. **Owner:** next mk-cli release prep. **Tier:** `v1+`.
+
+### `bughunt-mk-whole-diff-nits` — test pins from whole-diff s2 (ownerless)
+
+- **Surfaced:** 2026-11-02, `design/agent-reports/whole-diff-mk-bughunt-s2.md` N2, N3.
+- **What:** N2: no mk-codec test pins that `decode_string` accepts an all-uppercase valid card (only `cli_repair repair_uppercase_input_emits_redecodeable_lowercase` catches a `to_string()` mutant); suggested `assert!(decode_string(&strings[0].to_uppercase()).is_ok());` in `crates/mk-codec/tests/bughunt.rs` (not run). N3: a non-ASCII separator yields `InvalidHrp` carrying the whole string; fails closed, no spec text pins it.
+- **Status:** open, ownerless. **Owner:** end-of-bughunt batch. **Tier:** `v1+`.
