@@ -86,7 +86,11 @@ after the `(None, true) => None,` arm and before the existing
 }
 ```
 
-Clap help l.28 and l.85: STOP S3.
+Clap help (S3), exact:
+- encode.rs l.28 becomes
+  `/// 8-hex-char master fingerprint. Mutually exclusive with `--privacy-preserving`; a single-card encode needs one of the two (exit 64 otherwise); refused with `--keys`/`--in`, whose records carry their own.`
+- encode.rs l.85 becomes
+  `/// Encode without master fingerprint. Mutually exclusive with `--origin-fingerprint`; a single-card encode needs one of the two (exit 64 otherwise).`
 
 ### 3.3 CLI #3 — `crates/mk-cli/src/cmd/address.rs`, `resolve_indices`
 
@@ -202,7 +206,8 @@ Run once, each to a file, then grep:
 
 The grade cited l.501/502; on origin/master the `--count`/`--range` rows are
 **l.499/500** (verified by `git show`). New texts below are the grade's,
-verbatim; backticks and the unreleased marker are STOPs S1 and S2.
+verbatim except backticks restored (S1). No row carries an unreleased marker:
+no marker (released flags; lint R3) (S2).
 
 | line | old | new (grade) |
 |---|---|---|
@@ -244,6 +249,7 @@ plain `|`.)
   names (l.39 its own flag, l.47 `--privacy-preserving`, l.499 `--count`,
   l.500 `--range`?); (c) whether l.31, inside a `sh` code block, gets any
   marker.
+  RESOLVED (architect 83c0c20): no marker (released flags; lint R3); §8 intro updated.
 - **S3 (clap help, encode.rs l.28, l.85).** Grade: "change to match", no
   exact text. Today: "8-hex-char master fingerprint. Mutually exclusive with
   `--privacy-preserving`." and "Encode without master fingerprint. Mutually
@@ -251,6 +257,7 @@ plain `|`.)
   "; a single-card encode needs one of the two (exit 64 otherwise)" to both,
   and to `--origin-fingerprint` also "; refused with `--keys`/`--in`, whose
   records carry their own".
+  RESOLVED (architect 83c0c20): full candidate; exact texts at §3.2.
 - **S4 (clap help, address.rs l.37, l.41).** Does the help name the cap?
   Candidate: "Number of addresses per chain, starting at index 0 (max
   1000000). Conflicts with `--range`." and "Inclusive index range `A,B`, at
