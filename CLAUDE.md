@@ -4,6 +4,15 @@ This file is auto-loaded by Claude Code when starting a session in this reposito
 
 @AGENTS.md
 
+## Known hazards
+
+- **xpub/origin consistency (mk-codec).** The compact xpub form drops depth and child number and rebuilds them from the origin path, so the encoder must keep refusing xpub/origin mismatches on both depth and child number (a depth-only check misses a child-number mismatch).
+- **Policy-id stubs (mk-cli).** `--policy-id-stub` is not membership-checked, and an md1's key list can be sparse, so membership is enforced only against a complete cosigner set. A stub or a partial key list is never proof that a key belongs to a policy, and a partial list is never exhaustive.
+- **md dependency skew (mk-cli).** mk-cli resolves md-codec from crates.io independently of the sibling md checkout, and the resolved decoder may accept fewer wire versions than the sibling. Read `Cargo.lock` and the resolved decoder when changing `--from-md1` behavior.
+- **String determinism depends on the resolved mk-codec.** This repo derives the chunk-set id from the canonical bytecode, so encoding is string-deterministic here. Older mk-codec releases that consumers still resolve draw it from the system CSPRNG, so a multi-chunk re-encode there differs on every run. Check chunk framing and the version a consumer's `Cargo.lock` resolves before asserting golden strings or string round-trips.
+- **BCH is forked (mk-codec).** The BCH layer is a per-format fork, not shared code. A BCH defect fix here also requires checking md-codec's and mt-codec's ports.
+- **GUI mirror (mk-cli).** A flag change in mk-cli also updates mnemonic-gui's mk schema mirror (and its pinned-upstream tag), in addition to the toolkit manual chapter required below.
+
 ## Project at a glance
 
 `mk1` is a Bitcoin BIP-style codex32-derived backup format for individual extended public keys (xpubs). HRP `mk`, designed to engrave alongside `md1` (sibling repo `bg002h/descriptor-mnemonic` at `/scratch/code/shibboleth/descriptor-mnemonic`) for foreign-xpub multisig recovery. As of 2026-05-03 a third sibling format `ms1` (HRP `ms`, repo `bg002h/mnemonic-secret`) is in design — secret material (BIP-39 entropy / BIP-32 master seed / xpriv) using BIP-93 codex32 directly via `rust-codex32`. The three formats engrave together as a coherent backup bundle (md1 = template, mk1 = xpubs, ms1 = secret).
