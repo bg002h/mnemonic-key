@@ -50,7 +50,7 @@ No new flag, type, command or error variant.
 | 3 | `--count 1000000`, `--range 5,1000004` | accepted, 1,000,000 lines | 0 | — |
 | 4 | `--from-md1-set` file with a line whose byte 3 is inside a multi-byte char | line skipped (documented skip) | 0 | — |
 | 5 | non-ASCII char in the data part (after the last `1`) | `Error::InvalidChar { ch, position }`, position = 0-based char index in the data part, first non-ASCII char; a non-ASCII char is reported first, before any alphabet error | `mk decode` 1 | `invalid character <ch> at position <i>` |
-| 5 | non-ASCII char at or before the last `1` | `Error::InvalidHrp(hrp)` | `mk decode` 1 | `invalid HRP: <hrp>` (see STOP S5 for case) |
+| 5 | non-ASCII char at or before the last `1` | `Error::InvalidHrp(hrp)` | `mk decode` 1 | `invalid HRP: <hrp>` (hrp ASCII-lowercased; S5) |
 
 ## 3. Production changes (exact)
 
