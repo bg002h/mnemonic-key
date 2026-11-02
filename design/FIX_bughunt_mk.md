@@ -49,7 +49,7 @@ No new flag, type, command or error variant.
 | 3 | `--count N`, N > 2147483648 | unchanged ceiling text, fires first | 64 | `error: --count N exceeds the BIP-32 normal-index ceiling (max 2147483648)` |
 | 3 | `--count 1000000`, `--range 5,1000004` | accepted, 1,000,000 lines | 0 | — |
 | 4 | `--from-md1-set` file with a line whose byte 3 is inside a multi-byte char | line skipped (documented skip) | 0 | — |
-| 5 | non-ASCII char in the data part (after the last `1`) | `Error::InvalidChar { ch, position }`, position = 0-based char index in the data part, first non-ASCII char | `mk decode` 1 | `invalid character <ch> at position <i>` |
+| 5 | non-ASCII char in the data part (after the last `1`) | `Error::InvalidChar { ch, position }`, position = 0-based char index in the data part, first non-ASCII char; a non-ASCII char is reported first, before any alphabet error | `mk decode` 1 | `invalid character <ch> at position <i>` |
 | 5 | non-ASCII char at or before the last `1` | `Error::InvalidHrp(hrp)` | `mk decode` 1 | `invalid HRP: <hrp>` (see STOP S5 for case) |
 
 ## 3. Production changes (exact)
@@ -106,7 +106,17 @@ Clap help l.28 and l.85: STOP S3.
   /// a multi-gigabyte allocation.
   ```
 
-Clap help l.37 and l.41: STOP S4.
+Clap help l.37 becomes (S4, architect 83c0c20):
+
+```rust
+/// Number of addresses per chain, starting at index 0 (max 1000000). Conflicts with `--range`.
+```
+
+Clap help l.41 becomes:
+
+```rust
+/// Inclusive index range `A,B`, at most 1000000 indices (alternative to `--count`). Conflicts with `--count`.
+```
 
 ### 3.4 CLI #4 — `crates/mk-cli/src/cmd/encode.rs` l.480
 
@@ -197,10 +207,10 @@ verbatim; backticks and the unreleased marker are STOPs S1 and S2.
 | line | old | new (grade) |
 |---|---|---|
 | 31 (in a `sh` block) | `mk encode --xpub <XPUB> --origin-path <PATH> [OPTIONS]` | `mk encode --xpub <XPUB> --origin-path <PATH> (--origin-fingerprint <HEX> \| --privacy-preserving) [OPTIONS]` |
-| 39 | ``| `--origin-fingerprint <HEX>` | 8-hex-char master fingerprint; mutually exclusive with `--privacy-preserving` |`` | `\| --origin-fingerprint <HEX> \| 8-hex-char master fingerprint; mutually exclusive with --privacy-preserving; a single-card encode needs one of the two (exit 64 otherwise); refused with --keys/--in, whose records carry their own \|` |
-| 47 | ``| `--privacy-preserving` | emit without master fingerprint; mutually exclusive with `--origin-fingerprint` |`` | `\| --privacy-preserving \| emit without master fingerprint; mutually exclusive with --origin-fingerprint; a single-card encode needs one of the two (exit 64 otherwise) \|` |
-| 499 | ``| `--count <N>` | number of addresses per chain, starting at index 0 (default 10); conflicts with `--range` |`` | `\| --count <N> \| number of addresses per chain, starting at index 0 (default 10, max 1000000); conflicts with --range \|` |
-| 500 | ``| `--range <A,B>` | inclusive index range `A..=B`; conflicts with `--count` |`` | `\| --range <A,B> \| inclusive index range A..=B, at most 1000000 indices; conflicts with --count \|` |
+| 39 | ``| `--origin-fingerprint <HEX>` | 8-hex-char master fingerprint; mutually exclusive with `--privacy-preserving` |`` | ``\| `--origin-fingerprint <HEX>` \| 8-hex-char master fingerprint; mutually exclusive with `--privacy-preserving`; a single-card encode needs one of the two (exit 64 otherwise); refused with `--keys`/`--in`, whose records carry their own \|`` |
+| 47 | ``| `--privacy-preserving` | emit without master fingerprint; mutually exclusive with `--origin-fingerprint` |`` | ``\| `--privacy-preserving` \| emit without master fingerprint; mutually exclusive with `--origin-fingerprint`; a single-card encode needs one of the two (exit 64 otherwise) \|`` |
+| 499 | ``| `--count <N>` | number of addresses per chain, starting at index 0 (default 10); conflicts with `--range` |`` | ``\| `--count <N>` \| number of addresses per chain, starting at index 0 (default 10, max 1000000); conflicts with `--range` \|`` |
+| 500 | ``| `--range <A,B>` | inclusive index range `A..=B`; conflicts with `--count` |`` | ``\| `--range <A,B>` \| inclusive index range `A..=B`, at most 1000000 indices; conflicts with `--count` \|`` |
 
 (`\|` above is table escaping in this document only; the manual line has a
 plain `|`.)
@@ -223,6 +233,7 @@ plain `|`.)
   backticks (old lines 39, 47, 499, 500); the grade's new texts drop them.
   Transcribe the grade verbatim, or restore the chapter's backticks around
   each flag, `A..=B`, `--keys`/`--in`?
+  RESOLVED (architect 83c0c20): backticks restored; §8 rows 39, 47, 499, 500 carry them (row 31 unchanged, already backticked).
 - **S2 (unreleased marker).** Grade: "Each changed row carries the chapter's
   `(unreleased: mk-cli after <current release>: ...)` marker by its existing
   convention." l.16 defines the marker for flags absent from 0.13.0 only
@@ -245,14 +256,17 @@ plain `|`.)
   1000000). Conflicts with `--range`." and "Inclusive index range `A,B`, at
   most 1000000 indices (alternative to `--count`). Conflicts with `--count`."
   Or leave unchanged.
+  RESOLVED (architect 83c0c20): the help names the cap; texts at §3.3 (S4 pointer replaced).
 - **S5 (InvalidHrp payload case).** Q5 says `InvalidHrp(<hrp as typed>)`, but
   the binding shape (`to_ascii_lowercase` before the split) reports the
   ASCII-lowercased HRP, as `InvalidHrp` does today for every wrong HRP: an
   uppercase input `M\u{212A}1...` yields `invalid HRP: m\u{212A}`, not
   `M\u{212A}`. Accept the lowercased payload (no extra code; the row tests
   lowercase input only), or report the HRP as typed (extra slicing of `s`)?
+  RESOLVED (architect 83c0c20): accept the ASCII-lowercased payload; no code; the optional §4 row-05 uppercase case is not folded.
 - **S6 (two bad chars in one data part).** With the §3.1 shape, a data part
   that holds both an invalid ASCII char (e.g. `b`) and a later non-ASCII
   char reports the non-ASCII one (first non-ASCII), not the earlier invalid
   ASCII one. Accept (fails closed, keeps every ASCII-only path unchanged), or
   report the first invalid char of either kind when any non-ASCII is present?
+  RESOLVED (architect 83c0c20): accept first non-ASCII; clause added to §2 row 5 (the data-part row, l.52).
