@@ -600,3 +600,9 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Surfaced:** 2026-11-02, `design/agent-reports/whole-diff-mk-bughunt-s2.md` N2, N3.
 - **What:** N2: no mk-codec test pins that `decode_string` accepts an all-uppercase valid card (only `cli_repair repair_uppercase_input_emits_redecodeable_lowercase` catches a `to_string()` mutant); suggested `assert!(decode_string(&strings[0].to_uppercase()).is_ok());` in `crates/mk-codec/tests/bughunt.rs` (not run). N3: a non-ASCII separator yields `InvalidHrp` carrying the whole string; fails closed, no spec text pins it.
 - **Status:** open, ownerless. **Owner:** end-of-bughunt batch. **Tier:** `v1+`.
+
+### `bughunt-mk-03-split-success-half` — exact-1,000,000 success half of bughunt_mk_03 skipped off Linux (`deferred-minor`)
+
+- **Source:** `design/agent-reports/review-ci-portability-mk.md` M1.
+- **What:** the Linux-only gate on `bughunt_mk_03_address_huge_count_is_usage_error` also skips its exact-1,000,000 success half on macOS/Windows; only the refusal loop needs `timeout`/`ulimit -v`. Split that half into an ungated test (~30 s per OS).
+- **Status:** `deferred-minor`. **Owner:** next mk-cli test touch. **Tier:** `v1+`.
