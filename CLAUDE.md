@@ -2,6 +2,8 @@
 
 This file is auto-loaded by Claude Code when starting a session in this repository.
 
+@AGENTS.md
+
 ## Project at a glance
 
 `mk1` is a Bitcoin BIP-style codex32-derived backup format for individual extended public keys (xpubs). HRP `mk`, designed to engrave alongside `md1` (sibling repo `bg002h/descriptor-mnemonic` at `/scratch/code/shibboleth/descriptor-mnemonic`) for foreign-xpub multisig recovery. As of 2026-05-03 a third sibling format `ms1` (HRP `ms`, repo `bg002h/mnemonic-secret`) is in design — secret material (BIP-39 entropy / BIP-32 master seed / xpriv) using BIP-93 codex32 directly via `rust-codex32`. The three formats engrave together as a coherent backup bundle (md1 = template, mk1 = xpubs, ms1 = secret).
