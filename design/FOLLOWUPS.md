@@ -565,3 +565,25 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   correction-count stderr note naming the t=4 ceiling (merge on main;
   impl report design/agent-reports/impl-mk-decode-correction.md).
   **Tier:** `diagnostics` / mk-cli.
+
+### `bughunt-mk-csid-warning-same-flags` — csid mismatch warning should say "with the same flags" (`deferred-minor`)
+
+- **Surfaced:** 2026-11-02, `design/agent-reports/fix-review-r1-mk.md` finding M1 (FIX_bughunt_mk review r1, 0C/0I).
+- **Where:** `crates/mk-cli/src/cmd/mod.rs` l.130-136 (the csid mismatch warning; me-cli `csid_warn.rs` carries the same text).
+- **What:** the warning says "run mk encode again without --chunk-set-id". Followed literally after bug-hunt fix #1 without repeating the fingerprint flag, it exits 64 "pass --origin-fingerprint <hex> or --privacy-preserving explicitly". It fails closed with a named refusal and no printed command fails as printed; before #1 the same re-mint silently dropped the fingerprint. The warning could say "with the same flags".
+- **Why deferred:** Minor; fails closed.
+- **Status:** `deferred-minor`. **Owner:** mk toolkit migration of the encode advice, or the next mk-cli text change. **Tier:** `v1+`.
+
+### `bughunt-mk-gui-encode-fingerprint-pair` — mnemonic-gui encode form and GUI manual still treat the fingerprint pair as optional (`deferred-minor`)
+
+- **Surfaced:** 2026-11-02, `design/agent-reports/grade-bughunt-mk.md` §5 (first bullet) merged with `design/agent-reports/fix-review-r1-mk.md` finding M2.
+- **Where:** mnemonic-gui `src/schema/mk.rs` (encode form); toolkit `docs/manual-gui/src/70-mk/73-encode.md` l.95-110.
+- **What:** the encode form lets a user submit neither fingerprint flag; after the fix that gets exit 64 (fails closed). Make the pair a required choice. The GUI manual page still calls `--origin-fingerprint` "Optional" and says omitting both flags yields `origin_fingerprint = None`, which is false after fix #1 (not listed in FIX §8).
+- **Why deferred:** not gating; fails closed (exit 64, named refusal).
+- **Status:** `deferred-minor`. **Owner:** mnemonic-gui next schema sync (fix the manual page with it). **Tier:** `cross-repo`.
+
+### `bughunt-mk-stdout-grouping-location` — where do the grouped mk1 copies and group-size lines go when stdout is piped (ownerless)
+
+- **Surfaced:** 2026-11-02, `design/agent-reports/grade-bughunt-mk.md` §5 (second bullet; noted, not graded).
+- **What:** when stdout was piped, the grouped `mk1qp 22l3p ...` copies and `group size/separator` lines appeared on the terminal (not on stdout). The triage §4 says they are on stdout. Recon should settle where they go.
+- **Status:** open, ownerless. **Owner:** end-of-bughunt batch. **Tier:** `v1+`.
