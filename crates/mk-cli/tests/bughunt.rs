@@ -89,6 +89,7 @@ fn bughunt_mk_01_keys_and_in_encode_need_no_fingerprint_flag() {
 /// aborts (no exit code) instead of hogging memory. The BIP-32 ceiling check
 /// still fires first, and a request of exactly 1,000,000 indices succeeds.
 #[test]
+#[cfg_attr(not(target_os = "linux"), ignore = "needs GNU timeout and ulimit -v")]
 fn bughunt_mk_03_address_huge_count_is_usage_error() {
     use mk_codec::KeyCard;
     use std::str::FromStr;
