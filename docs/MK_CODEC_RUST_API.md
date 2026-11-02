@@ -1,9 +1,7 @@
 # Using `mk-codec` from Rust
 
 `mk-codec` is the Rust crate implementing the mk1 format
-(mnemonic-key). Unlike md1 and ms1, mk1 has no standalone CLI in
-v0.1 — instead, library consumers use `mk-codec` directly, or
-indirectly via `mnemonic convert --from mk1=… --to xpub …`.
+(mnemonic-key). mk1 also has a standalone CLI, `mk` (`crates/mk-cli/`); library consumers use `mk-codec` directly, or indirectly via `mnemonic convert --from mk1=… --to xpub …`.
 
 This chapter covers the public API surface for direct Rust use.
 
