@@ -27,11 +27,9 @@ fn desc(o: &Output) -> String {
     )
 }
 
-/// Hunt #1. SPEC §6: "Encoders SHOULD expose this [omitting the fingerprint]
-/// as an explicit choice rather than a default." With neither
-/// `--origin-fingerprint` nor `--privacy-preserving`, the card must not be
-/// minted silently. (Open product question: exact message / exit code; only
-/// the absence of a silent success is asserted.)
+/// Hunt #1 (grade Q1). A single-card `mk encode` with neither
+/// `--origin-fingerprint` nor `--privacy-preserving` is a usage error: exit
+/// 64, the exact stderr line below, nothing on stdout.
 #[test]
 fn bughunt_mk_01_encode_without_fingerprint_flag_not_silent() {
     let o = mk()
@@ -46,18 +44,50 @@ fn bughunt_mk_01_encode_without_fingerprint_flag_not_silent() {
         ])
         .output()
         .unwrap();
-    assert!(
-        !o.status.success(),
-        "minted a fingerprint-less card with no fingerprint flag and no \
-         --privacy-preserving: {}",
+    assert_eq!(o.status.code(), Some(64), "{}", desc(&o));
+    assert_eq!(
+        String::from_utf8_lossy(&o.stderr),
+        "error: pass --origin-fingerprint <hex> or --privacy-preserving explicitly\n",
+        "{}",
         desc(&o)
     );
+    assert!(o.stdout.is_empty(), "{}", desc(&o));
 }
 
-/// Hunt #3. `--count 2147483648` must be a fast usage error (exit 64), not an
-/// 8 GiB allocation. The child runs under `ulimit -v` (2 GiB) so an unfixed
-/// binary aborts (no exit code) instead of hogging memory. The cap value is
-/// an open product question; only "this request is refused" is asserted.
+/// Hunt #1 (grade Q1), the scope of the guard. `--keys` and `--in` take each
+/// record's fingerprint from its `[fp/path]`, so a batch encode with neither
+/// fingerprint flag still mints its cards (exit 0, one or more mk1 lines).
+#[test]
+fn bughunt_mk_01_keys_and_in_encode_need_no_fingerprint_flag() {
+    let d = tempfile::tempdir().unwrap();
+    let f = d.path().join("keys.txt");
+    std::fs::write(&f, format!("[73c5da0a/48'/0'/0'/2']{V1_XPUB}\n")).unwrap();
+    for flag in ["--keys", "--in"] {
+        let o = mk()
+            .args([
+                "encode",
+                flag,
+                f.to_str().unwrap(),
+                "--policy-id-stub",
+                "deadbeef",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(0), "{flag}: {}", desc(&o));
+        let out = String::from_utf8_lossy(&o.stdout);
+        assert!(
+            out.lines().any(|l| l.starts_with("mk1")),
+            "{flag}: no mk1 line: {}",
+            desc(&o)
+        );
+    }
+}
+
+/// Hunt #3 (grade Q3). `mk address` caps a request at 1,000,000 indices per
+/// chain: exit 64 with the exact stderr line, never a multi-gigabyte
+/// allocation. The child runs under `ulimit -v` (2 GiB) so an unfixed binary
+/// aborts (no exit code) instead of hogging memory. The BIP-32 ceiling check
+/// still fires first, and a request of exactly 1,000,000 indices succeeds.
 #[test]
 fn bughunt_mk_03_address_huge_count_is_usage_error() {
     use mk_codec::KeyCard;
@@ -70,9 +100,27 @@ fn bughunt_mk_03_address_huge_count_is_usage_error() {
     );
     let strings = mk_codec::encode(&kc).unwrap();
     let bin = std::path::PathBuf::from(env!("CARGO_BIN_EXE_mk"));
-    for flags in [
-        vec!["--count", "2147483648"],
-        vec!["--range", "0,2147483647"],
+    for (flags, want) in [
+        (
+            vec!["--count", "2147483648"],
+            "error: --count 2147483648 too large (max 1000000)\n",
+        ),
+        (
+            vec!["--range", "0,2147483647"],
+            "error: --range too large (max 1000000)\n",
+        ),
+        (
+            vec!["--count", "1000001"],
+            "error: --count 1000001 too large (max 1000000)\n",
+        ),
+        (
+            vec!["--range", "0,1000000"],
+            "error: --range too large (max 1000000)\n",
+        ),
+        (
+            vec!["--count", "2147483649"],
+            "error: --count 2147483649 exceeds the BIP-32 normal-index ceiling (max 2147483648)\n",
+        ),
     ] {
         let o = Command::new("timeout")
             .arg("60")
@@ -85,11 +133,40 @@ fn bughunt_mk_03_address_huge_count_is_usage_error() {
             .args(&flags)
             .output()
             .unwrap();
+        let d = desc(&o).chars().take(400).collect::<String>();
+        assert_eq!(o.status.code(), Some(64), "{flags:?} not refused: {d}");
+        assert_eq!(String::from_utf8_lossy(&o.stderr), want, "{flags:?}: {d}");
+    }
+    // Exactly 1,000,000 indices is allowed (the cap is inclusive). The two
+    // runs take ~30 s each, so they run side by side.
+    let runs: Vec<_> = [vec!["--count", "1000000"], vec!["--range", "5,1000004"]]
+        .into_iter()
+        .map(|flags| {
+            let (bin, strings) = (bin.clone(), strings.clone());
+            std::thread::spawn(move || {
+                let o = Command::new(&bin)
+                    .arg("address")
+                    .args(&strings)
+                    .args(&flags)
+                    .output()
+                    .unwrap();
+                (flags, o)
+            })
+        })
+        .collect();
+    for r in runs {
+        let (flags, o) = r.join().unwrap();
         assert_eq!(
             o.status.code(),
-            Some(64),
-            "{flags:?} not refused with a usage error: {}",
-            desc(&o).chars().take(400).collect::<String>()
+            Some(0),
+            "{flags:?}: code={:?} stderr={:?}",
+            o.status.code(),
+            String::from_utf8_lossy(&o.stderr)
+        );
+        assert_eq!(
+            o.stdout.iter().filter(|&&b| b == b'\n').count(),
+            1_000_000,
+            "{flags:?}: wrong number of address lines"
         );
     }
 }

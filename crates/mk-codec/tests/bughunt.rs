@@ -31,26 +31,18 @@ fn multi_chunk_card() -> KeyCard {
     )
 }
 
-/// SPEC §2.5 / §3.5: re-encoding a decoded path must give back the same
-/// bytes, so a non-minimal LEB128 component must be refused.
+/// Grade Q2: minimal LEB128 is an encoder rule, not a decoder refusal. A
+/// non-minimal component (`[0x80, 0x00]`, i.e. 0 with a trailing zero group)
+/// decodes to the same u32 as the minimal form, and re-encoding gives the
+/// minimal bytes `[fe, 01, 00]`.
 #[test]
-fn bughunt_mk_02_leb128_non_minimal_refused() {
-    for bytes in [
-        &[0xFEu8, 0x01, 0x80, 0x00][..],
-        &[0xFE, 0x01, 0x81, 0x80, 0x80, 0x00][..],
-    ] {
-        let mut cur = bytes;
-        match decode_path(&mut cur) {
-            Err(_) => {}
-            Ok(p) => {
-                let re = encode_path(&p);
-                panic!(
-                    "non-minimal path bytes {bytes:02x?} decoded to {p}; re-encodes as \
-                     {re:02x?} (not the same bytes)"
-                );
-            }
-        }
-    }
+fn bughunt_mk_02_leb128_non_minimal_decodes_to_same_value() {
+    let bytes = [0xFEu8, 0x01, 0x80, 0x00];
+    let mut cur = &bytes[..];
+    let p = decode_path(&mut cur).expect("non-minimal component decodes");
+    assert!(cur.is_empty(), "all 4 bytes consumed, left {cur:02x?}");
+    assert_eq!(p, DerivationPath::from_str("m/0").unwrap());
+    assert_eq!(encode_path(&p), vec![0xFE, 0x01, 0x00]);
 }
 
 /// Lead L5: a non-ASCII character must be refused, never decoded.
@@ -110,6 +102,46 @@ fn bughunt_mk_05_decode_string_non_ascii_refused() {
         bad.len(),
         accepted.first()
     );
+}
+
+/// Grade Q5: the variant and position of a non-ASCII refusal. In the data
+/// part it is `InvalidChar` at the 0-based CHARACTER index within the data
+/// part (not a byte index, not `InvalidStringLength`); at or before the
+/// separator it is `InvalidHrp` carrying the HRP.
+#[test]
+fn bughunt_mk_05_non_ascii_error_variant_and_position() {
+    use mk_codec::Error;
+    let strings = encode_with_chunk_set_id(&multi_chunk_card(), 0).unwrap();
+    for s in [&strings[0], strings.last().unwrap()] {
+        let chars: Vec<char> = s.chars().collect();
+        let data_len = chars.len() - 3;
+        for p in ['\u{212A}', '\u{00E9}'] {
+            for i in [0usize, 7, data_len - 1] {
+                let mut c = chars.clone();
+                c[3 + i] = p;
+                let bad: String = c.into_iter().collect();
+                let e = decode_string(&bad).err();
+                assert!(
+                    matches!(e, Some(Error::InvalidChar { ch, position }) if ch == p && position == i),
+                    "{} at data index {i}: got {e:?}",
+                    p.escape_unicode()
+                );
+                assert_eq!(
+                    e.unwrap().to_string(),
+                    format!("invalid character {p} at position {i}")
+                );
+            }
+        }
+        let mut c = chars.clone();
+        c[1] = '\u{212A}';
+        let bad: String = c.into_iter().collect();
+        let e = decode_string(&bad).err();
+        assert!(
+            matches!(&e, Some(Error::InvalidHrp(h)) if h == "m\u{212A}"),
+            "Kelvin sign in the HRP: got {e:?}"
+        );
+        assert_eq!(e.unwrap().to_string(), "invalid HRP: m\u{212A}");
+    }
 }
 
 struct Rng(u64);
