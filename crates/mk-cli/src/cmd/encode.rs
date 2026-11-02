@@ -25,7 +25,7 @@ pub struct EncodeArgs {
     #[arg(long, required_unless_present_any = ["keys", "in_file"])]
     pub xpub: Option<String>,
 
-    /// 8-hex-char master fingerprint. Mutually exclusive with `--privacy-preserving`.
+    /// 8-hex-char master fingerprint. Mutually exclusive with `--privacy-preserving`; a single-card encode needs one of the two (exit 64 otherwise); refused with `--keys`/`--in`, whose records carry their own.
     #[arg(long)]
     pub origin_fingerprint: Option<String>,
 
@@ -82,7 +82,7 @@ pub struct EncodeArgs {
     #[arg(long, value_name = "FILE")]
     pub from_md1_set: Vec<String>,
 
-    /// Encode without master fingerprint. Mutually exclusive with `--origin-fingerprint`.
+    /// Encode without master fingerprint. Mutually exclusive with `--origin-fingerprint`; a single-card encode needs one of the two (exit 64 otherwise).
     #[arg(long)]
     pub privacy_preserving: bool,
 
@@ -214,6 +214,11 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     let fingerprint = match (&args.origin_fingerprint, args.privacy_preserving) {
         (Some(s), false) => Some(parse_fingerprint(s)?),
         (None, true) => None,
+        (None, false) if key_source.is_none() => {
+            return Err(CliError::UsageError(
+                "pass --origin-fingerprint <hex> or --privacy-preserving explicitly".into(),
+            ));
+        }
         (None, false) => None,
         (Some(_), true) => unreachable!("guarded above"),
     };
@@ -477,7 +482,7 @@ fn read_md1_set(path: &str) -> Result<Vec<String>> {
     let mut out = Vec::new();
     for line in buf.lines() {
         let s = crate::format::strip_display_separators(line);
-        if s.len() >= 3 && s[..3].eq_ignore_ascii_case("md1") {
+        if s.get(..3).is_some_and(|p| p.eq_ignore_ascii_case("md1")) {
             out.push(s);
         }
     }

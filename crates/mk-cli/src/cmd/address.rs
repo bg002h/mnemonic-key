@@ -34,11 +34,11 @@ pub struct AddressArgs {
     #[arg(long, value_enum)]
     pub address_type: Option<AddressType>,
 
-    /// Number of addresses per chain, starting at index 0. Conflicts with `--range`.
+    /// Number of addresses per chain, starting at index 0 (max 1000000). Conflicts with `--range`.
     #[arg(long, conflicts_with = "range")]
     pub count: Option<u32>,
 
-    /// Inclusive index range `A,B` (alternative to `--count`). Conflicts with `--count`.
+    /// Inclusive index range `A,B`, at most 1000000 indices (alternative to `--count`). Conflicts with `--count`.
     #[arg(long, conflicts_with = "count")]
     pub range: Option<String>,
 
@@ -196,9 +196,10 @@ fn resolve_network(xpub: &Xpub, explicit: Option<CliNetwork>) -> Result<CliNetwo
 /// `--count N` → `0..N`; `--range A,B` → `A..=B`; neither → `0..10`.
 ///
 /// The highest generated index is validated against the BIP-32 normal-index
-/// ceiling (`< 2^31`) before any allocation (C1): an out-of-range `--count` /
-/// `--range` is a `UsageError` (exit 64), never a `from_normal_idx` panic or a
-/// multi-gigabyte allocation.
+/// ceiling (`< 2^31`) before any allocation (C1), then the index count is
+/// capped at 1,000,000 per chain: an out-of-range or oversized `--count` /
+/// `--range` is a `UsageError` (exit 64), never a `from_normal_idx` panic or
+/// a multi-gigabyte allocation.
 fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> {
     // Valid BIP-32 normal indices are 0..=2^31-1.
     const MAX_NORMAL: u32 = (1u32 << 31) - 1;
@@ -209,6 +210,11 @@ fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> 
             if c > MAX_NORMAL.saturating_add(1) {
                 return Err(CliError::UsageError(format!(
                     "--count {c} exceeds the BIP-32 normal-index ceiling (max 2147483648)"
+                )));
+            }
+            if c > 1_000_000 {
+                return Err(CliError::UsageError(format!(
+                    "--count {c} too large (max 1000000)"
                 )));
             }
             Ok((0..c).collect())
@@ -234,6 +240,11 @@ fn resolve_indices(count: Option<u32>, range: Option<&str>) -> Result<Vec<u32>> 
                 return Err(CliError::UsageError(format!(
                     "--range end {b} exceeds the BIP-32 normal-index ceiling (2147483647)"
                 )));
+            }
+            if (b - a) >= 1_000_000 {
+                return Err(CliError::UsageError(
+                    "--range too large (max 1000000)".into(),
+                ));
             }
             Ok((a..=b).collect())
         }

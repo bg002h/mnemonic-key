@@ -670,7 +670,7 @@ pub fn decode_string(s: &str) -> Result<DecodedString, crate::Error> {
     if matches!(case_check(s), CaseStatus::Mixed) {
         return Err(Error::MixedCase);
     }
-    let s_lower = s.to_lowercase();
+    let s_lower = s.to_ascii_lowercase();
 
     let sep_pos = s_lower
         .rfind(SEPARATOR)
@@ -680,6 +680,10 @@ pub fn decode_string(s: &str) -> Result<DecodedString, crate::Error> {
 
     if hrp != HRP {
         return Err(Error::InvalidHrp(hrp.to_string()));
+    }
+
+    if let Some((i, c)) = data_part.chars().enumerate().find(|(_, c)| !c.is_ascii()) {
+        return Err(Error::InvalidChar { ch: c, position: i });
     }
 
     let code =
