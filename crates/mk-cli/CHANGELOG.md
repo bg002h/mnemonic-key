@@ -9,14 +9,7 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
-**Next release: 0.14.0** — the BREAKING entries below take the pre-1.0 minor
-bump. Until it is tagged, `Cargo.toml` carries **`0.14.0-dev`**, so a binary
-built from `main` reports `mk 0.14.0-dev`. It used to report `mk 0.13.0` from a
-tree 83 commits past the `mk-cli-v0.13.0` tag (at `9ccd549`), carrying flags
-that release does not have (`--in`, `--out`, `--keys`, …), and nothing on
-screen told the two apart (F-677).
-`tests/version_is_honest.rs` holds the rule: a release version needs its own
-`## [X.Y.Z]` heading here, and a `-dev` version needs this section to name it.
+## [0.14.0] — 2026-11-04
 
 ### Added — chunk_set_id verification and correction reporting (2026-08-31)
 

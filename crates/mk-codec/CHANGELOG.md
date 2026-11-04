@@ -12,6 +12,8 @@ tag list are the record for those.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-11-04
+
 ### Added
 
 - **`mk_codec::test_vectors::csid_ext`**, with `pub const CSID_EXT_JSON`: the
