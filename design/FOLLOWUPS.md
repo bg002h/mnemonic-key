@@ -606,3 +606,9 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Source:** `design/agent-reports/review-ci-portability-mk.md` M1.
 - **What:** the Linux-only gate on `bughunt_mk_03_address_huge_count_is_usage_error` also skips its exact-1,000,000 success half on macOS/Windows; only the refusal loop needs `timeout`/`ulimit -v`. Split that half into an ungated test (~30 s per OS).
 - **Status:** `deferred-minor`. **Owner:** next mk-cli test touch. **Tier:** `v1+`.
+
+### `vendor-freshness-shared` — one shared vendor-freshness gate for five repos
+
+- **Spec:** mnemonic-toolkit `design/SPEC_vendor_freshness_shared.md`.
+- **Status:** resolved -- shipped by this PR
+- Companion: mnemonic-toolkit design/FOLLOWUPS.md::vendor-freshness-shared
