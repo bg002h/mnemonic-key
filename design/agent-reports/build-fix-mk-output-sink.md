@@ -22,3 +22,8 @@ rc 1: ci-shared (sha256 check, code-docs-check.test.sh and docs-only checks OK; 
 macOS and Windows legs, release.yml cross/aarch64 builds, assemble/sign, musl (tag only), docs-only.sh (needs GitHub context), fuzz-smoke, vendor-freshness (not run), release-mode vectors-roundtrip and smoke (run on debug builds here).
 
 Counts: Critical 0, Important 1 (the STOP), Minor 0.
+
+## Finish (2026-11-13)
+Ruling (coordinator brief build-fix-output-sink-finish.md): the local gate script is run by hand and by no CI step, so it is listed in `ci/code-docs-exempt.txt`, following that file's own precedent. Commit 6c4ea3d appends the ruled entry (that file alone; the script, the document and `.github/` are untouched).
+Check commands (logs f-*.log under /scratch/cache/build-fix-output-sink/mk/): `sha256sum --check --strict ci/shared-ci.sha256` rc 0; `bash ci/code-docs-check.test.sh` rc 0; `bash ci/code-docs-check.sh` rc 0 (98 files scanned); `bash ci/docs-only.test.sh` rc 0.
+The STOP above is closed. All other results above are from the first builder's logs. The draft PR is open (see the PR for its number); it names toolkit companion PR bg002h/mnemonic-toolkit#158 (merged, toolkit master 67470572) and does not merge before it.
