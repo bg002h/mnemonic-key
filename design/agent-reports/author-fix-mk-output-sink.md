@@ -41,3 +41,16 @@ Fold commit `72c46b99be0b2e19fbcc9abe7bdda0e7f2894a6a` (base `15a1825`), files `
 - The FOLLOWUPS entry `crash-sweep-mk-output-sink` is renamed `mk-output-sink` everywhere and gains its Companion line; the gate script's FOLLOWUPS grep follows the rename (its one changed line).
 - Gate: `GATE PASS` (RED rows 1-5 fail as expected, whole file 1 passed and 5 failed; checker self-test ok; GREEN rows 6 of 6; suite 405 of 405; doc, fmt, clippy ok). The fold agent's first run was killed (exit 137) and its second passed; the controller reran it on the fold head and it passed again.
 - Written by the controller from the fold agent's return and its own checks: the agent ended without this section, and its commit message was rewritten before any push to carry the gate output and the two trailer lines.
+
+## R1 fold (2026-11-13)
+
+Folded into `design/FIX_mk_output_sink.md` and `scripts/mk-output-sink-fix-gate.sh` (commit 952b8b2):
+- The architect's read-only-stdout ruling: section 3 = `fix.diff` (sha256 62286bfc...), section 4 = `rows-combined-i3.diff` (sha256 89331217..., review I3 combined), all 17 `old:`/`new:` pairs of `texts.md`, counts 7 rows / 406 tests / 6 RED commands. Checked first: the head document plus the architect's blocks and pairs equals `FIX_mk_output_sink.folded.md` byte for byte.
+- Review I1 (SIGXFSZ paragraph and the section 9 evidence clause), I2 (step 6 and the section 9 CI item list), I3 (P10 "only 64 kept", plants renumbered P11 and P12, table cell, heading), I4 (step 3a). The combined lines of `texts.md` L241-273 were used where they overlap.
+- Gate: compares against `/scratch/cache/architect-output-sink-ro/mk` (`fix.diff`, `rows-combined-i3.diff`); expects 6 RED commands, 7/7 rows, 406/406 suite.
+- FOLLOWUPS: 5 Minors and 5 Nits filed (commit 2) before `vendor-freshness-shared`, so section 3.7's hunk still applies (`git apply --check` passes on the head).
+- Gate result: `GATE PASS`.
+
+Count changes beyond the inputs' text, for the coordinator to confirm: I2's "the six rows" now reads "the seven rows" (the review predates the seventh row); the gate-coverage line in section 9 now says "the plants (P1 to P12)" instead of "the nine plants". Section 4's wording "byte for byte `f1-red-rows.diff`" is the architect's line and stays, though the rows now differ from that file.
+
+STOP: none.
