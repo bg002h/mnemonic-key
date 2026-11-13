@@ -68,35 +68,6 @@ pub fn set_non_dumpable() {
     }
 }
 
-/// Restore the default SIGPIPE disposition, which Rust's runtime sets to
-/// `SIG_IGN` before `main`.
-///
-/// With SIGPIPE ignored, a `println!` into a closed pipe returns `Err` and the
-/// `print!` machinery PANICS. `mk encode --keys big.txt | head` therefore
-/// printed a Rust panic and exit 101 after emitting a partial bundle -- and a
-/// large batch (a 1000-record file emits ~3000 lines) is exactly what an
-/// operator pages. Restoring `SIG_DFL` makes the process die quietly on EPIPE
-/// the way every other Unix filter does (R2/I, 2026-08-21).
-///
-/// Safety: `signal(2)` with `SIG_DFL` is async-signal-safe and this runs before
-/// any thread is spawned.
-///
-/// A no-op on Windows, which has no SIGPIPE. Gating this INSIDE the function
-/// (as `set_non_dumpable` does) rather than at the call site is what keeps
-/// `main` free of `cfg`; the first version omitted the gate entirely and broke
-/// all three Windows builds, which a Linux-only local gate cannot see.
-pub fn restore_default_sigpipe() {
-    // Unix only: SIGPIPE does not exist on Windows, and Rust does not install
-    // the SIG_IGN disposition there, so there is nothing to restore. Gated the
-    // same way `set_non_dumpable` gates its platform primitives, rather than
-    // gating the CALL SITE, so main() stays platform-agnostic.
-    #[cfg(unix)]
-    unsafe {
-        // SAFETY: single-threaded at this point; SIG_DFL is the kernel default.
-        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[cfg(target_os = "linux")]

@@ -6,6 +6,10 @@
 
 #![allow(missing_docs)] // mk-cli is binary-only; mirror md-cli/ms-cli precedent.
 
+// First, so its print macros shadow std's in every module below.
+#[macro_use]
+mod out;
+
 mod cmd;
 mod error;
 mod format;
@@ -59,8 +63,6 @@ enum Command {
 fn main() -> ExitCode {
     // argv-hardening: deny other-UID /proc/$PID/cmdline reads + core dumps.
     process_hardening::set_non_dumpable();
-    // Die quietly on EPIPE instead of panicking mid-bundle (see the fn's docs).
-    process_hardening::restore_default_sigpipe();
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
         Err(e) => {
@@ -69,10 +71,18 @@ fn main() -> ExitCode {
             // Output is on stdout and the canonical Unix exit is 0. The
             // catch-all 64 below preserves the carve-out for real parse
             // errors.
-            e.print().ok();
+            // --help and --version go to stdout under the same write-error
+            // rule as the verbs (`out`); a parse error goes to stderr.
+            if e.use_stderr() || !out::read_only() {
+                if let Err(w) = e.print() {
+                    if !e.use_stderr() {
+                        out::failed(&w);
+                    }
+                }
+            }
             return match e.kind() {
                 clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
-                    ExitCode::SUCCESS
+                    ExitCode::from(out::exit_code(0))
                 }
                 _ => ExitCode::from(64),
             };
@@ -94,13 +104,14 @@ fn main() -> ExitCode {
         Command::GenMan(a) => cmd::gen_man::run(a),
     };
 
-    match result {
-        Ok(code) => ExitCode::from(code),
+    let code = match result {
+        Ok(code) => code,
         Err(e) => {
             emit_error(&e, json_mode);
-            ExitCode::from(e.exit_code())
+            e.exit_code()
         }
-    }
+    };
+    ExitCode::from(out::exit_code(code))
 }
 
 fn is_json_mode(cmd: &Command) -> bool {
