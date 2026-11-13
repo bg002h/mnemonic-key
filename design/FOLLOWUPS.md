@@ -687,6 +687,38 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Why deferred:** a Nit of the R1 review, filed and not fixed.
 - **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
 
+### `mk-output-sink-wd-m1-flush-unpinned` — the `flush` in `stdout_write` is pinned by no row (`deferred-minor`)
+
+- **Surfaced:** 2026-11-13, coordinator `agent-reports/whole-diff-mk-output-sink-s2.md` M1.
+- **Where:** `crates/mk-cli/src/out.rs` `stdout_write` (`o.write_fmt(args).and_then(|()| o.flush())`).
+- **What:** removing the `flush` passes all rows. Equivalent today: every mk stdout write ends in a newline, so std's LineWriter flushes at the write and the error surfaces there. It matters only for a future `print!` without a newline (its error would be dropped at exit, output lost with exit 0). No row can kill it without a verb that prints a partial line.
+- **Why deferred:** a Minor of the whole-diff review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-wd-m2-closed-early-return-unpinned` — the `CLOSED` early return in `stdout_write` is pinned by no row (`deferred-minor`)
+
+- **Surfaced:** 2026-11-13, coordinator `agent-reports/whole-diff-mk-output-sink-s2.md` M2.
+- **Where:** `crates/mk-cli/src/out.rs` `stdout_write` (the `CLOSED` check) and its doc comment "after the first failure, writes nothing".
+- **What:** removing the early return passes all rows. After the first failure every later write fails the same way (EPIPE, or ENOSPC on `/dev/full`) and `WRITE_ERROR` is a `OnceLock` (first wins), so nothing observable differs; the doc comment is true only because of the early return.
+- **Why deferred:** a Minor of the whole-diff review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-wd-m3-sigxfsz-file-size-limit` — a stdout file over `ulimit -f` kills mk with SIGXFSZ (exit 153) (`deferred-minor`)
+
+- **Surfaced:** 2026-11-13, coordinator `agent-reports/whole-diff-ms-output-sink-s1.md` M-2 (found for ms; run for mk at head e6d533f4 plus the access-mode fix: `ulimit -f 1; target/debug/mk gui-schema > file` exits 153 with 512 bytes written).
+- **Where:** process start of `crates/mk-cli/src/main.rs`.
+- **What:** a stdout file over the `ulimit -f` limit kills mk by signal (exit 153). It fails closed (non-zero). With SIGXFSZ ignored the write error would reach the sink as `mk: cannot write the output: File too large (os error 27)` (exit 1; seen for the FIX document's own run). Possible change: ignore SIGXFSZ at start so a file-size limit is a write error like the others.
+- **Why deferred:** a Minor outside the diff, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-wd-n1-advisory-after-failed-stdout` — the stderr note "stdout is watch-only" still prints after stdout failed (`deferred-minor`)
+
+- **Surfaced:** 2026-11-13, coordinator `agent-reports/whole-diff-mk-output-sink-s1.md` Nits N1.
+- **Where:** `crates/mk-cli/src/cmd/address.rs:134` and every verb's `emit_output_class_advisory` call.
+- **What:** the note `note: stdout is watch-only — public keys only, cannot spend` prints after stdout failed or its reader left (`> /dev/full`, `| head -c1`, `1<ro.txt`), where nothing or a prefix reached stdout; the base died first in the first two. Harmless (a class description; the `cannot write` line follows).
+- **Why deferred:** a Nit of the whole-diff review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
 ### `vendor-freshness-shared` — one shared vendor-freshness gate for five repos
 
 - **Spec:** mnemonic-toolkit `design/SPEC_vendor_freshness_shared.md`.
