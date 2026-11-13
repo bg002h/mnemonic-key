@@ -16,8 +16,7 @@ exact diff and ran it both ways (RED: 6 tests run, 1 passed, 5 failed; GREEN:
 workspace 405 tests run, 405 passed). Where the grade did not decide a point
 that a holder can see, it is a STOP in section 10, not a choice.
 
-**Open STOPs (section 10) must be answered before the build starts.** Every
-other point is decided.
+**No STOP is open:** S1 is ruled (section 10). Every other point is decided.
 
 ## 1. Spec delta (exact texts)
 
@@ -372,13 +371,13 @@ index 651e69c..83ba7af 100644
  - **Status:** resolved -- shipped by this PR
  - Companion: mnemonic-toolkit design/FOLLOWUPS.md::vendor-freshness-shared
 +
-+### `crash-sweep-mk-output-sink` — a stdout that cannot take the output panicked (exit 101) in every mk verb
++### `mk-output-sink` — a stdout that cannot take the output panicked (exit 101) in every mk verb
 +
 +- **Surfaced:** 2026-11-13, crash sweep; graded in coordinator `agent-reports/grade-mk-crash-sweep-1.md` Q1 (F1, Important) and Q4 (the family rule).
 +- **Spec:** `design/FIX_mk_output_sink.md`.
 +- **What:** `println!` panicked on a full disk or `> /dev/full`, and a closed pipe killed the process with SIGPIPE (141) on unix and panicked on Windows. Now one write path (`src/out.rs`) stops the output on a write error; a closed reader leaves the verb's own exit code; any other error prints `mk: cannot write the output: <error>` and exits 1 (a failing code is kept).
 +- **Status:** resolved -- shipped by this PR
-+- **Companions:** the same rule for ms and md, after their triage (coordinator brief); the toolkit manual sentence in `44-mk-cli.md` (see the FIX document, section 8 and STOP S1).
++- **Companions:** the same rule for ms and md, after their triage (coordinator brief); the toolkit manual sentence in `44-mk-cli.md`, toolkit `design/FOLLOWUPS.md::mk-manual-when-stdout-fails` (see the FIX document, section 8 and S1, ruled).
 +
 +### `crash-sweep-mk-address-json-memory` — `mk address --json` at the 1,000,000 cap peaks at 3.5 GB (`deferred-minor`)
 +
@@ -681,7 +680,7 @@ diff removes only the function).
 2. Apply sections 3.1 to 3.6 (the grade's diff). Run the six rows: GREEN.
 3. Apply section 3.7 (FOLLOWUPS).
 4. Gate (section 7).
-5. Toolkit manual sentence (section 8), as a separate toolkit change, per STOP S1.
+5. Toolkit manual sentence (section 8): not part of this PR; it goes in the toolkit PR that pins the first mk-cli release carrying this fix (S1, ruled).
 6. CI on the PR must show the legs the grade did not run (section 9).
 
 ## 7. Gate
@@ -713,9 +712,16 @@ row.) The sentence does not depend on the release F1 re-pin of that table's
 rows (grade Q5; architect Q3), which may land first. The toolkit installer
 pins mk 0.13.0 today and release item F1 re-pins it to 0.14.0
 (`agent-reports/architect-release-f1.md` L105-116, the lockstep manual rows);
-toolkit FOLLOWUPS entry `mk-manual-exit-table-0-14` is being filed. Which
-toolkit PR carries this sentence, and when it may merge relative to the pin
-of an mk that has this fix: STOP S1.
+toolkit FOLLOWUPS entry `mk-manual-exit-table-0-14` is being filed. It lands with the toolkit pin of the first mk-cli release carrying this fix (S1, ruled).
+
+Toolkit companion entry, as the text a toolkit FOLLOWUPS PR files (the manual
+sentence above is held verbatim):
+
+> ### `mk-manual-when-stdout-fails` — at the mk re-pin carrying the output sink, `44-mk-cli.md` states what mk does when stdout fails (repo: **mnemonic-toolkit**; owning phase: **the toolkit pin bump to the mk-cli release carrying mnemonic-key `mk-output-sink`**)
+> - Surfaced: coordinator agent-reports/grade-ms-md-output-errors.md section 4 (S1). Companion: mnemonic-key design/FOLLOWUPS.md::mk-output-sink.
+> - What: insert in docs/manual/src/40-cli-reference/44-mk-cli.md, after the last row of `## Exit codes` (today L609), the paragraph of section 8 of mnemonic-key `design/FIX_mk_output_sink.md` verbatim (the sentence above), in the same commit as the scripts/install.sh mk pin. Plain text, no (unreleased: …) marker.
+> - Status: `open`.
+> - Tier: `docs`, `cross-repo`.
 
 No mk flag or help text changes, so the mnemonic-gui mk schema mirror needs no
 change. The stderr line and the exit codes are mk's only printed-text change.
@@ -732,15 +738,6 @@ change. The stderr line and the exit codes are mk's only printed-text change.
   5. FreeBSD.
 - **Gate coverage:** see the script header; it does not re-run the nine plants, the CI legs above, the toolkit manual, or `mutation-gate.sh`.
 
-## 10. STOP (undecided; answer before building)
+## 10. STOP (none open)
 
-- **S1 (toolkit sentence: which PR, when).** The grade says the manual line
-  goes "in its lockstep PR" and "may land first" relative to the F1 re-pin of
-  the exit-table rows. Neither the grade nor the F1 ruling says whether the
-  sentence may merge before the toolkit pins an mk that has this fix (the
-  pin is 0.13.0 today, 0.14.0 after F1, and this fix is 0.15.0-dev: the
-  sentence would describe behaviour the pinned binary does not have), whether
-  it must carry the chapter's `(unreleased: mk-cli after <release>)` marker
-  convention, or which toolkit PR carries it (the F1 PR, a separate small PR,
-  or the PR that pins mk 0.15.0). Decide: PR, merge timing relative to the mk
-  0.15.0 release and pin, and marker.
+- **S1 (ruled 2026-11-13, coordinator `agent-reports/grade-ms-md-output-errors.md` section 4).** The section 8 sentence goes in the toolkit PR that moves `scripts/install.sh`'s mk pin (`mk-cli-v0.13.0`, L61) to the first mk-cli release carrying this fix (0.15.0 or later). It goes in the same commit as that pin and the `44-mk-cli.md` L12 install line, and it may not merge before that pin. Insert it after the last row of the `## Exit codes` table (L601; today L609). That is not the release-F1 PR, which pins 0.14.0, unless F1 is built after mk 0.15.0 ships and pins it. Plain text, no `(unreleased: …)` marker: the lint reads that marker only on flag rows, so a behaviour marker could never fail. This PR files the cross-repo pair: mnemonic-key `design/FOLLOWUPS.md::mk-output-sink` (a Companion line) and toolkit `design/FOLLOWUPS.md::mk-manual-when-stdout-fails` (form below). The same rule holds for ms (`43-ms.md`) and md (`42-md.md`).

@@ -101,7 +101,7 @@ echo "self-test ok: the checker rejects a broken row"
 # 3. GREEN
 git -C "$W" apply "$OUT/code.diff"
 git -C "$W" apply "$OUT/followups.diff"
-grep -q 'crash-sweep-mk-output-sink' "$W/design/FOLLOWUPS.md" || die "FOLLOWUPS entry missing"
+grep -q 'mk-output-sink' "$W/design/FOLLOWUPS.md" || die "FOLLOWUPS entry missing"
 run() { # name cmd...
   local name=$1; shift
   (cd "$W" && "$@") >"$OUT/$name.log" 2>&1 || { tail -n 30 "$OUT/$name.log" >&2; die "$name failed"; }
