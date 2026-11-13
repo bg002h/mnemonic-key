@@ -2,3 +2,8 @@
 # ERE per line, matched against the repo-relative path; # starts a comment.
 # List a file here only when no step that ci/docs-only.sh guards runs it, and
 # say why in the comment above it.
+
+# Not run by CI: the local gate of the mk output-sink FIX document, run by
+# hand before the build and its reviews. It reads that document and the
+# FOLLOWUPS file to check them.
+^scripts/mk-output-sink-fix-gate\.sh$
