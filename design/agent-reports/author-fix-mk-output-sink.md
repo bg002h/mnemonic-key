@@ -33,3 +33,11 @@ None; no holder-visible text was invented.
 
 ## Not run
 The nine plants (listed from the grade's `plants.txt`, not re-run); Windows (first), macOS, musl, release-mode and FreeBSD CI legs; the toolkit manual edit; `mutation-gate.sh`; any review. The mk scripts have no catalog row to update (no `scripts/` directory existed in the repo).
+
+## S1 fold (2026-11-13)
+Fold commit `72c46b99be0b2e19fbcc9abe7bdda0e7f2894a6a` (base `15a1825`), files `design/FIX_mk_output_sink.md` and `scripts/mk-output-sink-fix-gate.sh`.
+- Section 10: the S1 item is replaced by the ruling's text, verbatim (coordinator `agent-reports/grade-ms-md-output-errors.md` section 4). No STOP is open.
+- Section 8: the ruled sentence replaces the STOP sentence; the toolkit companion entry `mk-manual-when-stdout-fails` is added in the ruling's form with mk's values.
+- The FOLLOWUPS entry `crash-sweep-mk-output-sink` is renamed `mk-output-sink` everywhere and gains its Companion line; the gate script's FOLLOWUPS grep follows the rename (its one changed line).
+- Gate: `GATE PASS` (RED rows 1-5 fail as expected, whole file 1 passed and 5 failed; checker self-test ok; GREEN rows 6 of 6; suite 405 of 405; doc, fmt, clippy ok). The fold agent's first run was killed (exit 137) and its second passed; the controller reran it on the fold head and it passed again.
+- Written by the controller from the fold agent's return and its own checks: the agent ended without this section, and its commit message was rewritten before any push to carry the gate output and the two trailer lines.
