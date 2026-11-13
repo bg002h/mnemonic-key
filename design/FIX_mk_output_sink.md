@@ -11,9 +11,10 @@ run fix `f1-fix.diff` and rows `f1-red-rows.diff` (copied byte for byte into
 section 3 and section 4 below). The architect ruling on the exit sets is
 `agent-reports/architect-crash-sweep-exit-sets.md`.
 
-Everything below is transcribed from the grade. The grade built this
-exact diff and ran it both ways (RED: 6 tests run, 1 passed, 5 failed; GREEN:
-workspace 405 tests run, 405 passed). Where the grade did not decide a point
+Everything below is transcribed from the grade, with the read-only stdout
+probe of the architect ruling (coordinator `agent-reports/architect-output-sink-read-only-stdout.md`) added. The grade built its diff
+and the architect built and ran this exact one both ways (RED: 7 tests run,
+1 passed, 6 failed; GREEN: workspace 406 tests run, 406 passed). Where the grade did not decide a point
 that a holder can see, it is a STOP in section 10, not a choice.
 
 **No STOP is open:** S1 is ruled (section 10). Every other point is decided.
@@ -59,7 +60,11 @@ stdout error; `--help` and `--version` go through the same path.
   output stops; at exit `mk: cannot write the output: <error>` is printed on
   stderr. A code that means "the run succeeded and stdout is the result" (0,
   and `repair`'s 5) becomes **1** (mk's existing I/O-error code); a failing
-  code is kept.
+  code is kept. A stdout opened read-only (`mk gui-schema 1</dev/null`) is
+  such an error: std's stdout reports EBADF as a successful write, so `out.rs`
+  checks fd 1 once (`fcntl(F_GETFL)`, unix only) at the first write or
+  `--help`/`--version` and records `Bad file descriptor (os error 9)`. A verb
+  that writes nothing to stdout is not touched.
 - Stderr write errors are ignored (this covers `2>&1 | head` once SIGPIPE is
   not restored).
 - No new exit code, no new error variant, no flag change.
@@ -73,19 +78,22 @@ stdout error; `--help` and `--version` go through the same path.
 | 3 | the same, verb already failing (`address --json --count 1000001`: the exit-64 envelope goes to stdout) | stops | the line | 64 (kept) | `full_stdout_keeps_a_failing_code` |
 | 4 | `--help` / `--version`, closed reader | stops | none | 0 | `closed_reader_exits_with_the_verbs_code` |
 | 5 | `--help` / `--version` (and `decode --help`), other stdout error | stops | the line | 1 | `full_stdout_exits_1_with_the_line` |
+| 5b | stdout opened read-only (`1</dev/null`): `gui-schema`, `encode`, `decode`, `--help`, `--version`, `repair` that repaired; `address --json --count 1000001` | lost (before: lost with exit 0) | `mk: cannot write the output: Bad file descriptor (os error 9)` last line | 1; 64 kept | `read_only_stdout_exits_1_with_the_line` |
+| 5c | the same, `vectors --out DIR` (writes nothing to stdout) | none | no `cannot write` | 0 | `read_only_stdout_exits_1_with_the_line` |
 | 6 | stderr write error (stdout and stderr both closed: `encode`'s notes, `vectors --out`'s "wrote N vector file(s)") | as case 1 | ignored | 0 | `closed_reader_on_stdout_and_stderr_exits_0` |
 | 7 | clap parse error (printed on stderr) | none | clap's text; a stderr failure is ignored | 64 (unchanged) | none new (no change in behaviour) |
 
-A short write (`ulimit -f 1`) leaves a cut file but exits 1 with
-`mk: cannot write the output: File too large (os error 27)` (grade, run on
-the fixed binary; not a row).
+A file-size limit (`ulimit -f`) is outside the rule. The kernel sends SIGXFSZ, and by default it kills mk
+(rc 153 in a shell, file cut, no mk line). Only where SIGXFSZ is ignored (`trap '' XFSZ`) does the write fail
+with EFBIG, and then mk prints `mk: cannot write the output: File too large (os error 27)` and exits 1
+(run on the fixed binary; not a row).
 
 ## 3. Production changes (exact)
 
 The six blocks 3.1 to 3.6 are `f1-fix.diff` split by file, in the diff's own
 order, byte for byte: concatenated they equal the grade's file
-(sha256 `0bb0fb557ebb5144b7cae1ab7a05b333fec6627d180d6dc798bc62cc6f4cc5c8`, checked by the gate). Apply them with `git apply`.
-They touch `src/out.rs` (new, 74 lines), `src/main.rs`,
+(sha256 `62286bfc27066afb7535832615f13322f41b782e0d516ce92c0a5ae892ace385`, checked by the gate). Apply them with `git apply`.
+They touch `src/out.rs` (new, 100 lines), `src/main.rs`,
 `src/process_hardening.rs` (the SIGPIPE function removed), `CHANGELOG.md`,
 `Cargo.toml`, `Cargo.lock`. Block 3.7 is not part of the grade's file.
 
@@ -159,7 +167,7 @@ index 01191db..030fe79 100644
 
 ```diff
 diff --git a/crates/mk-cli/src/main.rs b/crates/mk-cli/src/main.rs
-index 7dfc4f5..bc745a5 100644
+index 7dfc4f5..c9ebd97 100644
 --- a/crates/mk-cli/src/main.rs
 +++ b/crates/mk-cli/src/main.rs
 @@ -6,6 +6,10 @@
@@ -182,16 +190,18 @@ index 7dfc4f5..bc745a5 100644
      let cli = match Cli::try_parse() {
          Ok(cli) => cli,
          Err(e) => {
-@@ -69,10 +71,16 @@ fn main() -> ExitCode {
+@@ -69,10 +71,18 @@ fn main() -> ExitCode {
              // Output is on stdout and the canonical Unix exit is 0. The
              // catch-all 64 below preserves the carve-out for real parse
              // errors.
 -            e.print().ok();
 +            // --help and --version go to stdout under the same write-error
 +            // rule as the verbs (`out`); a parse error goes to stderr.
-+            if let Err(w) = e.print() {
-+                if !e.use_stderr() {
-+                    out::failed(&w);
++            if e.use_stderr() || !out::read_only() {
++                if let Err(w) = e.print() {
++                    if !e.use_stderr() {
++                        out::failed(&w);
++                    }
 +                }
 +            }
              return match e.kind() {
@@ -201,7 +211,7 @@ index 7dfc4f5..bc745a5 100644
                  }
                  _ => ExitCode::from(64),
              };
-@@ -94,13 +102,14 @@ fn main() -> ExitCode {
+@@ -94,13 +104,14 @@ fn main() -> ExitCode {
          Command::GenMan(a) => cmd::gen_man::run(a),
      };
  
@@ -227,10 +237,10 @@ index 7dfc4f5..bc745a5 100644
 ```diff
 diff --git a/crates/mk-cli/src/out.rs b/crates/mk-cli/src/out.rs
 new file mode 100644
-index 0000000..c8529bb
+index 0000000..f43b708
 --- /dev/null
 +++ b/crates/mk-cli/src/out.rs
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,100 @@
 +//! The one stdout path. Every `print!`/`println!` in mk-cli resolves to the
 +//! macros below (declared `#[macro_use]` first in `main.rs`, so they shadow
 +//! std's in every module), and so do `eprint!`/`eprintln!`.
@@ -253,13 +263,39 @@ index 0000000..c8529bb
 +
 +/// Writes to stdout; after the first failure, writes nothing.
 +pub(crate) fn stdout_write(args: std::fmt::Arguments<'_>) {
-+    if CLOSED.load(Ordering::Relaxed) {
++    if CLOSED.load(Ordering::Relaxed) || read_only() {
 +        return;
 +    }
 +    let mut o = std::io::stdout().lock();
 +    if let Err(e) = o.write_fmt(args).and_then(|()| o.flush()) {
 +        failed(&e);
 +    }
++}
++
++/// std's stdout reports EBADF as a successful write, so a stdout opened
++/// read-only (`1</dev/null`) would lose the output with exit 0. Checked once,
++/// at the first write (or clap's `--help`/`--version`): then EBADF is recorded
++/// as the write error. A verb that writes nothing to stdout is not touched.
++pub(crate) fn read_only() -> bool {
++    static RO: OnceLock<bool> = OnceLock::new();
++    *RO.get_or_init(|| {
++        #[cfg(unix)]
++        {
++            // SAFETY: fcntl(F_GETFL) takes no pointer; a bad fd returns -1.
++            let fl = unsafe { libc::fcntl(1, libc::F_GETFL) };
++            let ro = fl >= 0 && (fl & libc::O_ACCMODE) == libc::O_RDONLY;
++            if ro {
++                failed(&std::io::Error::from_raw_os_error(libc::EBADF));
++            }
++            ro
++        }
++        // Windows: std turns only an invalid handle into a success, so a
++        // read-only handle's error reaches the sink as written.
++        #[cfg(not(unix))]
++        {
++            false
++        }
++    })
 +}
 +
 +/// Records a failed stdout write (also used for clap's `--help`/`--version`).
@@ -398,8 +434,8 @@ index 651e69c..83ba7af 100644
 
 ## 4. RED rows
 
-The rows are `crates/mk-cli/tests/output_errors.rs` (6 tests, new file),
-byte for byte `f1-red-rows.diff` (sha256 `95fa725cd3d8cb6dc4a7e854dd6ea1d854218ed81c4d233ce50f2c604301a00b`). They supersede the
+The rows are `crates/mk-cli/tests/output_errors.rs` (7 tests, new file),
+byte for byte `f1-red-rows.diff` (sha256 `89331217d8c5c636a71023cabe0405edde01b5299421298d57c98db5802519f6`). They supersede the
 triage's `stdout_write_error.rs` and `closed_pipe.rs`; do not commit those.
 Apply the block, then run each command in the `sh` block on the unmodified
 code, from the repo root with `$HOME/.cargo/bin` first in PATH (the pin is
@@ -407,12 +443,12 @@ code, from the repo root with `$HOME/.cargo/bin` first in PATH (the pin is
 output.
 
 ```diff
-diff --git a/crates/mk-cli/tests/output_errors.rs b/crates/mk-cli/tests/output_errors.rs
+diff --git c/crates/mk-cli/tests/output_errors.rs w/crates/mk-cli/tests/output_errors.rs
 new file mode 100644
-index 0000000..00c903c
+index 0000000..e80575f
 --- /dev/null
-+++ b/crates/mk-cli/tests/output_errors.rs
-@@ -0,0 +1,215 @@
++++ w/crates/mk-cli/tests/output_errors.rs
+@@ -0,0 +1,255 @@
 +//! What mk does when stdout cannot take its output (crash sweep F1 and the
 +//! family rule, grade-mk-crash-sweep-1; manual `44-mk-cli.md` "Exit codes").
 +//!
@@ -578,6 +614,9 @@ index 0000000..00c903c
 +        &args(&["address", "--json", "--count", "1000001"], &card()),
 +        64,
 +    );
++    // A content mismatch in --json mode prints its envelope on stdout (exit 4).
++    const OTHER: &str = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
++    full_case(&args(&["verify", "--json", "--xpub", OTHER], &card()), 4);
 +}
 +
 +#[test]
@@ -628,6 +667,43 @@ index 0000000..00c903c
 +    }
 +    assert!(bad.is_empty(), "stdout named outside src/out.rs: {bad:?}");
 +}
++
++/// std's stdout reports EBADF as a successful write, so a stdout opened
++/// read-only (`mk gui-schema 1</dev/null`) lost the output and exited 0.
++#[test]
++fn read_only_stdout_exits_1_with_the_line() {
++    const BADF: &str = "mk: cannot write the output: Bad file descriptor (os error 9)";
++    let on_read_only = |a: &[String]| {
++        let ro = std::fs::File::open("/dev/null").unwrap();
++        mk().args(a)
++            .stdout(Stdio::from(ro))
++            .stderr(Stdio::piped())
++            .output()
++            .unwrap()
++    };
++    let c = card();
++    for (a, code) in [
++        (s(&["gui-schema"]), 1),
++        (s(&ENCODE), 1),
++        (args(&["decode"], &c), 1),
++        (s(&["--help"]), 1),
++        (s(&["--version"]), 1),
++        (args(&["repair"], &damaged()), 1),
++        // A failing verb keeps its code (the --json usage envelope, 64).
++        (args(&["address", "--json", "--count", "1000001"], &c), 64),
++    ] {
++        let o = on_read_only(&a);
++        let err = String::from_utf8_lossy(&o.stderr);
++        assert_eq!(o.status.code(), Some(code), "{a:?}: {err}");
++        assert_eq!(err.lines().last(), Some(BADF), "{a:?}: {err}");
++    }
++    // A verb that writes nothing to stdout keeps its code and prints no line.
++    let dir = tempfile::tempdir().unwrap();
++    let o = on_read_only(&s(&["vectors", "--out", dir.path().to_str().unwrap()]));
++    let err = String::from_utf8_lossy(&o.stderr);
++    assert_eq!(o.status.code(), Some(0), "{err}");
++    assert!(!err.contains("cannot write"), "{err}");
++}
 ```
 
 ```sh
@@ -636,21 +712,23 @@ cargo nextest run --locked -j 8 -E 'test(/(^|::)full_stdout_after_a_repair_exits
 cargo nextest run --locked -j 8 -E 'test(/(^|::)full_stdout_keeps_a_failing_code$/)' ## expect: panicked at library/std/src/io/stdio.rs
 cargo nextest run --locked -j 8 -E 'test(/(^|::)closed_reader_exits_with_the_verbs_code$/)' ## expect: killed by a signal: ExitStatus(unix_wait_status(13))
 cargo nextest run --locked -j 8 -E 'test(/(^|::)closed_reader_on_stdout_and_stderr_exits_0$/)' ## expect: killed by a signal: ExitStatus(unix_wait_status(13))
+cargo nextest run --locked -j 8 -E 'test(/(^|::)read_only_stdout_exits_1_with_the_line$/)' ## expect: left: Some(0)
 ```
 
 | row | expected after GREEN | on the base code (measured by the grade, `red3.log`) |
 |---|---|---|
 | `full_stdout_exits_1_with_the_line` | 14 invocations (nine verbs, `--help`, `--version`, `decode --help`) each exit 1 with the line last on stderr, no panic | FAIL: `thread 'main' panicked at library/std/src/io/stdio.rs:1123:9` / `failed printing to stdout: No space left on device (os error 28)` |
 | `full_stdout_after_a_repair_exits_1_not_5` | the repair fixture exits 5 on a good stdout; on a full stdout exit 1 | FAIL: the same panic |
-| `full_stdout_keeps_a_failing_code` | exit 64 and the line | FAIL: the same panic |
+| `full_stdout_keeps_a_failing_code` | exit 64 and exit 4 (`verify --json` mismatch), each with the line | FAIL: the same panic |
 | `closed_reader_exits_with_the_verbs_code` | exit 0 (5 for `repair`), no signal | FAIL: `killed by a signal: ExitStatus(unix_wait_status(13))` |
 | `closed_reader_on_stdout_and_stderr_exits_0` | exit 0, no signal | FAIL: signal 13 |
+| `read_only_stdout_exits_1_with_the_line` | on a stdout opened read-only: `gui-schema`, `encode`, `decode`, `--help`, `--version` and a repair that repaired exit 1, `address --json --count 1000001` keeps 64, each with `mk: cannot write the output: Bad file descriptor (os error 9)` last; `vectors --out DIR` exits 0 with no `cannot write` | FAIL (architect, `redbase-row.log`): `left: Some(0)` / `right: Some(1)` (exit 0, output lost) |
 | `only_out_rs_names_stdout` | PASS | PASS on the base too: a source-scan guard, not a RED row. Its teeth are plants P7 and P8 (below). |
 
-Whole-file RED (grade): **6 tests run: 1 passed, 5 failed**. The rows are
+Whole-file RED (architect, `redbase-set.log`): **7 tests run: 1 passed, 6 failed**. The rows are
 `cfg(target_os = "linux")`.
 
-### Tests can fail (the grade's nine plants)
+### Tests can fail (the grade's nine plants, the review's one and the architect's two)
 
 Each plant was made against the fix; each fails at least one row (grade
 `plants.txt`; the gate does not re-run them).
@@ -666,6 +744,11 @@ Each plant was made against the fix; each fails at least one row (grade
 | P7 | `std::io::stdout()` in `vectors.rs` | `only_out_rs_names_stdout` |
 | P8 | one `std::println!` site in `address.rs` | `closed_reader_exits_with_the_verbs_code`, `full_stdout_exits_1_with_the_line`, `only_out_rs_names_stdout` |
 | P9 | the line is not printed | `full_stdout_after_a_repair_exits_1_not_5`, `full_stdout_exits_1_with_the_line`, `full_stdout_keeps_a_failing_code` |
+| P10 | only 64 kept (`if code == 64 { code } else { 1 }` in `exit_code`) | `full_stdout_keeps_a_failing_code` |
+| P11 | the clap branch not probed (`if true {` for `if e.use_stderr() \|\| !out::read_only() {`) | `read_only_stdout_exits_1_with_the_line` (at `--help`, `left: Some(0)`) |
+| P12 | the probe records no error (its `failed(...EBADF)` line removed) | `read_only_stdout_exits_1_with_the_line` (`left: Some(0)`) |
+
+P11 and P12 were run by the architect against the ruled tree (coordinator `agent-reports/architect-output-sink-read-only-stdout.md`, `plant-P1.log`, `plant-P2.log`). P1 to P10 were run against the grade's diff or the review's; P4 plants the clap branch, which the probe now wraps.
 
 ## 5. Tests that change
 
@@ -676,12 +759,19 @@ diff removes only the function).
 
 ## 6. Build order
 
-1. Add the rows (section 4) as their own commit; run the RED commands: five FAIL for the stated reasons, the scan row PASSES.
-2. Apply sections 3.1 to 3.6 (the grade's diff). Run the six rows: GREEN.
+1. Add the rows (section 4) as their own commit; run the RED commands: six FAIL for the stated reasons, the scan row PASSES.
+2. Apply sections 3.1 to 3.6 (the grade's diff with the architect's probe). Run the seven rows: GREEN.
 3. Apply section 3.7 (FOLLOWUPS).
+3a. The toolkit half of the cross-repo pair (section 8's `mk-manual-when-stdout-fails` entry, verbatim) is
+not edited by the mk build. The controller files it in a toolkit FOLLOWUPS-only PR when this mk PR opens. The
+mk PR's description names that toolkit PR, and the mk PR does not merge before it.
 4. Gate (section 7).
 5. Toolkit manual sentence (section 8): not part of this PR; it goes in the toolkit PR that pins the first mk-cli release carrying this fix (S1, ruled).
-6. CI on the PR must show the legs the grade did not run (section 9).
+6. CI on the PR: the `ci.yml` build matrix (ubuntu and macOS; Windows once the PR is out of draft),
+   `freebsd-compile-gate`, and `release.yml`'s `release test` and `build mk` jobs must be green. They prove
+   that the change compiles and the existing suite passes on every OS. Only ubuntu runs the seven rows. No leg runs
+   a closed pipe on Windows or macOS, and none builds musl on a PR (`musl-binaries.yml` is tag-only). Those
+   cases rest on std's mapping (Rust 1.85.0 `sys/pal/windows/mod.rs` L81, L87) and are recorded, not shown.
 
 ## 7. Gate
 
@@ -691,12 +781,12 @@ blocks, shows the rows and the full mk-cli suite green, and has a self-test
 that goes red on a broken row. Its header states what it does not cover.
 The commands it runs, each to a file, then grep:
 
-- `cargo nextest run --locked -j 8` expecting **405 tests run: 405 passed**
-  (grade, `green-final.log`: base 399 plus the 6 rows).
+- `cargo nextest run --locked -j 8` expecting **406 tests run: 406 passed**
+  (architect, `g-suite.log`: base 399 plus the 7 rows).
 - `cargo test --locked --doc`
 - `cargo fmt --check`
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
-- `cargo nextest run --locked -j 8 -E 'binary(output_errors)'`: **6 tests run: 6 passed** (a short or empty count is a FAIL).
+- `cargo nextest run --locked -j 8 -E 'binary(output_errors)'`: **7 tests run: 7 passed** (a short or empty count is a FAIL).
 - Then `coordinator/scripts/mutation-gate.sh <worktree> <base>` before any review (not in the script).
 
 ## 8. Toolkit manual lockstep (44-mk-cli.md)
@@ -729,14 +819,14 @@ change. The stderr line and the exit codes are mk's only printed-text change.
 ## 9. Checks recorded
 
 - **Version:** `Cargo.toml` and `Cargo.lock` 0.14.0 to 0.15.0-dev (in the diff).
-- **Evidence (grade):** RED 6 run, 1 passed, 5 failed (`red3.log`); GREEN workspace 405 run, 405 passed (`green-final.log`); clippy `--workspace --all-targets -D warnings` rc 0; `cargo +1.95.0 fmt --check` rc 0; `cargo test --doc` rc 0. On the fixed binary: `mk --help | head -5` gave 0 nonzero in 200 runs; `address --count 100000 | head -3` rc 0; `ulimit -f 1` left 512 bytes, rc 1, `mk: cannot write the output: File too large (os error 27)`.
-- **Not run by the grade, so CI on the PR must show them** (the rows are Linux-only; `out.rs` is std-only and std maps Windows' closed-pipe errors to BrokenPipe):
-  1. **Windows**: the closed-pipe case must give the verb's own exit code and no panic. This leg must confirm std's mapping; there is no Windows row, so read it first.
-  2. macOS.
-  3. musl.
-  4. release-mode build and tests.
-  5. FreeBSD.
-- **Gate coverage:** see the script header; it does not re-run the nine plants, the CI legs above, the toolkit manual, or `mutation-gate.sh`.
+- **Evidence (grade, then architect for the read-only probe):** RED 7 run, 1 passed, 6 failed (`redbase-set.log`); GREEN workspace 406 run, 406 passed (`g-suite.log`); `cargo check --target x86_64-unknown-freebsd -p mk-cli` rc 0; clippy `--workspace --all-targets -D warnings` rc 0; `cargo +1.95.0 fmt --check` rc 0; `cargo test --doc` rc 0. On the fixed binary: `mk --help | head -5` gave 0 nonzero in 200 runs; `address --count 100000 | head -3` rc 0; `ulimit -f 1` with SIGXFSZ ignored: rc 1 and the line; with SIGXFSZ at its default: rc 153 (signal).
+- **CI on the PR** (the rows are Linux-only): the `ci.yml` build matrix (ubuntu and macOS; Windows once the PR is out of draft),
+  `freebsd-compile-gate`, and `release.yml`'s `release test` and `build mk` jobs must be green. They prove
+  that the change compiles and the existing suite passes on every OS. Only ubuntu runs the seven rows. No leg runs
+  a closed pipe on Windows or macOS, and none builds musl on a PR (`musl-binaries.yml` is tag-only). Those
+  cases rest on std's mapping (Rust 1.85.0 `sys/pal/windows/mod.rs` L81, L87) and are recorded, not shown.
+  `out.rs` uses std plus one `libc::fcntl` under `cfg(unix)` (the read-only probe); `freebsd-compile-gate` compiles it (architect: `cargo check --target x86_64-unknown-freebsd -p mk-cli` rc 0), and on Windows the probe is `false` (std's `is_ebadf` there is `ERROR_INVALID_HANDLE` only, so a read-only handle's error reaches the sink; not run).
+- **Gate coverage:** see the script header; it does not re-run the plants (P1 to P12), the CI legs above, the toolkit manual, or `mutation-gate.sh`.
 
 ## 10. STOP (none open)
 
