@@ -692,3 +692,25 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Spec:** mnemonic-toolkit `design/SPEC_vendor_freshness_shared.md`.
 - **Status:** resolved -- shipped by this PR
 - Companion: mnemonic-toolkit design/FOLLOWUPS.md::vendor-freshness-shared
+
+### `mk-output-sink` — a stdout that cannot take the output panicked (exit 101) in every mk verb
+
+- **Surfaced:** 2026-11-13, crash sweep; graded in coordinator `agent-reports/grade-mk-crash-sweep-1.md` Q1 (F1, Important) and Q4 (the family rule).
+- **Spec:** `design/FIX_mk_output_sink.md`.
+- **What:** `println!` panicked on a full disk or `> /dev/full`, and a closed pipe killed the process with SIGPIPE (141) on unix and panicked on Windows. Now one write path (`src/out.rs`) stops the output on a write error; a closed reader leaves the verb's own exit code; any other error prints `mk: cannot write the output: <error>` and exits 1 (a failing code is kept).
+- **Status:** resolved -- shipped by this PR
+- **Companions:** the same rule for ms and md, after their triage (coordinator brief); the toolkit manual sentence in `44-mk-cli.md`, toolkit `design/FOLLOWUPS.md::mk-manual-when-stdout-fails` (see the FIX document, section 8 and S1, ruled).
+
+### `crash-sweep-mk-address-json-memory` — `mk address --json` at the 1,000,000 cap peaks at 3.5 GB (`deferred-minor`)
+
+- **Surfaced:** 2026-11-13, crash sweep (architect `agent-reports/architect-crash-sweep-exit-sets.md` Q5); graded in coordinator `agent-reports/grade-mk-crash-sweep-1.md` Q3.
+- **Where:** `crates/mk-cli/src/cmd/address.rs:256-290` (`emit_text`, `emit_json` take every row at once); the cap's doc comment `address.rs:200-202` and `tests/bughunt.rs:85-89` ("never a multi-gigabyte allocation").
+- **What:** every row is built before any is printed; in `--json` each becomes a `serde_json::Value` map, about 21 times the output size. Measured (debug, bip84 card): `--count 1000000 --json` 1,765 MB peak, 81.9 MB stdout; `--range 0,999999 --chain both --json` 3,522 MB peak, 163.8 MB stdout, 62.9 s; the latter under `prlimit --as=2G` aborts after 59.8 s (rc 134, no stdout, stderr only "memory allocation of 632 bytes failed"). Text mode also collects (100 MB at 1,000,000). Fails closed (no output, no wrong data); needs a near-cap `--json` request and a machine with less free memory than about 1.8 GB per million rows.
+- **Owed:** the toolkit's `address` (the migration, verb placement 2026-11-01) writes each row as it is derived, text and JSON alike (the JSON envelope's `addresses` array streamed), with the cap's doc comment true. RED row: `address --range 0,999999 --chain both --json` under `prlimit --as=1G` exits 0 with 2,000,000 rows; it fails on the mk 2fc367c5 code (rc 134, measured at 2G).
+- **Status:** `deferred-minor`. **Owner:** the `address` move to the toolkit. **Tier:** `v1+`.
+
+### `mk-codec-doc-comment-exit` — `CliError::Codec` doc comment says exit 2; the arm returns 1 (architect 2026-11-13)
+
+- Surfaced: coordinator `agent-reports/architect-crash-sweep-exit-sets.md` Q4 E5.
+- What: `crates/mk-cli/src/error.rs` L22 "Exit 2 (or 3 for `UnsupportedVersion`)" -> "Exit 1 (or 3 for `UnsupportedVersion`); `mk repair` exits 2 from its own bypass". `exit_code` L126 is 1 since 0.14.0.
+- Owner: the next mk-cli cycle.

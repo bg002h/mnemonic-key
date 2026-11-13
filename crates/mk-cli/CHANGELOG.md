@@ -9,6 +9,21 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+Next release: 0.15.0
+
+### Changed
+
+- **A stdout that cannot take the output no longer panics.** Every verb and
+  `--help`/`--version` wrote with `println!`, which panicked (exit 101,
+  "failed printing to stdout") on a full disk or `> /dev/full`. Now any stdout
+  write error other than a closed pipe prints
+  `mk: cannot write the output: <error>` on stderr and exits 1; a verb that was
+  already failing keeps its own code. A reader that closes the pipe early
+  (`mk address … | head -3`) only stops the output, and the exit code is the
+  verb's own, not death by SIGPIPE (141) as in 0.14.0; on Windows, where
+  SIGPIPE does not exist, this removes the closed-pipe panic.
+  `tests/output_errors.rs`.
+
 ## [0.14.0] — 2026-11-04
 
 ### Added — chunk_set_id verification and correction reporting (2026-08-31)
