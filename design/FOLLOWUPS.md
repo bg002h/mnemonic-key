@@ -607,6 +607,86 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **What:** the Linux-only gate on `bughunt_mk_03_address_huge_count_is_usage_error` also skips its exact-1,000,000 success half on macOS/Windows; only the refusal loop needs `timeout`/`ulimit -v`. Split that half into an ungated test (~30 s per OS).
 - **Status:** `deferred-minor`. **Owner:** next mk-cli test touch. **Tier:** `v1+`.
 
+### `mk-output-sink-fix-r1-m1-changelog-help-version` — the FIX CHANGELOG line says `--help`/`--version` panicked (exit 101); the base exited 0 with the output lost (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` M1.
+- **Where:** `design/FIX_mk_output_sink.md` L39 and the CHANGELOG diff (L125 at head 00c98c97).
+- **What:** "Every verb and `--help`/`--version` wrote with `println!`, which panicked (exit 101 ...)" is false of 0.14.0 for `--help`/`--version`: the base gives exit 0 with the output lost (`e.print().ok()`), and `gen-man` and `vectors --out` write nothing to stdout. Suggested: "Every verb that prints wrote with `println!`, which panicked (exit 101, \"failed printing to stdout\") on a full disk or `> /dev/full`, and `--help`/`--version` exited 0 with the output lost." The diff must be re-hashed.
+- **Why deferred:** a Minor of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-m2-companion-line-stale` — the `mk-output-sink` entry's Companions line is stale (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` M2.
+- **Where:** `design/FIX_mk_output_sink.md` L380 (the `mk-output-sink` entry).
+- **What:** "**Companions:** the same rule for ms and md, after their triage (coordinator brief)" is stale: ms has `ms-output-sink` and md has `fix/md-output-sink`; the file and CLAUDE.md use the singular `Companion:`. Suggested: "- **Companion:** toolkit `design/FOLLOWUPS.md::mk-manual-when-stdout-fails` (FIX section 8, S1 ruled). The same rule: mnemonic-secret `design/FOLLOWUPS.md::ms-output-sink`, descriptor-mnemonic `md-output-sink`."
+- **Why deferred:** a Minor of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-m3-codec-doc-comment-entry-form` — the `mk-codec-doc-comment-exit` entry has a wrong id, plain fields, an unknown tier and an ambiguous owner (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` M3.
+- **Where:** `design/FIX_mk_output_sink.md` L390-396 (`mk-codec-doc-comment-exit`).
+- **What:** the id says mk-codec but the comment is in mk-cli `error.rs:22`; the fields are not bold, unlike the FOLLOWUPS.md template; `Tier: mk` is in no tier vocabulary; "Owner: the next mk-cli cycle" reads as 0.15.0-dev, the cycle this PR opens. Suggested: id `mk-cli-codec-doc-comment-exit`, bold fields, "**Owner:** the first mk-cli change after this one that touches `error.rs`. **Tier:** `v1+`."
+- **Why deferred:** a Minor of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-m4-manual-entry-progress-note` — "`mk-manual-exit-table-0-14` is being filed" is a progress note about an entry that does not exist (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` M4.
+- **Where:** `design/FIX_mk_output_sink.md` L715 (L710 cites toolkit 47baf6f2; the cite holds at f1388e8c).
+- **What:** the toolkit entry does not exist at toolkit f1388e8c, and the line will go stale. Drop "is being filed", or name who files it.
+- **Why deferred:** a Minor of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-m5-scan-row-gated-linux` — `only_out_rs_names_stdout`, a pure source scan, does not run off Linux (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` M5.
+- **Where:** `crates/mk-cli/tests/output_errors.rs` (rows block).
+- **What:** the whole file is `cfg(target_os = "linux")`, so the scan does not run on the macOS or Windows legs. Gate the file per test instead, leaving the scan ungated.
+- **Why deferred:** a Minor of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-n1-release-yml-sigpipe-comment` — a `release.yml` comment says `--help` dies of SIGPIPE, false once the fix lands (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` N1.
+- **Where:** `.github/workflows/release.yml` L225-227.
+- **What:** the comment "the still-writing `--help` dies of SIGPIPE" will be false once this lands. The code is still right; fix it when `.github/` is next touched.
+- **Why deferred:** a Nit of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-n2-section8-version-missing` — section 8's sentence "from a verb or `--help`" leaves out `--version` (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` N2.
+- **Where:** `design/FIX_mk_output_sink.md` section 8.
+- **What:** `--version` behaves the same as `--help` (matrix).
+- **Why deferred:** a Nit of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-n3-closed-fd1-not-stated` — `>&-` (a closed fd 1) is not stated anywhere (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` N3.
+- **Where:** `design/FIX_mk_output_sink.md` (matrix b3).
+- **What:** Rust's runtime reopens a closed fd 1 on `/dev/null`, so every verb exits 0 with the output gone. No write error is visible, so the rule cannot reach it; the document does not say so.
+- **Why deferred:** a Nit of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-n4-gen-mk-vectors-eprintln` — `gen_mk_vectors.rs` uses std `eprintln!` (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` N4.
+- **Where:** `crates/mk-codec/src/bin/gen_mk_vectors.rs` L1435, L1454.
+- **What:** a dev binary, not `mk`, so out of scope of the rule; recorded.
+- **Why deferred:** a Nit of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
+### `mk-output-sink-fix-r1-n5-scan-misses-raw-stdout` — `only_out_rs_names_stdout` matches `stdout(` only (`deferred-minor`)
+
+- **Surfaced:** coordinator `agent-reports/review-fix-mk-output-sink-r1.md` N5.
+- **Where:** `crates/mk-cli/tests/output_errors.rs` `only_out_rs_names_stdout`.
+- **What:** `libc::write(1, ...)` or a `let f = std::io::stdout;` binding would slip past the scan (theoretical).
+- **Why deferred:** a Nit of the R1 review, filed and not fixed.
+- **Status:** `deferred-minor`. **Owner:** `mk-output-sink-followups`. **Tier:** `v1+`.
+
 ### `vendor-freshness-shared` — one shared vendor-freshness gate for five repos
 
 - **Spec:** mnemonic-toolkit `design/SPEC_vendor_freshness_shared.md`.
