@@ -27,3 +27,12 @@ Counts: Critical 0, Important 1 (the STOP), Minor 0.
 Ruling (coordinator brief build-fix-output-sink-finish.md): the local gate script is run by hand and by no CI step, so it is listed in `ci/code-docs-exempt.txt`, following that file's own precedent. Commit 6c4ea3d appends the ruled entry (that file alone; the script, the document and `.github/` are untouched).
 Check commands (logs f-*.log under /scratch/cache/build-fix-output-sink/mk/): `sha256sum --check --strict ci/shared-ci.sha256` rc 0; `bash ci/code-docs-check.test.sh` rc 0; `bash ci/code-docs-check.sh` rc 0 (98 files scanned); `bash ci/docs-only.test.sh` rc 0.
 The STOP above is closed. All other results above are from the first builder's logs. The draft PR is open (see the PR for its number); it names toolkit companion PR bg002h/mnemonic-toolkit#158 (merged, toolkit master 67470572) and does not merge before it.
+
+## Whole-diff fold (2026-11-13)
+Start head e6d533f4. Folded: the access-mode-3 port of the ms fix, and the s2 review's I1.
+- Port: RED e47c538 `no_access_mode_stdout_exits_1_with_the_line`: `1 test run: 0 passed, 1 failed, 199 skipped` (left: Some(0), right: Some(1)). GREEN 8f361b2 (probe `!matches!(fl & libc::O_ACCMODE, libc::O_WRONLY | libc::O_RDWR)`, doc comment): `1 test run: 1 passed, 199 skipped`.
+- I1 b8f2131 `read_write_stdout_keeps_the_output_and_exits_0` (row verbatim from the report): RED on a scratch plant (the probe with `| libc::O_RDWR` removed, reverted, never committed): `1 test run: 0 passed, 1 failed`, left: Some(1), right: Some(0); GREEN on the head: `1 test run: 1 passed, 200 skipped`.
+- Filed c242666 (deferred-minor, owner mk-output-sink-followups): `mk-output-sink-wd-m1-flush-unpinned`, `-m2-closed-early-return-unpinned`, `-m3-sigxfsz-file-size-limit` (run here: `ulimit -f 1; mk gui-schema > file` exits 153, so it holds), `-n1-advisory-after-failed-stdout` (s1 Nit 1). Not filed: s2 N1 (already filed), s1 Nit 2.
+- Gate (logs /scratch/cache/fold-output-sink-accmode/mk/logs/): rc 0 for nextest (408 tests run: 408 passed; was 406), doc tests, `cargo +1.95.0 fmt --check --all`, clippy `--workspace --all-targets -D warnings`, rows file (9 tests run: 9 passed; was 7), `ci/code-docs-check.sh` (98 files scanned), freebsd `cargo check --target x86_64-unknown-freebsd -p mk-cli`.
+- The FIX document (counts 7 / 406) and its gate script are unedited; they predate these rows.
+- STOPs: none.
