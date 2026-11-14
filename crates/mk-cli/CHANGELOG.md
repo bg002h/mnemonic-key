@@ -9,6 +9,8 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-14
+
 Next release: 0.15.0
 
 ### Changed
