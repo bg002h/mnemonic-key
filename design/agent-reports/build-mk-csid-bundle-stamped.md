@@ -1,4 +1,4 @@
-**⚠ Important: the new CHANGELOG entry fails the existing test `version_is_honest` (needs a -dev version bump the brief forbids); not pushed. See STOP.**
+**Resolved by the Follow-on below: the STOP (Important) was cured by the 0.16.0-dev bump; no open Critical or Important.**
 
 # Build report: mk FU1, bundle-stamped chunk-set id stays silent (Option A)
 
@@ -46,3 +46,14 @@ Cause: the brief's required CHANGELOG entry under `[Unreleased]` while the crate
 
 **⚠ Important: 1 (above)**
 Counts: Critical 0, Important 1, Minor 1 (contract 4 wording)
+
+## Follow-on (version bump, re-gate, push, draft PR)
+- Model: Claude Sonnet 5.5, claude-sonnet-5-5. Base 89192ac706e0dc6d5a4c68f83a56ccc4ecf5d904 (origin/main unmoved before and after the push). PR: #26 (draft), https://github.com/bg002h/mnemonic-key/pull/26
+- Bump commit a5d6f1e2acffd00f3f044948de63c98565fabcfb: mk-cli 0.16.0-dev; Cargo.lock diff is the one mk-cli version line.
+- Beyond the brief: the first re-gate still failed `version_is_honest` ("`## [Unreleased]` does not name 0.16.0 as the next release"). The test and precedent 2f05088 require a `Next release: 0.16.0` line under `[Unreleased]`; I added exactly that line to `crates/mk-cli/CHANGELOG.md` and amended it into the bump commit (never pushed before). The brief did not mention it; the coordinator may check it.
+- Gate on the bump head (logs /scratch/cache/mk-csid-logs/fu2/): build rc 0; `cargo nextest run --workspace --no-fail-fast` 415 run, 415 passed; locked release.yml form 415 run, 415 passed; doc-tests both forms rc 0; clippy -D warnings rc 0; docs-only.test, shared-ci sha, code-docs-check, vector checksum, `cargo +1.95.0 fmt --check` rc 0; vectors-roundtrip ok; FreeBSD `cargo check` rc 0.
+- NOT RUN: as above (musl, macOS/Windows, release.yml build matrix, stable/beta legs, fuzz-smoke, vendor-freshness, mutation gate).
+- SPEC contract 4 wording stands for the diff review.
+- STOPs: none.
+
+Counts: Critical 0, Important 0, Minor 1 (contract 4 wording)
