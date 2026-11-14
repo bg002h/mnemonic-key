@@ -81,7 +81,7 @@ pub fn run(args: AddressArgs) -> Result<u8> {
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
-    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
 
     let addr_type = resolve_address_type(&card.origin_path, args.address_type)?;
     let network = resolve_network(&card.xpub, args.network)?;

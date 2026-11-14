@@ -9,6 +9,12 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+Next release: 0.16.0
+
+### Changed
+
+- **A card made by `mnemonic bundle` no longer warns about its chunk-set id.** Its id is the bundle id (the first policy-id stub's leading 20 bits XOR the cosigner slot, 0-31), not one derived from its content; `mk decode`, `inspect`, `verify`, `derive`, `address` and `repair` now stay silent on it, and `mk verify --json` gains `chunk_set_id.bundle_stamped`. Re-minting such a card is not needed.
+
 ## [0.15.0] — 2026-11-14
 
 Next release: 0.15.0

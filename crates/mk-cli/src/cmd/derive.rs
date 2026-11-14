@@ -51,7 +51,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
-    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,

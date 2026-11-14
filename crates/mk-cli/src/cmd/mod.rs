@@ -136,17 +136,41 @@ pub fn chunk_set_id_mismatch_warning(declared: u32, derived: u32) -> String {
     )
 }
 
+/// One past the highest cosigner slot a bundle can stamp: md1 holds at most
+/// 32 keys (md-codec `KeyCountOutOfRange` outside `1..=32`), so slots are
+/// `0..=31` and the XOR touches the low five bits only.
+const BUNDLE_SLOT_LIMIT: u32 = 32;
+
+/// `true` when `declared` is the toolkit's bundle id for `card` (BIP "Note
+/// (toolkit slot-XOR)"): the leading 20 bits of the card's FIRST
+/// policy_id_stub, XOR a cosigner slot below [`BUNDLE_SLOT_LIMIT`].
+/// `mnemonic bundle` stamps that id on purpose, so it is not a mismatch to
+/// warn about.
+pub fn is_bundle_stamped(declared: u32, card: &mk_codec::KeyCard) -> bool {
+    let Some(s) = card.policy_id_stubs.first() else {
+        return false;
+    };
+    let base = ((s[0] as u32) << 12) | ((s[1] as u32) << 4) | ((s[2] as u32) >> 4);
+    (declared ^ base) < BUNDLE_SLOT_LIMIT
+}
+
+/// `true` when a (declared, derived) pair should be reported: they differ
+/// and the declared id is not the card's bundle id.
+pub fn chunk_set_id_warns(declared: u32, derived: u32, card: &mk_codec::KeyCard) -> bool {
+    declared != derived && !is_bundle_stamped(declared, card)
+}
+
 /// Emit the R2 stderr warning for a precomputed `chunk_set_id_comparison`
-/// result. A no-op on a match, or on `None` (single-string input, or a
-/// re-encode that could not be computed).
+/// result. A no-op on a match, on a bundle-stamped id, or on `None`
+/// (single-string input, or a re-encode that could not be computed).
 ///
 /// Independently deletable per verb (P1 mutation gate): each call site
 /// below is this one line, seated at that verb's own decode call, per
 /// plan P1 -- NOT centralized in `read_mk1_strings`, which only reads
 /// strings and never decodes.
-pub fn warn_chunk_set_id_mismatch(comparison: Option<(u32, u32)>) {
+pub fn warn_chunk_set_id_mismatch(comparison: Option<(u32, u32)>, card: &mk_codec::KeyCard) {
     if let Some((declared, derived)) = comparison {
-        if declared != derived {
+        if chunk_set_id_warns(declared, derived, card) {
             eprintln!("{}", chunk_set_id_mismatch_warning(declared, derived));
         }
     }

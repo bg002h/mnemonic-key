@@ -42,7 +42,7 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only. Per
     // plan P1, seated here at this verb's own decode call -- deleting this
     // one line is the P1 mutation gate for `decode`.
-    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card));
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
     // Diagnostics followup `mk-decode-silent-correction-reporting`: same
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).

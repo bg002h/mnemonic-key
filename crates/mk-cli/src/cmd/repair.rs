@@ -226,7 +226,7 @@ pub fn run(args: RepairArgs) -> Result<u8> {
             continue;
         };
         if let Some(derived) = crate::cmd::derived_chunk_set_id(card) {
-            if derived != *declared {
+            if crate::cmd::chunk_set_id_warns(*declared, derived, card) {
                 eprintln!(
                     "{} This id was set when the card was minted; the repair did not change it.",
                     crate::cmd::chunk_set_id_mismatch_warning(*declared, derived)
