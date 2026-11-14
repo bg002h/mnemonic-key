@@ -68,7 +68,7 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     // the other four read verbs, AND report the pair on `emit_ok`'s own
     // stdout verdict / `--json` envelope below (contract 4 -- BOTH modes).
     let csid = chunk_set_id_comparison(&strings, &card);
-    warn_chunk_set_id_mismatch(csid);
+    warn_chunk_set_id_mismatch(csid, &card);
     // Diagnostics followup `mk-decode-silent-correction-reporting`: same
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).
@@ -220,6 +220,7 @@ fn emit_ok(
                 "declared": format!("{declared:05x}"),
                 "derived": format!("{derived:05x}"),
                 "matches": declared == derived,
+                "bundle_stamped": crate::cmd::is_bundle_stamped(declared, card),
             });
         }
         let s = serde_json::to_string(&envelope)
@@ -234,7 +235,7 @@ fn emit_ok(
         // STDOUT too (not just the stderr R2 warning above) -- same frozen
         // content (R6), so a consumer reading only stdout still sees it.
         if let Some((declared, derived)) = csid {
-            if declared != derived {
+            if crate::cmd::chunk_set_id_warns(declared, derived, card) {
                 println!(
                     "{}",
                     crate::cmd::chunk_set_id_mismatch_warning(declared, derived)

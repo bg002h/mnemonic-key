@@ -770,3 +770,11 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - N-2: the advisory does not say how a policy card of several md1 strings is pasted (unquoted, space-separated).
 - Owner: the next mk-cli cycle.
 - Status: `deferred-minor`.
+
+### `mk-chunk-set-id-bundle-stamped` — the chunk-set-id warning fires on every card `mnemonic bundle` makes (Important; toolkit FU1 companion)
+
+- Surfaced: toolkit design/agent-reports/architect-pins-md-0.20.6-mk-0.15.0-stops.md S4/FU1; graded 2026-11-14, coordinator agent-reports/grade-mk-chunk-set-id-bundle.md.
+- Where: crates/mk-cli/src/cmd/mod.rs:128-150 and its callers (decode, inspect, verify text+stdout, derive, address, repair blessed path).
+- What: the toolkit stamps each mk1 card with the leading 20 bits of its first policy_id_stub XOR the cosigner slot (bip :327); slots run 0..=31 (md1 caps keys at 32; a 32-key descriptor bundle mints slot 31). mk warns on every such card and advises a re-mint; a re-minted `--md1-form template` card then fails `verify-bundle` mk1_template_stub_bind (rc 4). Fix: no warning when `declared ^ top20(stubs[0]) < 32` silent (Option A, Brian 2026-11-14); `mk verify --json` gains `chunk_set_id.bundle_stamped`. Fix texts and RED rows: the grade report.
+- Companion: descriptor-mnemonic md-cli seat_notes (seat/input.rs:605) needs the same predicate (its own FOLLOWUPS entry).
+- Status: `fixed in this PR`. Tier: `cross-repo`. Owner: the next mk-cli release; the next toolkit mk pin waits for it.

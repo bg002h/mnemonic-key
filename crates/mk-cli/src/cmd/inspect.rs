@@ -50,7 +50,7 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     // contract 3: the stamped id prints unconditionally in text mode below
     // (matched or not), so the warning's value has a cross-check surface.
     let csid = chunk_set_id_comparison(&strings, &card);
-    warn_chunk_set_id_mismatch(csid);
+    warn_chunk_set_id_mismatch(csid, &card);
     let declared_csid = csid.map(|(declared, _)| declared);
 
     let per_chunk_variants: Vec<&str> = strings.iter().map(|s| classify_code_variant(s)).collect();

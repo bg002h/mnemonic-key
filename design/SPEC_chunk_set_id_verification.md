@@ -135,7 +135,7 @@ know how many physical plates the pieces came from).
    the recompute seats at that chokepoint (or equivalently at each
    verb's decode call) so "every mk surface" is structural, not an
    enumeration that decays (r1 C1). On declared ≠ derived, chunked
-   input only: **one warning per mismatching group, in the surface's
+   input only — except a bundle-stamped id: one whose XOR with the leading 20 bits of the card's first policy_id_stub is below 32 (bip :327; pinned by `tests/csid_bundle_stamped.rs`), which is silent — **one warning per mismatching group, in the surface's
    existing group order** (r4 L2-M2 — repair and md seat are batch-
    capable; the other verbs decode one card). Exit unchanged. Draft:
    > `warning: this key card's stamped chunk-set id (12345) was not derived from its content, which computes ef12f. The card decodes fine, but diagnostics that name plates by id will call it 12345. To fix it, re-mint: run mk encode again without --chunk-set-id and the id is derived from the key data automatically.` (Wording per operator walk W13.)
@@ -160,7 +160,8 @@ know how many physical plates the pieces came from).
 4. **`mk verify`:** text mode reports the mismatch in verify's own
    stdout format (content: the pair + remedy). `--json` gains an
    optional additive field
-   `"chunk_set_id": {"declared": "12345", "derived": "ef12f", "matches": false}`;
+   `"chunk_set_id": {"declared": "12345", "derived": "ef12f", "matches": false, "bundle_stamped": false}`
+   (`bundle_stamped` is true when the stamped id is a bundle-stamped id as in contract 2; `matches` keeps its literal meaning);
    verify's integer `schema_version` stays `1` (additive field, absent
    for single-string input). Still non-fatal. No `--strict` this cycle.
    **All OTHER JSON envelopes are UNCHANGED this cycle (r4 L2-I3):**
