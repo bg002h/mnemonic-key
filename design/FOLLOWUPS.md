@@ -778,3 +778,10 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - What: the toolkit stamps each mk1 card with the leading 20 bits of its first policy_id_stub XOR the cosigner slot (bip :327); slots run 0..=31 (md1 caps keys at 32; a 32-key descriptor bundle mints slot 31). mk warns on every such card and advises a re-mint; a re-minted `--md1-form template` card then fails `verify-bundle` mk1_template_stub_bind (rc 4). Fix: no warning when `declared ^ top20(stubs[0]) < 32` silent (Option A, Brian 2026-11-14); `mk verify --json` gains `chunk_set_id.bundle_stamped`. Fix texts and RED rows: the grade report.
 - Companion: descriptor-mnemonic md-cli seat_notes (seat/input.rs:605) needs the same predicate (its own FOLLOWUPS entry).
 - Status: `fixed in this PR`. Tier: `cross-repo`. Owner: the next mk-cli release; the next toolkit mk pin waits for it.
+
+### `mk-csid-bundle-review-minors` — Minor and Nits from the whole-diff review of mk#26
+
+- Surfaced: 2026-11-14, design/agent-reports/review-mk-csid-bundle-stamped.md (M1, N1-N3).
+- What: M1 (Minor): `crates/mk-cli/src/cmd/mod.rs:149` "only the FIRST stub counts" is untested (`.first()` -> `.last()` passes 208/208); add a 2-stub multi-chunk card stamped from stub A's top 20 XOR 3 asserting silent, and one stamped from stub B's top 20 asserting the warning. N1 (Nit): the no-stub `return false` branch is unreachable from a decodable card (mk-codec rejects empty stubs); keep as defensive. N2 (Nit): SPEC contract 2 (~:138) exception clause reads as if the bold "one warning per mismatching group" were the silent case; end the exception with a full stop and start "On any other mismatch: **one warning per mismatching group, ...**". N3 (Nit): BIP note "SHOULD NOT warn" could read "MAY omit the warning"; not required.
+- Owner: the next mk-cli cycle.
+- Status: `deferred-minor`. Tier: `ownerless`.
