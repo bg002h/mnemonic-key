@@ -234,3 +234,20 @@ fn out_of_range_count_and_range_are_usage_error_not_panic() {
     let big_range = run(&c, &["--range", "2147483648,2147483648"]);
     assert_eq!(code(&big_range), 64, "{}", stderr(&big_range));
 }
+
+#[test]
+fn multisig_advisory_prints_the_md_address_route() {
+    let c = card(V1_48_MULTISIG, "m/48'/0'/0'/2'");
+    let o = run(&c, &[]);
+    assert_eq!(code(&o), 64, "{}", stderr(&o));
+    let err = stderr(&o);
+    let last = err
+        .split('`')
+        .enumerate()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, s)| s)
+        .last()
+        .expect("the advisory prints a backticked command");
+    assert_eq!(last, "md address <MD1>... --from-mk1-file FILE", "{err}");
+    assert!(!err.contains("mnemonic verify-bundle"), "{err}");
+}
