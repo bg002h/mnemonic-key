@@ -738,6 +738,7 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - **Surfaced:** 2026-11-13, crash sweep (architect `agent-reports/architect-crash-sweep-exit-sets.md` Q5); graded in coordinator `agent-reports/grade-mk-crash-sweep-1.md` Q3.
 - **Where:** `crates/mk-cli/src/cmd/address.rs:256-290` (`emit_text`, `emit_json` take every row at once); the cap's doc comment `address.rs:200-202` and `tests/bughunt.rs:85-89` ("never a multi-gigabyte allocation").
 - **What:** every row is built before any is printed; in `--json` each becomes a `serde_json::Value` map, about 21 times the output size. Measured (debug, bip84 card): `--count 1000000 --json` 1,765 MB peak, 81.9 MB stdout; `--range 0,999999 --chain both --json` 3,522 MB peak, 163.8 MB stdout, 62.9 s; the latter under `prlimit --as=2G` aborts after 59.8 s (rc 134, no stdout, stderr only "memory allocation of 632 bytes failed"). Text mode also collects (100 MB at 1,000,000). Fails closed (no output, no wrong data); needs a near-cap `--json` request and a machine with less free memory than about 1.8 GB per million rows.
+- **Measured, p2tr (grade-md-mk-remedies §9, 2026-11-13):** `mk address` 1,000,000 rows, `--chain both`, p2tr, `--json`: 119 s, 3,650 MB peak. Same cause (every row collected first) and same class; Minor, deferred to the address migration.
 - **Owed:** the toolkit's `address` (the migration, verb placement 2026-11-01) writes each row as it is derived, text and JSON alike (the JSON envelope's `addresses` array streamed), with the cap's doc comment true. RED row: `address --range 0,999999 --chain both --json` under `prlimit --as=1G` exits 0 with 2,000,000 rows; it fails on the mk 2fc367c5 code (rc 134, measured at 2G).
 - **Status:** `deferred-minor`. **Owner:** the `address` move to the toolkit. **Tier:** `v1+`.
 
@@ -746,3 +747,26 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - Surfaced: coordinator `agent-reports/architect-crash-sweep-exit-sets.md` Q4 E5.
 - What: `crates/mk-cli/src/error.rs` L22 "Exit 2 (or 3 for `UnsupportedVersion`)" -> "Exit 1 (or 3 for `UnsupportedVersion`); `mk repair` exits 2 from its own bypass". `exit_code` L126 is 1 since 0.14.0.
 - Owner: the next mk-cli cycle.
+
+### `policy-id-stub-256-refused` — 256 or more policy id stubs are refused with "policy_id_stub_count must be >= 1" (`deferred-minor`)
+
+- Surfaced: 2026-11-13, coordinator `agent-reports/grade-md-mk-remedies.md` §7 candidate 1 (Minor, confirmed).
+- What: 255 stubs give rc 0, 256 give rc 1 with "policy_id_stub_count must be >= 1". The refusal fails closed and names the field. Needs 256+ policies on one key and a bulk input. The fix is not cheap at the codec: the string is in the v0.1 vector corpus (`v0.1.json:616`, `gen_mk_vectors.rs:813`).
+- Owed (CLI side, for later): refuse earlier with `at most 255 policy ids fit on one mk1 card (--policy-id-stub and --from-md1 together); got {n}`, exit 64.
+- Status: `deferred-minor`.
+
+### `mk-mutants-audit-owed` — one cargo-mutants audit of mk-codec and mk-cli is owed (grade STOP 2)
+
+- Surfaced: 2026-11-13, coordinator `agent-reports/grade-md-mk-remedies.md` §8 STOP 2.
+- What: one cargo-mutants audit of mk-codec and mk-cli, dispatched on its own after the mk remedies job. It does not gate that job.
+- Status: `open`.
+
+### `mk-remedies-review-minors` — Minors and Nits of the mk-remedies diff review (`deferred-minor`)
+
+- Surfaced: 2026-11-13, coordinator `agent-reports/review-mk-remedies-diff.md` (0 C / 1 I / 2 M / 2 N; the Important, I-1, is fixed on this branch).
+- M-1: `design/SPEC_mk_derive_address.md` §6 Non-goals still reads "`mk address` refuses multisig-path cards (descriptor tooling's job)"; reword to name the route, "(use `md address <MD1>... --from-mk1-file FILE`)".
+- M-2: the mutation gate on this change tested nothing viable (1 mutant, unviable; cargo-mutants never edits the words of a string). The advisory text is covered by the row `multisig_advisory_prints_the_md_address_route` (three plants caught) and by the reviewer's executed table, not by the gate.
+- N-1: the entries `policy-id-stub-256-refused` and `mk-mutants-audit-owed` have no Owner or Tier line.
+- N-2: the advisory does not say how a policy card of several md1 strings is pasted (unquoted, space-separated).
+- Owner: the next mk-cli cycle.
+- Status: `deferred-minor`.
