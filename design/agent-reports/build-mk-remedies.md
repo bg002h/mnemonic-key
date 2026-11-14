@@ -2,7 +2,7 @@
 
 - Base: origin/main cea6c70bc940616aa302a33efff253932113ace4 (did not move before the build).
 - Branch: fix/mk-remedies. Head: see the PR and the final commit (this report is the last commit).
-- PR: filled in below after the push.
+- PR: https://github.com/bg002h/mnemonic-key/pull/25 (draft)
 
 ## RED
 Row `multisig_advisory_prints_the_md_address_route` (crates/mk-cli/tests/cli_address.rs), run on the unmodified base:
