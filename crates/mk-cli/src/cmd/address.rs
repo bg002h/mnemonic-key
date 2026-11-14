@@ -150,7 +150,8 @@ fn resolve_address_type(
              addresses would not match the wallet. Derive the wallet's addresses from its md1 \
              policy card and every cosigner's mk1 card: `md address <MD1>... --from-mk1-file \
              FILE`, where <MD1>... is the policy card and FILE holds the cosigners' mk1 \
-             strings, one per line"
+             strings, one per line. If md refuses to seat the cards, it prints why and how to \
+             fix it: follow that and run the command again"
         ))),
         inference => {
             if let Some(t) = explicit {

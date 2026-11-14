@@ -760,3 +760,13 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - Surfaced: 2026-11-13, coordinator `agent-reports/grade-md-mk-remedies.md` §8 STOP 2.
 - What: one cargo-mutants audit of mk-codec and mk-cli, dispatched on its own after the mk remedies job. It does not gate that job.
 - Status: `open`.
+
+### `mk-remedies-review-minors` — Minors and Nits of the mk-remedies diff review (`deferred-minor`)
+
+- Surfaced: 2026-11-13, coordinator `agent-reports/review-mk-remedies-diff.md` (0 C / 1 I / 2 M / 2 N; the Important, I-1, is fixed on this branch).
+- M-1: `design/SPEC_mk_derive_address.md` §6 Non-goals still reads "`mk address` refuses multisig-path cards (descriptor tooling's job)"; reword to name the route, "(use `md address <MD1>... --from-mk1-file FILE`)".
+- M-2: the mutation gate on this change tested nothing viable (1 mutant, unviable; cargo-mutants never edits the words of a string). The advisory text is covered by the row `multisig_advisory_prints_the_md_address_route` (three plants caught) and by the reviewer's executed table, not by the gate.
+- N-1: the entries `policy-id-stub-256-refused` and `mk-mutants-audit-owed` have no Owner or Tier line.
+- N-2: the advisory does not say how a policy card of several md1 strings is pasted (unquoted, space-separated).
+- Owner: the next mk-cli cycle.
+- Status: `deferred-minor`.
