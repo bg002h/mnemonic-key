@@ -24,6 +24,14 @@ Next release: 0.15.0
   SIGPIPE does not exist, this removes the closed-pipe panic.
   `tests/output_errors.rs`.
 
+- **The multisig refusal of `mk address` now prints a command that runs.** The
+  refusal for a BIP-48/BIP-87 cosigner card pointed at
+  `mnemonic verify-bundle`, which exits 64 as printed and does not derive
+  addresses. It now says to derive the wallet's addresses from its md1 policy
+  card and every cosigner's mk1 card with
+  `md address <MD1>... --from-mk1-file FILE`. Text only: the refusal and its
+  exit code (64) are unchanged. `tests/cli_address.rs`.
+
 ## [0.14.0] — 2026-11-04
 
 ### Added — chunk_set_id verification and correction reporting (2026-08-31)

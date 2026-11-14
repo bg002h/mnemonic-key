@@ -147,8 +147,10 @@ fn resolve_address_type(
     match infer_address_type(origin_path) {
         AddressTypeInference::Multisig => Err(CliError::UsageError(format!(
             "card origin {origin_path} is a multisig cosigner xpub (BIP-48/BIP-87); single-key \
-             addresses would not match the wallet. Use descriptor tooling for multisig address \
-             derivation (e.g. `mnemonic verify-bundle`)"
+             addresses would not match the wallet. Derive the wallet's addresses from its md1 \
+             policy card and every cosigner's mk1 card: `md address <MD1>... --from-mk1-file \
+             FILE`, where <MD1>... is the policy card and FILE holds the cosigners' mk1 \
+             strings, one per line"
         ))),
         inference => {
             if let Some(t) = explicit {
