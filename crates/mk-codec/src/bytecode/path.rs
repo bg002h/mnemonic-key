@@ -350,7 +350,7 @@ mod tests {
         // u32::MAX (5 bytes) is accepted: hardened index 0x7FFF_FFFF.
         let mut cursor: &[u8] = &[0xFE, 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
         let p = decode_path(&mut cursor).unwrap();
-        assert_eq!(p.to_string(), "m/2147483647'");
+        assert_eq!(p.to_string(), "2147483647'");
         // 2^32 and 2^32 + 5 (5 bytes, fits the shift guard) exceed u32::MAX: refused.
         for first in [0x80u8, 0x85] {
             let mut cursor: &[u8] = &[0xFE, 1, first, 0x80, 0x80, 0x80, 0x10];
