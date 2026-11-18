@@ -294,3 +294,27 @@ fn from_md1_set_bad_path_names_the_flag() {
     );
     assert!(stderr.contains("--from-md1-set"), "got {stderr:?}");
 }
+
+/// A COMPLETE keyed policy (two keys, `n == 2`) must refuse an xpub that is not
+/// one of its cosigners: exit 64 naming "is not a cosigner". (BIP-32 test
+/// vector 1 master key, a real xpub that is not in the fixture.)
+#[test]
+fn encode_from_complete_keyed_md1_refuses_non_member_xpub() {
+    const OTHER_XPUB: &str = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8";
+    let out = mk()
+        .args([
+            "encode",
+            "--xpub",
+            OTHER_XPUB,
+            "--origin-fingerprint",
+            "3442193e",
+            "--origin-path",
+            "m",
+        ])
+        .args(repeated(&KEYED_POLICY_A))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(64), "got {stderr:?}");
+    assert!(stderr.contains("is not a cosigner"), "got {stderr:?}");
+}
