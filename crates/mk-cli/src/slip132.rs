@@ -307,5 +307,14 @@ mod tests {
             !Slip132Variant::ZpubMultisig.path_matches(&path("m/48'/0'/0'")),
             "ZpubMultisig must NOT match short path m/48'/0'/0' (no script-type component)"
         );
+        // Multisig needs BOTH purpose 48' AND the script-type index (&&, not ||)
+        assert!(
+            !Slip132Variant::YpubMultisig.path_matches(&path("m/48'/0'/0'/2'")),
+            "YpubMultisig must NOT match m/48'/0'/0'/2'"
+        );
+        assert!(
+            !Slip132Variant::YpubMultisig.path_matches(&path("m/84'/0'/0'/1'")),
+            "YpubMultisig must NOT match m/84'/0'/0'/1'"
+        );
     }
 }

@@ -484,3 +484,50 @@ fn repair_json_envelope_shape() {
     // restored char. They MUST differ.
     assert_ne!(p0["was"], p0["now"], "was != now for a real correction");
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Single-string group re-verify (baseline GAP-B, repair.rs
+// `group_is_complete_and_consistent` SingleString arm).
+//
+// A valid single-string mk1 cannot carry a real xpub (65 bytes > the 56-byte
+// single-string cap), so the reachable single-string verdict is Reject: a
+// BCH-valid single string whose bytecode does not decode. After a 1-char
+// correction the group is complete (1 member) and MUST be re-decoded and
+// refused (exit 2, SetReassemblyMismatch), not emitted as an UNVERIFIED
+// candidate (exit 5).
+// ──────────────────────────────────────────────────────────────────────────
+#[test]
+fn repair_corrected_single_string_that_fails_decode_exits_2() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+
+    let header = StringLayerHeader::SingleString {
+        version: VERSION_V0_1,
+    };
+    let mut data_5bit = header.to_5bit_symbols();
+    data_5bit.extend(bytes_to_5bit(&[0xFF; 10])); // not a valid mk1 bytecode
+    let valid = encode_5bit_to_string(&data_5bit).expect("encode single string");
+    assert!(
+        mk_codec::decode(&[valid.as_str()]).is_err(),
+        "precondition: the BCH-valid single string must fail mk_codec::decode"
+    );
+    let corrupted = flip_at(&valid, 5);
+
+    let out = Command::cargo_bin("mk")
+        .expect("mk binary")
+        .args(["repair", &corrupted])
+        .output()
+        .expect("invoke mk repair");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.stdout.is_empty(),
+        "a Reject suppresses all output; got {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
