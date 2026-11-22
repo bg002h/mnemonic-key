@@ -2,6 +2,11 @@
 
 Model: Claude Opus 5.5 (claude-opus-5-5), 2026-11-22. Author of this FIX document (not the coordinator).
 Base: `origin/main` 434d789 (mk-cli 0.16.0). Branch `fix/single-print`.
+Folded for review r1 (`coordinator/agent-reports/review-fix-single-print-r1.md`; fold model Claude Sonnet 5.5,
+claude-sonnet-5-5, 2026-11-22): I-3 (section 8a: this doc owns the one-place toolkit gui-manual text, no FIX owns
+mk's alone), I-4 (section 8: landing order; section 8a-bis: the `{#installer-ahead}` replacement text), M-3 (the
+six `--in` help lines, section 3). `origin/main` has since moved to 3755d47 (a FOLLOWUPS line only; the section 3/5
+diffs and `single_print.rs` still apply clean and pass).
 
 ## 0. Ruling and scope
 
@@ -256,7 +261,88 @@ index 83effff..2da5ece 100644
  /// Parse `--separator`: the keyword `space`, or the literal `" "`.
  ///
  /// **`hyphen` and `comma` were removed (SPEC §6c: whitespace only, everywhere).**
+diff --git i/crates/mk-cli/src/cmd/address.rs w/crates/mk-cli/src/cmd/address.rs
+index 1df0b2e..0b15c94 100644
+--- i/crates/mk-cli/src/cmd/address.rs
++++ w/crates/mk-cli/src/cmd/address.rs
+@@ -25,7 +25,7 @@ pub struct AddressArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
+diff --git i/crates/mk-cli/src/cmd/decode.rs w/crates/mk-cli/src/cmd/decode.rs
+index 75b68aa..0cc2f74 100644
+--- i/crates/mk-cli/src/cmd/decode.rs
++++ w/crates/mk-cli/src/cmd/decode.rs
+@@ -25,7 +25,7 @@ pub struct DecodeArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
+diff --git i/crates/mk-cli/src/cmd/derive.rs w/crates/mk-cli/src/cmd/derive.rs
+index c5f3b54..9aef518 100644
+--- i/crates/mk-cli/src/cmd/derive.rs
++++ w/crates/mk-cli/src/cmd/derive.rs
+@@ -28,7 +28,7 @@ pub struct DeriveArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
+diff --git i/crates/mk-cli/src/cmd/inspect.rs w/crates/mk-cli/src/cmd/inspect.rs
+index c1fc3bf..4737513 100644
+--- i/crates/mk-cli/src/cmd/inspect.rs
++++ w/crates/mk-cli/src/cmd/inspect.rs
+@@ -32,7 +32,7 @@ pub struct InspectArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
+diff --git i/crates/mk-cli/src/cmd/repair.rs w/crates/mk-cli/src/cmd/repair.rs
+index 87a3b60..815c53b 100644
+--- i/crates/mk-cli/src/cmd/repair.rs
++++ w/crates/mk-cli/src/cmd/repair.rs
+@@ -76,7 +76,7 @@ pub struct RepairArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
+diff --git i/crates/mk-cli/src/cmd/verify.rs w/crates/mk-cli/src/cmd/verify.rs
+index 87b1d61..274fc70 100644
+--- i/crates/mk-cli/src/cmd/verify.rs
++++ w/crates/mk-cli/src/cmd/verify.rs
+@@ -28,7 +28,7 @@ pub struct VerifyArgs {
+ 
+     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
+     /// the positional arguments. Display separators are stripped, so a card
+-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
++    /// transcribed in grouped form re-ingests. SPEC §6b.
+     #[arg(long = "in", value_name = "FILE")]
+     pub in_file: Option<String>,
+ 
 ```
+
+Review r1 M-3 is the last six hunks above: the `--in` help of `mk address`, `decode`, `derive`, `inspect`, `repair`
+and `verify` said "transcribed from the engraving card in grouped form re-ingests"; there is no stderr card now.
 
 ## 4. RED rows
 
@@ -685,7 +771,7 @@ index c48a779..a976cdd 100644
 
 | CI step | command | result |
 |---|---|---|
-| test | `cargo nextest run --locked --workspace --no-fail-fast` (`--build-jobs 6 -j 6`, own target dir) | 424 passed, 0 failed (`/scratch/cache/sp-mk-full2.log`) |
+| test | `cargo nextest run --locked --workspace --no-fail-fast` (`--build-jobs 6 -j 6`, own target dir) | 424 passed, 0 failed (`/scratch/cache/sp-mk-full2.log`; re-run in the fold round on `origin/main` 3755d47 with the M-3 hunks: `/scratch/cache/fold-sp-mk-green.log`, 424 passed, clippy and fmt clean) |
 | doc tests | `cargo test --locked --workspace --doc` | ok |
 | clippy | `cargo clippy --locked --workspace --all-targets -- -D warnings` | clean |
 | fmt | `cargo fmt --all --check` | clean |
@@ -705,7 +791,26 @@ The build re-runs the whole gate on its own commits; this table is the author's 
 
 ## 8. Lockstep
 
-### 8a. Toolkit manual (`mnemonic-toolkit` `docs/manual/src/40-cli-reference/44-mk-cli.md`), lands with the toolkit's mk pin bump
+### 8.0 Landing order (review r1 I-4; replaces steps 3-5 of the author report's "Landing order"; steps 1-2 unchanged)
+
+3. mnemonic-gui: `pinned-upstream.toml` md/ms/mk tags + the schema edits of md 8c, ms 8c, mk 8b; schema-mirror; gui
+   release.
+4. mnemonic-toolkit, ONE commit: bump the md/ms/mk install pins AND the mnemonic-gui install pin to the step-3
+   release, with the toolkit lockstep of all three FIX docs (incl. the I-3 sites in md 8b, ms 8b and below, and
+   `docs/manual-gui/tests/expected_gui_schema_inventory.json`), so `{#installer-ahead}` never names these three
+   releases; the `manual` job incl. doc-flag-lint mutation self-test. The replacement text for the
+   `{#installer-ahead}` section (`82-binary-and-launch.md`) is in section 8a-bis below (one place for all three).
+
+Why: with the toolkit installer ahead of the GUI, the installed GUI's schema still says `default_value: Some("5")`
+for `--group-size` (mk.rs:71); its `is_at_default` (mnemonic-gui `src/form/invocation.rs:96-121`) suppresses a Number
+flag equal to the schema default, so a user who sets 5 sends no `--group-size`, and the new CLI applies 0: unbroken
+output with no message. If the toolkit must land first instead, each FIX doc's toolkit section must carry this
+`{#installer-ahead}` sentence (PROPOSED text, from the review): "On the `md encode`, `md descriptor --emit md1`,
+`ms encode` and `mk encode` forms, this GUI does not send `--group-size 5` (its shown default), and these CLI
+releases print the unbroken string unless `--group-size` is given: to print groups of five, run the CLI with
+`--group-size 5`."
+
+### 8a. Toolkit manual (`mnemonic-toolkit` `docs/manual/src/40-cli-reference/44-mk-cli.md`), lands in step 4 (the toolkit's one commit)
 
 Line 42 (`--out` row) becomes:
 
@@ -732,9 +837,70 @@ watch-only note.", become:
 No flag is added or removed, so `ci/doc-flag-lint.test.sh` and the manual lint's flag-coverage step are unaffected;
 the toolkit's `manual` CI job is the check.
 
-### 8b. mnemonic-gui (`src/schema/mk.rs`, `ENCODE_FLAGS`), lands with the gui's mk pin bump
+### 8a-ter. Toolkit GUI manual, mk page (review r1 I-3), lands in step 4
 
-- `--group-size`: `default_value: Some("0")`; `help: "Group each mk1 string on stdout every N characters, for hand
+`docs/manual-gui/src/70-mk/73-encode.md` (line anchors @cdedd8a2; the gui-manual lints check flag names, outlines and
+CLI pins, not defaults, so nothing else catches these):
+
+- line 31 becomes: "— group each mk1 string on stdout every N characters (default 0 = unbroken)"; line 32 becomes: "—
+  separator keyword for `--group-size` (`space`; default `space`)".
+- line 46: "default `5`" becomes "default `0`", and the sentence "break each emitted `mk1` string into groups" becomes
+  "print each `mk1` string on stdout in groups".
+- line 57: "Dropdown (`space`|`hyphen`|`comma`; default `space`)" becomes "Dropdown (`space`; default `space`; `hyphen`
+  and `comma` were retired in mk-cli 0.14.0 and are refused at exit 64)"; delete the `hyphen` and `comma` outline
+  bullets (lines 67-68) and sections (lines 75-86); lines 59-60 "it affects only the rendered card" becomes "it
+  affects only the printed form".
+
+The review's I-3 list also covers md 53/54/5A/5E and ms 63 (those are in md 8b and ms 8b) and
+`82-binary-and-launch.md` (section 8a-bis).
+
+### 8a-bis. Toolkit GUI manual, `{#installer-ahead}` section (`docs/manual-gui/src/80-troubleshooting/82-binary-and-launch.md`) (review r1 I-4), PROPOSED text, lands in step 4
+
+This is the only authored text in the fold. Under the section 8.0 order the GUI release of step 3 carries the new
+md/ms/mk tags, so in the step-4 commit the manual's `[manual-gui]` md/ms/mk tags equal the installer's and
+`tests/check_cli_pins.py` (a) calls their `[installer-ahead]` entries stale: delete `md-cli-tag-implied`,
+`ms-cli-tag-implied` and `mk-cli-tag-implied` from `pinned-upstream.toml` `[installer-ahead]`. What remains of the
+section depends on one fact the builder reads from `scripts/install.sh` and `pinned-upstream.toml` at build time
+(not decided here):
+
+Case A: `toolkit-tag-implied` is still older than the installer's `mnemonic-toolkit` tag (at cdedd8a2: `v0.105.1`
+against `v0.107.0`). The section stays, reduced to `mnemonic`. Lines 44-63 (the section's opening paragraph through
+"First `mnemonic`, three outputs:") become:
+
+    The toolkit installer currently installs one CLI release newer than
+    this GUI was built against: `mnemonic-toolkit-v0.107.0` (the GUI's
+    label reads `Pinned: mnemonic 0.105.1`). The forms run unchanged. The
+    0.107.0 `mnemonic` refuses a secret typed on the command line at exit
+    2 for five more flags (`ms-shares combine --share`, `slip39 combine
+    --share`, `seed-xor combine --share`, `import-wallet --ms1`,
+    `verify-bundle --ms1`), but no form is affected: the GUI sends each
+    secret over a private channel (`-` or `@env:`) or, on an OS without
+    one, adds `--allow-argv-secret` itself. `mnemonic --version` printing
+    the newer version is expected.
+
+    Outputs differ, mostly on invalid or unusual input or on the recovery
+    line of a card; none changes a derived wallet. Three `mnemonic`
+    outputs:
+
+(the three `mnemonic` bullets, lines 65-86 at cdedd8a2, stay unchanged). Everything from "Then `ms`, five outputs:"
+through the end of the `md` list (lines 87-195, including the `mk encode` bullet of lines 117-121 that said "`mk
+encode` now prints its grouped card on stderr") is deleted: those outputs belong to releases the GUI is now pinned
+to, not to releases the installer is ahead on. The sentence "The toolkit installer installs newer releases of all
+four (next section)." becomes "The toolkit installer installs a newer release of `mnemonic` (next section).", and
+"the next section lists the four it installs newer than these" becomes "the next section lists the one it installs
+newer than these".
+
+Case B: the GUI's `mnemonic` tag also equals the installer's. Then `pinned-upstream.toml` `[installer-ahead]` is
+deleted whole and the whole `{#installer-ahead}` section (lines 43-195) is deleted, because `check_cli_pins.py` (a)
+requires the section to be absent when the table is. The sentence "The toolkit installer installs newer releases of
+all four (next section)." becomes "The toolkit installer installs exactly these releases.", and "the next section
+lists the four it installs newer than these" is deleted.
+
+In both cases the builder runs `check_cli_pins.py` (b) and updates every prose mention of a CLI version it names.
+
+### 8b. mnemonic-gui (`src/schema/mk.rs`, `ENCODE_FLAGS`), lands in step 3 (the gui release, AHEAD of the toolkit)
+
+- `--group-size`: `default_value: Some("0")` (the 5 -> 0 change is what makes the step order matter, section 8.0); `help: "Group each mk1 string on stdout every N characters, for hand
   engraving (default 0 = unbroken). Cosmetic — intake strips separators, so any grouping re-ingests."`
 - `--separator`: `help: "Separator for --group-size: `space` only (hyphen and comma were retired). Cosmetic —
   non-load-bearing."` (the current text still lists `space|hyphen|comma`, stale since mk-cli 0.14.0).
