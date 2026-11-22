@@ -9,6 +9,21 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+Next release: 0.18.0
+
+### Changed
+
+- **`mk address` and `mk derive` refuse a fixed-key card** (bughunt-1119 bh-mk-C1). A card whose xpub has depth 0
+  and an all-zero chain code (how the toolkit writes a single WIF key) has no child keys any wallet watches, so both
+  commands now exit 64 right after the chunk-set-id warning, before anything else is checked, instead of printing
+  addresses or a child xpub no wallet watches. The error prints a ready-to-paste `mnemonic convert --from xpub=...
+  --to address --path m --script-type TYPE` command that shows the key's own address (with `--network NETWORK` for a
+  test-kind xpub; `TYPE` and `NETWORK` are pre-filled from `--address-type` and `--network` when given), and says that
+  a key in a multisig wallet takes its addresses from the md1 policy card (`md address`). A depth-0 BIP-32 master
+  card (real chain code) is unchanged.
+- **`mk derive` refuses an empty `--path`** (bughunt-1119 bh-mk-I18). `--path ''`, `m` and `m/` used to print the
+  parent xpub labelled `child_xpub`; they now exit 64 (`derive needs at least one step`).
+
 ## [0.17.0] — 2026-11-22
 
 Next release: 0.17.0
