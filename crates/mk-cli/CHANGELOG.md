@@ -13,6 +13,10 @@ Next release: 0.18.0
 
 ### Changed
 
+- `mk encode` refuses a depth-0 xpub whose parent fingerprint is not 00000000 (exit 64).
+- `mk verify` reports a card whose depth-0 key is not a valid BIP 32 master, or whose depth-1 origin fingerprint is not the xpub's parent fingerprint, as invalid (exit 1, kinds `MasterParentFingerprintNonzero` / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
+- `mk decode`, `inspect`, `address` and `derive` still read such a card and warn on stderr.
+- Requires mk-codec 0.6.0.
 - **`mk address` and `mk derive` refuse a fixed-key card** (bughunt-1119 bh-mk-C1). A card whose xpub has depth 0
   and an all-zero chain code (how the toolkit writes a single WIF key) has no child keys any wallet watches, so both
   commands now exit 64 right after the chunk-set-id warning, before anything else is checked, instead of printing

@@ -14,6 +14,7 @@ use serde_json::json;
 use crate::cmd::derive_support::{fixed_key_refusal, is_fixed_key_card, secp_verify};
 use crate::cmd::{
     chunk_set_id_comparison, fmt_fingerprint, read_mk1_strings, warn_chunk_set_id_mismatch,
+    warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -56,6 +57,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     if is_fixed_key_card(&card.xpub) {
         return Err(fixed_key_refusal(&card.xpub, None, None));
     }
+    warn_if_invalid(&card);
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,

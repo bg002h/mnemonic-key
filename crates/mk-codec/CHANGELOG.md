@@ -12,6 +12,30 @@ tag list are the record for those.
 
 ## [Unreleased]
 
+**SemVer-minor: `encode` refuses cards it used to mint (BIP 32 invalid depth-0 keys, a depth-1 origin fingerprint that is not the parent fingerprint, out-of-range path indices). Wire layout unchanged; decoding unchanged.**
+
+### Added
+
+- `KeyCard::validate`
+- `Error::MasterParentFingerprintNonzero`
+- `Error::MasterFingerprintMismatch`
+- `Error::OriginParentFingerprintMismatch`
+
+### Changed
+
+- **`encode` refuses an origin-path component whose index is 2^31 or more**, in either form, with `Error::InvalidPathComponent` (`component <n> index <i> is out of the BIP 32 range 0..2^31`). Before, it wrote the index with bit 31 set and the card decoded to a different path.
+- **`encode` refuses a depth-0 key whose parent fingerprint is not 00000000** with `Error::MasterParentFingerprintNonzero` (BIP 32 test vector 5).
+- **`encode` refuses a depth-0 card whose origin fingerprint is not the key's own** with `Error::MasterFingerprintMismatch`. A key with an all-zero chain code may carry 00000000 instead.
+- **`encode` refuses a depth-1 card whose origin fingerprint is not the xpub's parent fingerprint** with `Error::OriginParentFingerprintMismatch`.
+- `canonical_payload_bytes` keeps accepting a decoded legacy card.
+- `GENERATOR_FAMILY` is `mk-codec 0.6`; V19 is regenerated as a valid master; both corpus SHAs are re-pinned.
+
+### Compatibility
+
+- Decoders: unaffected. A card minted before 0.6.0 that breaks one of the three
+  key-origin rules still decodes, and \`KeyCard::validate\` reports it.
+- "`mnemonic-toolkit`: its WIF cards (all-zero chain code, origin fingerprint 00000000) stay valid."
+
 ## [0.5.1] — 2026-11-04
 
 ### Added

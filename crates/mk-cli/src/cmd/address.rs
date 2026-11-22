@@ -15,7 +15,9 @@ use crate::cmd::derive_support::{
     AddressType, AddressTypeInference, CliNetwork, fixed_key_refusal, infer_address_type,
     is_fixed_key_card, render_address, secp_verify,
 };
-use crate::cmd::{chunk_set_id_comparison, read_mk1_strings, warn_chunk_set_id_mismatch};
+use crate::cmd::{
+    chunk_set_id_comparison, read_mk1_strings, warn_chunk_set_id_mismatch, warn_if_invalid,
+};
 use crate::error::{CliError, Result};
 
 /// `mk address` arguments.
@@ -91,6 +93,7 @@ pub fn run(args: AddressArgs) -> Result<u8> {
             args.network,
         ));
     }
+    warn_if_invalid(&card);
 
     let addr_type = resolve_address_type(&card.origin_path, args.address_type)?;
     let network = resolve_network(&card.xpub, args.network)?;

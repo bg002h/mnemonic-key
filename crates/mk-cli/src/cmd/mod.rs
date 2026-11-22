@@ -104,9 +104,23 @@ fn declared_chunk_set_id(strings: &[String]) -> Option<u32> {
 ///
 /// `mk_codec::derive_chunk_set_id` fully qualified: `md_codec` exports a
 /// same-named function and this crate links both.
+///
+/// `canonical_payload_bytes`, not `encode_bytecode`: a decoded legacy card that
+/// fails the depth-0 key rules still has a canonical re-encode, and its
+/// chunk-set-id comparison must not silently vanish.
 fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
-    let bytecode = mk_codec::bytecode::encode_bytecode(card).ok()?;
+    let bytecode = card.canonical_payload_bytes().ok()?;
     Some(mk_codec::derive_chunk_set_id(&bytecode))
+}
+
+/// Warn on stderr when a decoded card fails `KeyCard::validate` (T5). The card
+/// is still read as written; stdout and the exit code are unchanged.
+pub fn warn_if_invalid(card: &mk_codec::KeyCard) {
+    if let Err(e) = card.validate() {
+        eprintln!(
+            "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
+        );
+    }
 }
 
 /// Compare the declared vs. content-derived `chunk_set_id` for a decoded

@@ -20,7 +20,7 @@ use serde_json::json;
 
 use crate::cmd::{
     chunk_set_id_comparison, classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings,
-    warn_chunk_set_id_mismatch,
+    warn_chunk_set_id_mismatch, warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -51,6 +51,7 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     // (matched or not), so the warning's value has a cross-check surface.
     let csid = chunk_set_id_comparison(&strings, &card);
     warn_chunk_set_id_mismatch(csid, &card);
+    warn_if_invalid(&card);
     let declared_csid = csid.map(|(declared, _)| declared);
 
     let per_chunk_variants: Vec<&str> = strings.iter().map(|s| classify_code_variant(s)).collect();

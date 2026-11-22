@@ -9,7 +9,7 @@
 //! (tracked as `decoder-error-variant-parity` in
 //! `design/FOLLOWUPS.md`).
 
-use bitcoin::bip32::ChildNumber;
+use bitcoin::bip32::{ChildNumber, Fingerprint};
 use thiserror::Error;
 
 /// All errors `mk-codec` can produce.
@@ -192,6 +192,48 @@ pub enum Error {
         /// Terminal component of `origin_path` (`None` for an empty path).
         path_child: Option<ChildNumber>,
     },
+
+    /// A depth-0 key whose parent fingerprint is not 00000000 (BIP 32
+    /// serializes a master key with a zero parent fingerprint). Refused at
+    /// mint and reported by `KeyCard::validate`. A decoder still reads such a
+    /// card (cards minted before mk-codec 0.6.0 may carry it).
+    #[error(
+        "depth-0 key has parent fingerprint {parent_fingerprint}; \
+         BIP 32 requires 00000000 for a master key"
+    )]
+    MasterParentFingerprintNonzero {
+        /// `xpub.parent_fingerprint` as supplied (not 00000000).
+        parent_fingerprint: Fingerprint,
+    },
+
+    /// A depth-0 card whose origin fingerprint is not the key's own. The one
+    /// accepted exception is an all-zero chain code with origin fingerprint
+    /// 00000000 (a key built from a raw WIF). Refused at mint, reported by
+    /// `KeyCard::validate`, and still decoded.
+    #[error(
+        "origin fingerprint {origin_fingerprint} is not the depth-0 key's own \
+         fingerprint {key_fingerprint}"
+    )]
+    MasterFingerprintMismatch {
+        /// The card's `origin_fingerprint`.
+        origin_fingerprint: Fingerprint,
+        /// The key's own fingerprint (`xpub.fingerprint()`).
+        key_fingerprint: Fingerprint,
+    },
+
+    /// A depth-1 card whose origin fingerprint is not the key's parent
+    /// fingerprint (at depth 1 the parent is the master). Refused at mint,
+    /// reported by `KeyCard::validate`, still decoded.
+    #[error(
+        "origin fingerprint {origin_fingerprint} is not the depth-1 key's parent \
+         fingerprint {parent_fingerprint}; at depth 1 the parent is the master"
+    )]
+    OriginParentFingerprintMismatch {
+        /// The card's `origin_fingerprint`.
+        origin_fingerprint: Fingerprint,
+        /// `xpub.parent_fingerprint` as supplied.
+        parent_fingerprint: Fingerprint,
+    },
 }
 
 /// `Result` alias used throughout `mk-codec`.
@@ -242,6 +284,26 @@ mod tests {
             (
                 Error::InvalidXpubVersion(0xDEADBEEF),
                 "invalid xpub version: 0xdeadbeef",
+            ),
+            (
+                Error::MasterParentFingerprintNonzero {
+                    parent_fingerprint: Fingerprint::from([1, 1, 1, 1]),
+                },
+                "depth-0 key has parent fingerprint 01010101; BIP 32 requires 00000000 for a master key",
+            ),
+            (
+                Error::MasterFingerprintMismatch {
+                    origin_fingerprint: Fingerprint::from([0xde, 0xad, 0xbe, 0xef]),
+                    key_fingerprint: Fingerprint::from([0x75, 0x1e, 0x76, 0xe8]),
+                },
+                "origin fingerprint deadbeef is not the depth-0 key's own fingerprint 751e76e8",
+            ),
+            (
+                Error::OriginParentFingerprintMismatch {
+                    origin_fingerprint: Fingerprint::from([0xde, 0xad, 0xbe, 0xef]),
+                    parent_fingerprint: Fingerprint::from([0x75, 0x1e, 0x76, 0xe8]),
+                },
+                "origin fingerprint deadbeef is not the depth-1 key's parent fingerprint 751e76e8; at depth 1 the parent is the master",
             ),
         ];
         for (err, expected) in cases {

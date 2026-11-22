@@ -77,6 +77,14 @@ impl KeyCard {
     /// - `origin_path` MUST have at most [`crate::MAX_PATH_COMPONENTS`]
     ///   = 10 components when an explicit-path encoding would be used;
     ///   exceeding that yields [`crate::Error::PathTooDeep`].
+    /// - each `origin_path` component's index MUST be below 2^31 in either
+    ///   form; otherwise [`crate::Error::InvalidPathComponent`]
+    /// - a depth-0 key MUST have parent fingerprint 00000000 and, when
+    ///   `origin_fingerprint` is present, carry its own fingerprint (an
+    ///   all-zero chain code may carry 00000000 instead); see
+    ///   [`KeyCard::validate`]
+    /// - a depth-1 key with a present `origin_fingerprint` MUST carry its
+    ///   parent fingerprint there
     ///
     /// Callers that want a fail-fast constructor should validate
     /// these invariants before calling `new`, or simply rely on the
@@ -93,6 +101,16 @@ impl KeyCard {
             origin_path,
             xpub,
         }
+    }
+
+    /// Check this card against every rule `encode` enforces
+    /// (`design/SPEC_mk_v0_1.md` §4, encoder-side invariants), including the
+    /// depth-0 key rules a decoder does not reject. A card returned by
+    /// `decode` can fail it: cards minted before mk-codec 0.6.0 may carry an
+    /// invalid depth-0 key. Readers report that (`mk verify` exits 1,
+    /// `mk decode` warns) rather than refuse to read the card.
+    pub fn validate(&self) -> Result<()> {
+        crate::bytecode::encode::validate_card(self)
     }
 
     /// Serialize this card to its canonical pre-chunking bytecode.
@@ -114,8 +132,12 @@ impl KeyCard {
     /// [`crate::bytecode::encode_bytecode`] (e.g.
     /// [`crate::Error::InvalidPolicyIdStubCount`],
     /// [`crate::Error::XpubOriginPathMismatch`]).
+    ///
+    /// Unlike `encode`, this does not apply the depth-0 key rules of
+    /// [`KeyCard::validate`], so a decoded legacy card still has a canonical
+    /// identity.
     pub fn canonical_payload_bytes(&self) -> Result<Vec<u8>> {
-        crate::bytecode::encode_bytecode(self)
+        crate::bytecode::encode::encode_canonical_payload(self)
     }
 
     /// Reconstruct a `KeyCard` from its canonical pre-chunking bytecode.

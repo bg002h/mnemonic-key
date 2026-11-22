@@ -17,7 +17,7 @@ name = "mk"
 path = "src/main.rs"
 
 [dependencies]
-mk-codec = { path = "../mk-codec", version = "0.5.1" }
+mk-codec = { path = "../mk-codec", version = "0.6.0" }
 # F-127 cycle: bumped to md-codec 0.42.0, the primary's current version.
 #
 # At 0.34.0 this CLI could not read a CHUNKED md1 at all -- every chunk was
