@@ -859,9 +859,7 @@ The review's I-3 list also covers md 53/54/5A/5E and ms 63 (those are in md 8b a
 This is the only authored text in the fold. Under the section 8.0 order the GUI release of step 3 carries the new
 md/ms/mk tags, so in the step-4 commit the manual's `[manual-gui]` md/ms/mk tags equal the installer's and
 `tests/check_cli_pins.py` (a) calls their `[installer-ahead]` entries stale: delete `md-cli-tag-implied`,
-`ms-cli-tag-implied` and `mk-cli-tag-implied` from `pinned-upstream.toml` `[installer-ahead]`. What remains of the
-section depends on one fact the builder reads from `scripts/install.sh` and `pinned-upstream.toml` at build time
-(not decided here):
+`ms-cli-tag-implied` and `mk-cli-tag-implied` from `pinned-upstream.toml` `[installer-ahead]`.
 
 Under section 8.0 the GUI's `mnemonic` tag stays `mnemonic-toolkit-v0.105.1` and the installer's stays newer
 (`v0.107.0` at cdedd8a2), so the section stays, reduced to `mnemonic`. Lines 45-65 of `82-binary-and-launch.md`
