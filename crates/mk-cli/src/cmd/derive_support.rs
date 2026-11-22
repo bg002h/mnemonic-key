@@ -10,6 +10,40 @@ use bitcoin::bip32::{ChildNumber, DerivationPath, Xpub};
 use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use bitcoin::{Address, KnownHrp, NetworkKind};
 
+use crate::error::CliError;
+
+/// A "fixed-key card": the decoded xpub has depth 0 and an all-zero chain code (how the toolkit
+/// writes a single WIF key). Such a card has no child keys any wallet watches (bh-mk-C1).
+pub fn is_fixed_key_card(xpub: &Xpub) -> bool {
+    xpub.depth == 0 && xpub.chain_code.to_bytes() == [0u8; 32]
+}
+
+/// The refusal for a fixed-key card, shared by `mk address` and `mk derive` (FIX section 2.1).
+/// `TYPE` / `NETWORK` are the literal words unless the caller got the matching flag.
+pub fn fixed_key_refusal(
+    xpub: &Xpub,
+    address_type: Option<AddressType>,
+    network: Option<CliNetwork>,
+) -> CliError {
+    let ty = address_type.map_or("TYPE", AddressType::label);
+    let mut text = format!(
+        "this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key \
+         this way) and has no child keys any wallet watches, so mk derives nothing from it. If this \
+         key is one of the keys in a multisig wallet, that wallet's addresses come from its md1 \
+         policy card (md address), not from this key alone. The key's own address: \
+         mnemonic convert --from xpub={xpub} --to address --path m --script-type {ty}"
+    );
+    if xpub.network == NetworkKind::Test {
+        let net = match network {
+            Some(n @ (CliNetwork::Testnet | CliNetwork::Signet | CliNetwork::Regtest)) => n.label(),
+            _ => "NETWORK",
+        };
+        text.push_str(" --network ");
+        text.push_str(net);
+    }
+    CliError::UsageError(text)
+}
+
 /// Single-key address script type. clap values: `p2pkh|p2sh-p2wpkh|p2wpkh|p2tr`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
 #[clap(rename_all = "kebab-case")]
@@ -141,6 +175,14 @@ pub fn render_address(
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn is_fixed_key_card() {
+        let leaf = Xpub::from_str("tpubD6NzVbkrYhZ4WLczPJWReQycCJdd6YVWXubbVUFnJ5KgU5MDQrD998ZJLT5hqNKRA9cJzkh4D7oXwCpwFUWWWkHR9zPeBk1hnWBJKNhyYsn").unwrap();
+        let tv1 = Xpub::from_str("xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8").unwrap();
+        assert!(super::is_fixed_key_card(&leaf));
+        assert!(!super::is_fixed_key_card(&tv1));
+    }
 
     // V2 bip84 mainnet account xpub (m/84'/0'/0') from the mk-codec v0.1 corpus.
     const ACCT_84_XPUB: &str = "xpub6BmeGmRo4LosAcU21HDaGcvtaQ7GrqQcY48nBkE22qM6KVwQUjRJ1BGzk84SFVHgLcd61Vcnhr8petHexjjn5WbQ9PriVrRhphw4oCp2z6a";

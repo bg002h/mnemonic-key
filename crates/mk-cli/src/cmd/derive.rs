@@ -11,7 +11,7 @@ use bitcoin::bip32::{ChildNumber, DerivationPath};
 use clap::Args;
 use serde_json::json;
 
-use crate::cmd::derive_support::secp_verify;
+use crate::cmd::derive_support::{fixed_key_refusal, is_fixed_key_card, secp_verify};
 use crate::cmd::{
     chunk_set_id_comparison, fmt_fingerprint, read_mk1_strings, warn_chunk_set_id_mismatch,
     warn_if_invalid,
@@ -53,6 +53,10 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     let card = mk_codec::decode(&refs)?;
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
     warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
+    // bh-mk-C1: a fixed-key card has no child keys any wallet watches; refuse first.
+    if is_fixed_key_card(&card.xpub) {
+        return Err(fixed_key_refusal(&card.xpub, None, None));
+    }
     warn_if_invalid(&card);
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
@@ -120,6 +124,12 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
 fn parse_relative_unhardened(s: &str) -> Result<DerivationPath> {
     let path = DerivationPath::from_str(s)
         .map_err(|e| CliError::UsageError(format!("--path invalid derivation path {s:?}: {e}")))?;
+    if path.as_ref().is_empty() {
+        return Err(CliError::UsageError(format!(
+            "--path {s:?} has no steps: derive needs at least one step (e.g. m/0/5); \
+             the card's own key is shown by `mk decode`"
+        )));
+    }
     if path.as_ref().iter().any(ChildNumber::is_hardened) {
         return Err(CliError::UsageError(format!(
             "--path {s}: cannot derive hardened children from an xpub (no private key); \
