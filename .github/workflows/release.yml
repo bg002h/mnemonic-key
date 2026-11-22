@@ -455,7 +455,7 @@ jobs:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           set -euo pipefail
-          gh release view "$TAG" >/dev/null 2>&1 ||             gh release create "$TAG" --title "$TAG" --generate-notes || true
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes || gh release view "$TAG" >/dev/null
           # Every archive upload must succeed: a signed sums file beside an
           # archive that silently failed to upload lists a digest nobody can get.
           gh release upload "$TAG" release/mk-*.tar.gz --clobber

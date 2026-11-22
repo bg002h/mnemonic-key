@@ -144,7 +144,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         (Some(_), Some(_)) => unreachable!("guarded above"),
     };
 
-    if key_source.is_some() {
+    if let Some((_, given)) = key_source {
         // Each --keys record carries its own origin, so a global one would have
         // to either override it (engraving an origin the key was not derived
         // at) or be ignored. Both are worse than refusing.
@@ -157,7 +157,6 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             ("--privacy-preserving", args.privacy_preserving),
         ] {
             if present {
-                let given = key_source.expect("guarded by the enclosing if").1;
                 return Err(CliError::UsageError(format!(
                     "{given} and {flag} are mutually exclusive; {}",
                     if flag == "--privacy-preserving" {
