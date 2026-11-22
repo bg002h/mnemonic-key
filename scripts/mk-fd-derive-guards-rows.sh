@@ -2,7 +2,7 @@
 # RED/GREEN rows for design/FIX_mk_fd_derive_guards.md (bughunt-1119 F-D: bh-mk-C1, bh-mk-I18).
 #
 # What it does: builds `mk` (cargo build --locked -p mk-cli, the repo's pinned
-# 1.85 toolchain, no --release), mints three public-key fixture cards with
+# 1.85 toolchain, no --release), mints four public-key fixture cards with
 # `mk encode`, then runs every CLI row the document prints and checks it against
 # the MODE's expectation:
 #   red   = the base commit's behaviour (each defect shows; controls pass)
@@ -12,12 +12,12 @@
 #
 # Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
 # the rest (plus a newline; "=" alone means empty). The C1 refusal text is the
-# FIX document's section 2.1 text (Brian's ruling, Option B), built here from the
-# card's xpub string.
+# FIX document's section 2.1 text (Brian's ruling, Option B, FIX r1 I-1/I-2), built
+# here from the card's xpub string and the TYPE/NETWORK words per row.
 #
 # What it does NOT cover: the nextest rows in
 # crates/mk-cli/tests/bh1119_derive_guards.rs; that the printed `mnemonic convert`
-# command runs (the FIX report runs it once for a mainnet and a signet case); the
+# command runs (the fold report runs the filled and the bare-word forms once); the
 # I18 text beyond a substring; fmt, clippy, the full suite, the toolkit manual;
 # non-Linux CI legs.
 #
@@ -27,8 +27,8 @@ export PATH="$HOME/.cargo/bin:$PATH"
 MODE=${1:?usage: $0 red|green}
 case "$MODE" in red|green) ;; *) echo "usage: $0 red|green" >&2; exit 2;; esac
 REPO=$(git rev-parse --show-toplevel)
-WORK=${WORK:-/scratch/cache/mk-fd-derive-guards-rows}
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$REPO/target}
+WORK=${WORK:-$REPO/target/mk-fd-rows}
 case "$WORK$CARGO_TARGET_DIR" in /tmp*) echo "refusing /tmp" >&2; exit 2;; esac
 cargo --version | grep -q '^cargo 1\.85\.' || { echo "cargo is not the 1.85 pin: $(cargo --version)" >&2; exit 2; }
 (cd "$REPO" && cargo build --locked -q -p mk-cli)
@@ -73,10 +73,11 @@ row() {
 }
 CHILD=tb1qgl57xjd595rrxmpwys85q40xh4nmqunqrmrmwp
 CHILDM=bc1qgl57xjd595rrxmpwys85q40xh4nmqunqfacg4j
-# The C1 refusal text (FIX section 2.1, Brian's ruling B): mainnet xpub, then a test-kind xpub.
-C1HEAD="this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub="
-C1MAIN="${C1HEAD}${LEAFM} --to address --path m --script-type <TYPE>"
-C1TEST="${C1HEAD}${LEAF} --to address --path m --script-type <TYPE> --network <testnet|signet|regtest>"
+# The C1 refusal text (FIX section 2.1, Brian's ruling B, FIX r1 I-1/I-2).
+C1HEAD="this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. If this key is one of the keys in a multisig wallet, that wallet's addresses come from its md1 policy card (md address), not from this key alone. The key's own address: mnemonic convert --from xpub="
+# c1main TYPE; c1test TYPE NET (the words after --script-type / --network).
+c1main() { printf '%s' "${C1HEAD}${LEAFM} --to address --path m --script-type $1"; }
+c1test() { printf '%s' "${C1HEAD}${LEAF} --to address --path m --script-type $1 --network $2"; }
 ENV1='{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"'
 ENV2='"},"schema_version":1}'
 if [ "$MODE" = red ]; then
@@ -96,17 +97,17 @@ if [ "$MODE" = red ]; then
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 0 "\"child_xpub\":\"$X84\"" - - -- derive --in acct.mk1 --path "$p" --json
   done
 else
-  row fd_c1_address_refuses_fixed_key_card 64 = - "=error: $C1TEST" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
-  row fd_c1_address_refuses_fixed_key_card_json 64 "=$ENV1$C1TEST$ENV2" - = -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
-  row fd_c1_address_refuses_fixed_key_card_mainnet 64 = - "=error: $C1MAIN" -- address --in leafm.mk1 --address-type p2wpkh --count 1
-  row fd_c1_derive_refuses_fixed_key_card 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --index 0
-  row fd_c1_derive_refuses_fixed_key_card_path 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path m/0/0
-  row fd_c1_derive_refuses_fixed_key_card_mainnet 64 = - "=error: $C1MAIN" -- derive --in leafm.mk1 --index 0
-  row "fd_c1_refusal_precedes_other_errors[address-type]" 64 = - "=error: $C1TEST" -- address --in leaf.mk1
-  row "fd_c1_refusal_precedes_other_errors[network]" 64 = - "=error: $C1TEST" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
-  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path "m/0'"
-  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path /
-  row "fd_c1_refusal_precedes_other_errors[empty]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path ''
+  row fd_c1_address_refuses_fixed_key_card 64 = - "=error: $(c1test p2wpkh signet)" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
+  row fd_c1_address_refuses_fixed_key_card_json 64 "=$ENV1$(c1test p2wpkh signet)$ENV2" - = -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
+  row fd_c1_address_refuses_fixed_key_card_mainnet 64 = - "=error: $(c1main p2wpkh)" -- address --in leafm.mk1 --address-type p2wpkh --count 1
+  row fd_c1_derive_refuses_fixed_key_card 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --index 0
+  row fd_c1_derive_refuses_fixed_key_card_path 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path m/0/0
+  row fd_c1_derive_refuses_fixed_key_card_mainnet 64 = - "=error: $(c1main TYPE)" -- derive --in leafm.mk1 --index 0
+  row "fd_c1_refusal_precedes_other_errors[address-type]" 64 = - "=error: $(c1test TYPE NETWORK)" -- address --in leaf.mk1
+  row "fd_c1_refusal_precedes_other_errors[network]" 64 = - "=error: $(c1test p2wpkh NETWORK)" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
+  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path "m/0'"
+  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path /
+  row "fd_c1_refusal_precedes_other_errors[empty]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path ''
   for p in '' m m/; do
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 64 '"kind":"UsageError"' "child_xpub" - -- derive --in acct.mk1 --path "$p" --json
   done
