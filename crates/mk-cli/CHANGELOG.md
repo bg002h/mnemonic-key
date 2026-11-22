@@ -9,6 +9,17 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+Next release: 0.17.0
+
+### Changed
+
+- **Each mk1 string is printed once.** `mk encode` no longer repeats its strings on stderr as a grouped
+  engraving card, and the `group size:` / `separator:` lines are gone (Brian 2026-11-22, reversing D4 of the
+  constellation uniformity spec). `--group-size N` now groups stdout, on request; its default is `0`, so a plain
+  `mk encode` prints on stdout exactly what it printed before. `--out FILE` receives the same bytes stdout
+  would have carried. With `--keys` and two or more cards, stderr names each card's lines:
+  `card <i> of <n>: lines <a>-<b>`. `--json` is unchanged.
+
 ## [0.16.0] — 2026-11-14
 
 Next release: 0.16.0

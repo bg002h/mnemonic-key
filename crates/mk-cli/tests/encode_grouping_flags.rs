@@ -1,17 +1,11 @@
-//! `mk encode` display-grouping flags (P3, SPEC §6a/§6b/§6c).
+//! `mk encode` display-grouping flags (single print, Brian 2026-11-22).
 //!
-//! **The grouped form moved off stdout.** §6a rules that `encode`'s stdout is
-//! "the canonical artifact, ungrouped, nothing else"; §6b rules that
-//! `--group-size` / `--separator` "affect the stderr card only"; §6c requires
-//! `md` and `mk` — which had no card at all, only a one-line `note:` — to grow
-//! one, and says the minimum it must carry is the grouped string itself, since
-//! after this change that is the only place it exists.
+//! Each mk1 string is printed ONCE, on stdout. `--group-size N` groups stdout
+//! on request (default 0, the canonical unbroken artifact), as `mt encode` and
+//! `mnemonic bundle` do; there is no stderr engraving card. The stdout/stderr
+//! byte rows live in `single_print.rs`; this file keeps the flag-surface rows.
 //!
-//! So the assertions below are a PAIR at every step: what left stdout, and
-//! where it went. A test that only checked stdout would pass equally against an
-//! implementation that deleted the grouped form outright.
-//!
-//! `--json` is UNCHANGED and out of scope this cycle (§6b).
+//! `--json` is UNCHANGED: it ignores the grouping flags.
 
 use std::process::Command;
 
@@ -96,83 +90,12 @@ fn encode_stdout_is_the_unbroken_artifact_under_default_flags() {
     }
 }
 
-/// `--group-size 5` and `--group-size 0` produce BYTE-IDENTICAL stdout.
-///
-/// This is the assertion that says the flag no longer reaches stdout at all,
-/// rather than that one particular default happens to be unbroken.
-#[test]
-fn group_size_no_longer_reaches_stdout() {
-    let grouped = encode(&["--group-size", "5"]);
-    let unbroken = encode(&["--group-size", "0"]);
-    assert!(grouped.status.success() && unbroken.status.success());
-    assert_eq!(
-        grouped.stdout, unbroken.stdout,
-        "--group-size must not change stdout (SPEC §6b: the stderr card only)"
-    );
-}
-
 // ──────────────────────────────────────────────────────────────────────────
-// §6c — the engraving card, on stderr.
-
+// `--json` ignores the grouping flags.
 // ──────────────────────────────────────────────────────────────────────────
 
-/// The card carries the grouped form, then its two settings, then the advisory.
-///
-/// The grouped line is recomputed from the stdout artifact, so this fails if
-/// the card renders a DIFFERENT string as well as if it renders none.
-#[test]
-fn the_stderr_card_carries_the_grouped_form_by_default() {
-    let out = encode(&[]);
-    assert!(out.status.success(), "stderr={}", stderr_of(&out));
-    let stdout = stdout_of(&out);
-    let stderr = stderr_of(&out);
-
-    for artifact in stdout.lines() {
-        let want = regroup(artifact, 5, ' ');
-        assert!(
-            stderr.lines().any(|l| l == want),
-            "card must carry the space-5 grouped form of {artifact:?}; stderr={stderr:?}"
-        );
-    }
-    assert!(
-        stderr.lines().any(|l| l == "group size: 5"),
-        "card names its group size; stderr={stderr:?}"
-    );
-    assert!(
-        stderr.lines().any(|l| l == "separator: space"),
-        "card names its separator; stderr={stderr:?}"
-    );
-    assert_eq!(
-        stderr.lines().last(),
-        Some(ADVISORY),
-        "the existing advisory stays LAST; stderr={stderr:?}"
-    );
-}
-
-/// `--group-size 0` yields a card whose artifact line is unbroken.
-///
-/// The card is still emitted: an operator who asked for no grouping still needs
-/// to see what to transcribe, and `--no-engraving-card` is deliberately NOT
-/// added to `mk` (§6c names it for `ms` and `mnemonic` only).
-#[test]
-fn group_size_0_makes_the_card_unbroken_but_still_a_card() {
-    let out = encode(&["--group-size", "0"]);
-    assert!(out.status.success(), "stderr={}", stderr_of(&out));
-    let artifact = first_line(&out);
-    let stderr = stderr_of(&out);
-    assert!(
-        stderr.lines().any(|l| l == artifact),
-        "card carries the unbroken string verbatim; stderr={stderr:?}"
-    );
-    assert!(
-        stderr.lines().any(|l| l == "group size: 0"),
-        "card reports the group size it was given; stderr={stderr:?}"
-    );
-    assert_eq!(stderr.lines().last(), Some(ADVISORY));
-}
-
-/// `--json` is out of scope (§6b): the JSON envelope stays the ONLY thing on
-/// stdout, and no card is printed in front of it.
+/// `--json` is unchanged: the JSON envelope is the ONLY thing on stdout, and
+/// stderr carries only the advisory.
 #[test]
 fn json_mode_emits_no_card() {
     let out = encode(&["--json"]);
@@ -215,7 +138,7 @@ fn retired_separator_keywords_are_refused() {
         );
         let stderr = stderr_of(&out);
         assert!(
-            stderr.contains("space"),
+            stderr.contains("Use `--separator space`"),
             "the refusal must name what replaced it; stderr={stderr:?}"
         );
     }
@@ -225,17 +148,17 @@ fn retired_separator_keywords_are_refused() {
 #[test]
 fn whitespace_separator_still_accepted_both_spellings() {
     for spelling in ["space", " "] {
-        let out = encode(&["--separator", spelling]);
+        let out = encode(&["--group-size", "5", "--separator", spelling]);
         assert!(
             out.status.success(),
             "--separator {spelling:?} must still work; stderr={}",
             stderr_of(&out)
         );
-        let artifact = first_line(&out);
-        let stderr = stderr_of(&out);
-        assert!(
-            stderr.lines().any(|l| l == regroup(&artifact, 5, ' ')),
-            "space-grouped card; stderr={stderr:?}"
+        let artifact = first_line(&encode(&[]));
+        assert_eq!(
+            first_line(&out),
+            regroup(&artifact, 5, ' '),
+            "space-grouped stdout"
         );
     }
 }

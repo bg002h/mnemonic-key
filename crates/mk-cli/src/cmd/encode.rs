@@ -103,13 +103,14 @@ pub struct EncodeArgs {
     #[arg(long)]
     pub chunk_set_id: Option<String>,
 
-    /// Insert a separator every N characters in each emitted mk1 string
-    /// (0 = unbroken). SPEC §3. Display only; --json stays unbroken.
-    #[arg(long, default_value_t = 5)]
+    /// Group each mk1 string on stdout every N characters, for hand engraving
+    /// (0 = unbroken, the default). `--out` receives the same bytes; `--json`
+    /// stays unbroken.
+    #[arg(long, default_value_t = 0)]
     pub group_size: u16,
 
-    /// Separator for the stderr engraving card: `space`, or the literal " ".
-    /// Whitespace only (SPEC §6c); `hyphen` and `comma` were removed.
+    /// Separator to use with `--group-size`: `space`, or the literal " ".
+    /// Whitespace only; `hyphen` and `comma` were removed.
     #[arg(long, default_value = "space", value_parser = crate::format::parse_separator)]
     pub separator: char,
 
@@ -402,16 +403,11 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         });
     }
 
-    // SPEC §6a: the artifact is UNGROUPED and stdout carries nothing else --
-    // so `me sysw pack` can read what `mk encode` wrote with no
-    // `--group-size 0` and no `grep` in between. No blank line between cards
-    // either: a blank line is not an artifact. The grouped form a human
-    // transcribes, and the card boundary, both move to the stderr engraving
-    // card below (§6b: the grouping flags "affect the stderr card only").
-    //
-    // Built as ONE string rather than printed line by line, because §6b's
-    // `--out` writes the same bytes to a file and a second emitter is a second
-    // place for the two to drift.
+    // Each mk1 string is printed ONCE, on stdout (Brian 2026-11-22, reversing
+    // D4): there is no stderr engraving card. `--group-size` groups stdout on
+    // request, as `mt encode` and `mnemonic bundle` do; the default (0) is the
+    // canonical, unbroken artifact `me sysw pack` reads. `--out` receives the
+    // same bytes stdout would have carried, built once so the two cannot drift.
     let artifact = if args.json {
         if key_source.is_some() {
             json_batch(&minted)?
@@ -422,7 +418,11 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         let mut body = String::new();
         for card in &minted {
             for s in &card.strings {
-                body.push_str(s);
+                body.push_str(&crate::format::render_grouped(
+                    s,
+                    args.group_size as usize,
+                    args.separator,
+                ));
                 body.push('\n');
             }
         }
@@ -430,29 +430,26 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     };
 
     // SPEC §6b: "stdout is used when --out is not given." When it IS given the
-    // artifact goes to the file ONLY -- writing both would put on stdout the
-    // material `--out` exists to keep off it.
+    // artifact goes to the file ONLY.
     match &args.out_file {
         Some(path) => {
-            // The one item P3's boundary table has `mk` ADOPT from the shared
-            // crate. `write` has no root re-export, so the path is qualified --
-            // the unqualified form is an E0425.
             mnemonic_io_lib::write::write_private(std::path::Path::new(path), artifact.as_bytes())
                 .map_err(|e| CliError::UsageError(format!("--out {path}: {e}")))?
         }
         None => print!("{artifact}"),
     }
 
-    // The card is a display of the artifact, so `--json` (which is explicitly
-    // out of scope this cycle) does not get one.
-    if !args.json {
-        let grouped: Vec<Vec<String>> = minted.iter().map(|c| c.strings.clone()).collect();
-        crate::format::write_engraving_card(
-            &mut std::io::stderr(),
-            &grouped,
-            args.group_size as usize,
-            args.separator,
-        );
+    // F-311: a key file carrying the same record twice mints two byte-identical
+    // cards that share one chunk-set id, so the card boundary is not
+    // recoverable from the strings. With two or more cards, stderr names each
+    // card's line range. `--json` carries the cards as separate objects.
+    if !args.json && minted.len() > 1 {
+        let mut first = 1usize;
+        for (i, card) in minted.iter().enumerate() {
+            let last = first + card.strings.len() - 1;
+            eprintln!("card {} of {}: lines {first}-{last}", i + 1, minted.len());
+            first = last + 1;
+        }
     }
     crate::output_advisory::emit_output_class_advisory(
         crate::output_advisory::OutputClass::WatchOnly,

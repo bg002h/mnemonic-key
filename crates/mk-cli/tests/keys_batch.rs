@@ -143,13 +143,13 @@ fn batch_matches_per_key_loop() {
 /// fixture and a two-record file give different totals while the blank count
 /// reproduces invariantly.
 ///
-/// The card boundary moves to the stderr engraving card, asserted here too. That
+/// The card boundary moves to a stderr label per card, asserted here too. That
 /// is not decoration: a key file carrying the same BIP-380 record twice is
 /// accepted at exit 0 and emits two byte-identical cards sharing one chunk-set
 /// id (F-311), so the boundary is NOT recoverable from the headers, and the
-/// blank line was the only signal the duplicate had been accepted.
+/// labels are the only signal the duplicate had been accepted.
 #[test]
-fn stdout_carries_mk1_lines_only_and_the_boundary_moves_to_the_card() {
+fn stdout_carries_mk1_lines_only_and_stderr_labels_each_card() {
     let body = keyfile_body(&KEYS);
     let kf = write_keyfile(&body);
     let output = mk()
@@ -176,14 +176,20 @@ fn stdout_carries_mk1_lines_only_and_the_boundary_moves_to_the_card() {
         "no blank line survives on stdout; got {out:?}"
     );
 
-    // ...and the boundary it carried is now on the human-facing card, once per
-    // pair of cards. `card` also ends with the output-class advisory, which is
-    // not blank, so a trailing blank cannot be miscounted here.
-    assert_eq!(
-        card.lines().filter(|l| l.is_empty()).count(),
-        KEYS.len() - 1,
-        "one blank line BETWEEN each pair of cards, on stderr; got {card:?}"
-    );
+    // ...and the boundary it carried is now a stderr label per card, whose line
+    // ranges tile stdout exactly (single print, 2026-11-22).
+    let mut next = 1usize;
+    let labels: Vec<&str> = card.lines().filter(|l| l.starts_with("card ")).collect();
+    assert_eq!(labels.len(), KEYS.len(), "one label per card; got {card:?}");
+    for (i, l) in labels.iter().enumerate() {
+        let range = l
+            .strip_prefix(&format!("card {} of {}: lines ", i + 1, KEYS.len()))
+            .unwrap_or_else(|| panic!("label {i} malformed: {l:?}"));
+        let (a, b) = range.split_once('-').unwrap();
+        assert_eq!(a.parse::<usize>().unwrap(), next, "ranges are contiguous");
+        next = b.parse::<usize>().unwrap() + 1;
+    }
+    assert_eq!(next - 1, out.lines().count(), "the ranges cover stdout");
 
     let single = stdout_of(
         &mk()
@@ -436,21 +442,18 @@ fn record_order_follows_file_order() {
         .output()
         .unwrap();
     let batch = stdout_of(&output);
-    // SPEC §6a took the blank line off stdout, so a consumer can no longer
-    // `split("\n\n")` the ARTIFACT into cards. The boundary lives on the stderr
-    // engraving card now, and with `--group-size 0` its lines are the same
-    // unbroken strings -- so the first card is still recoverable, from the card.
-    let card = String::from_utf8(output.stderr.clone()).unwrap();
-    let first_batch_card: Vec<&str> = card
-        .split("\n\n")
-        .next()
-        .unwrap()
+    // The boundary is the stderr label `card 1 of N: lines 1-B` (single print,
+    // 2026-11-22): the first card is stdout's lines 1..=B.
+    let labels = String::from_utf8(output.stderr.clone()).unwrap();
+    let first = labels
         .lines()
-        .filter(|l| l.starts_with("mk1"))
-        .collect();
+        .find_map(|l| l.strip_prefix(&format!("card 1 of {}: lines 1-", KEYS.len())))
+        .unwrap_or_else(|| panic!("no label for the first card; stderr={labels:?}"));
+    let b: usize = first.parse().unwrap();
+    let first_batch_card: Vec<&str> = batch.lines().take(b).collect();
     assert!(
         !first_batch_card.is_empty(),
-        "the card must still delimit the first record; stderr={card:?}"
+        "the label must delimit the first record; stderr={labels:?}"
     );
 
     let (fp, path, x) = KEYS[0];
