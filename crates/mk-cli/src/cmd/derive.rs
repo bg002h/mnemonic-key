@@ -28,7 +28,7 @@ pub struct DeriveArgs {
 
     /// Read mk1 strings from FILE, one per line, instead of (or in addition to)
     /// the positional arguments. Display separators are stripped, so a card
-    /// transcribed from the engraving card in grouped form re-ingests. SPEC §6b.
+    /// transcribed in grouped form re-ingests. SPEC §6b.
     #[arg(long = "in", value_name = "FILE")]
     pub in_file: Option<String>,
 

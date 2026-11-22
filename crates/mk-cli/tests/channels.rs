@@ -403,14 +403,10 @@ fn in_on_the_reading_verbs_equals_the_positional_run() {
 #[test]
 fn in_accepts_a_grouped_card() {
     let d = tmpdir();
-    let run = mk().args(single_card_args()).output().unwrap();
-    let unbroken = stdout_of(&run);
-    let card = String::from_utf8(run.stderr.clone()).unwrap();
-    let mut grouped = String::new();
-    for l in card.lines().filter(|l| l.starts_with("mk1")) {
-        grouped.push_str(l);
-        grouped.push('\n');
-    }
+    let unbroken = stdout_of(&mk().args(single_card_args()).output().unwrap());
+    let mut grouped_args = single_card_args();
+    grouped_args.extend(["--group-size".to_string(), "5".to_string()]);
+    let grouped = stdout_of(&mk().args(grouped_args).output().unwrap());
     assert!(grouped.contains(' '), "precondition: the card is grouped");
 
     let g = d.path().join("grouped.mk1");
