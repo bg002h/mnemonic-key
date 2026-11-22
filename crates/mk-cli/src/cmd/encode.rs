@@ -212,6 +212,19 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         ));
     }
 
+    // Repeated stub (FIX_mk_fe_keyed_policy 2.3): refuse at the first stub equal
+    // to an earlier one, whichever channels supplied the two.
+    for (i, s) in stubs.iter().enumerate() {
+        if stubs[..i].contains(s) {
+            return Err(CliError::UsageError(format!(
+                "policy stub {} is bound twice; a card lists each policy once, so a stub \
+                 repeated across --policy-id-stub, --from-md1 and --from-md1-set is refused \
+                 and no card was minted.",
+                fmt_stub(s),
+            )));
+        }
+    }
+
     let fingerprint = match (&args.origin_fingerprint, args.privacy_preserving) {
         (Some(s), false) => Some(parse_fingerprint(s)?),
         (None, true) => None,
@@ -318,9 +331,19 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // Only KEYED policies are checked. A keyless template carries no keys
     // (`cosigners == None`), so membership is not decidable from it and every
     // template-form card stays legal -- that is the ordinary bundle workflow.
-    for (_fp, path, xpub) in &cards {
+    //
+    // The sparse rule: membership (the refusal below) needs a COMPLETE key list,
+    // but the origin check needs only the slot that holds the card's key.
+    //
+    // Origin (FIX_mk_fe_keyed_policy 2.1): for a keyed policy, a card whose key
+    // sits in a slot must declare that slot's origin, and a policy holding the
+    // key in two slots is refused. This runs for a complete AND a sparse key
+    // list; a slot that holds the card's key states its origin even when other
+    // slots are empty. Per card (record order), per policy (stub order).
+    for (fp, path, xpub) in &cards {
         let ident = crate::cmd::xpub_identity_65(xpub);
         for policy in &policies {
+            check_card_against_slots(policy, fp, path, xpub, &ident)?;
             let Some(cosigners) = &policy.cosigners else {
                 continue;
             };
@@ -453,10 +476,10 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         None => print!("{artifact}"),
     }
 
-    // F-311: a key file carrying the same record twice mints two byte-identical
-    // cards that share one chunk-set id, so the card boundary is not
-    // recoverable from the strings. With two or more cards, stderr names each
-    // card's line range. `--json` carries the cards as separate objects.
+    // F-311: cards of one key file can share a chunk-set id, so the card
+    // boundary is not recoverable from the strings. (The same record twice is
+    // now refused, FIX_mk_fe_keyed_policy 2.2.) With two or more cards, stderr
+    // names each card's line range. `--json` carries the cards as separate objects.
     if !args.json && minted.len() > 1 {
         let mut first = 1usize;
         for (i, card) in minted.iter().enumerate() {
@@ -487,6 +510,89 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
 /// path to a README bind zero stubs and then fail with a message about flags the
 /// operator did supply -- or mint against a `--policy-id-stub` they also passed,
 /// silently dropping the wallet they meant to bind.
+/// Render a path as `m` then `/<index>` per component, `'` after a hardened one.
+fn fmt_origin_path(components: &[(bool, u32)]) -> String {
+    let mut out = String::from("m");
+    for (hardened, value) in components {
+        out.push_str(&format!("/{value}{}", if *hardened { "'" } else { "" }));
+    }
+    out
+}
+
+/// FIX_mk_fe_keyed_policy 2.1: the card's origin against the keyed slots of one
+/// policy that hold the card's key. Order: repeated key (c), path (a), master
+/// fingerprint (b). A missing fingerprint on either side is not compared.
+fn check_card_against_slots(
+    policy: &crate::cmd::Md1Card,
+    fp: &Option<Fingerprint2>,
+    path: &DerivationPath2,
+    xpub: &Xpub2,
+    ident: &[u8; 65],
+) -> Result<()> {
+    let slots: Vec<&crate::cmd::KeyedSlot> =
+        policy.keyed.iter().filter(|s| &s.key == ident).collect();
+    let stub = fmt_stub(&policy.stub);
+    match slots.as_slice() {
+        [] => Ok(()),
+        [slot] => {
+            let card_path: Vec<(bool, u32)> = path
+                .into_iter()
+                .map(|c| match c {
+                    bitcoin::bip32::ChildNumber::Normal { index } => (false, *index),
+                    bitcoin::bip32::ChildNumber::Hardened { index } => (true, *index),
+                })
+                .collect();
+            let n = slot.idx;
+            if card_path != slot.origin {
+                let (policy_path, card_decl) =
+                    (fmt_origin_path(&slot.origin), fmt_origin_path(&card_path));
+                return Err(CliError::UsageError(if slot.standard_filled {
+                    format!(
+                        "xpub {xpub} is @{n} of the wallet policy with stub {stub}, which \
+                         states no origin path for it, so its policy id uses the standard \
+                         origin path for its template, {policy_path}; the card declares \
+                         {card_decl}. A card whose origin contradicts its own policy is \
+                         refused; no card was minted. If {card_decl} is this key's origin, \
+                         re-encode the md1 with the keys' real origins (md encode --path, or \
+                         the origin in the template) and mint against the new md1."
+                    )
+                } else {
+                    format!(
+                        "xpub {xpub} is @{n} of the wallet policy with stub {stub}, whose \
+                         origin path for it is {policy_path}; the card declares {card_decl}. \
+                         A card whose origin contradicts its own policy is refused; no card \
+                         was minted."
+                    )
+                }));
+            }
+            if let (Some(pfp), Some(cfp)) = (slot.fingerprint, fp) {
+                if pfp != cfp.to_bytes() {
+                    return Err(CliError::UsageError(format!(
+                        "xpub {xpub} is @{n} of the wallet policy with stub {stub}, whose \
+                         master fingerprint for it is {}; the card declares {}. A card whose \
+                         origin contradicts its own policy is refused; no card was minted.",
+                        hex::encode(pfp),
+                        fmt_fingerprint(cfp),
+                    )));
+                }
+            }
+            Ok(())
+        }
+        many => {
+            let list = many
+                .iter()
+                .map(|s| format!("@{}", s.idx))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(CliError::UsageError(format!(
+                "the wallet policy with stub {stub} holds xpub {xpub} at {list}; BIP 388 \
+                 requires the keys of a policy to be pairwise distinct, so the policy is \
+                 refused and no card was minted."
+            )))
+        }
+    }
+}
+
 fn read_md1_set(path: &str) -> Result<Vec<String>> {
     let buf = std::fs::read_to_string(path)
         .map_err(|e| CliError::UsageError(format!("--from-md1-set {path}: {e}")))?;

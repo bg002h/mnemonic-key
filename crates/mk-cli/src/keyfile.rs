@@ -19,9 +19,12 @@
 //! fingerprint, path and key together, so they cannot be misaligned BY THE
 //! TOOL the way three parallel lists can.
 //!
+//! Records are compared pairwise (FIX_mk_fe_keyed_policy 2.2): a repeated
+//! record, one key under two origins and one origin with two keys are refused.
 //! What this does NOT do is check that a record is internally truthful. A
 //! record pairing a real xpub with a DIFFERENT key's fingerprint and path is
-//! accepted whenever the xpub's own depth still matches (the encoder checks
+//! accepted whenever the xpub's own depth still matches and no keyed policy states
+//! that key's origin (the encoder checks
 //! depth and child number, not whose key it is), so two same-depth cosigners
 //! can be crossed by an operator editing the file. The earlier wording here
 //! claimed records "cannot come apart", which over-claims a real but narrower
@@ -135,6 +138,9 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     }
 
     let mut out = Vec::new();
+    // 1-based file line of each record (blank and comment lines count), for
+    // the pairwise checks below.
+    let mut lines: Vec<usize> = Vec::new();
     for (i, raw) in buf.lines().enumerate() {
         let line = raw.split('#').next().unwrap_or("").trim();
         if line.is_empty() {
@@ -143,13 +149,60 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         let rec = parse_key_record(line)
             .map_err(|e| CliError::UsageError(format!("{source}:{}: {}", i + 1, e.message())))?;
         out.push(rec);
+        lines.push(i + 1);
     }
+    check_record_set(&out, &lines, &source)?;
     if out.is_empty() {
         return Err(CliError::UsageError(format!(
             "{flag} {source}: no key records found (blank lines and `#` comments are ignored)"
         )));
     }
     Ok(out)
+}
+
+/// An origin as BIP-380 notation, `[<fp>/<path>]` (an empty path renders `[fp/]`).
+fn fmt_origin(r: &KeyRecord) -> String {
+    format!(
+        "[{}/{}]",
+        crate::cmd::fmt_fingerprint(&r.fingerprint),
+        r.path
+    )
+}
+
+/// Compare every pair of records (FIX_mk_fe_keyed_policy 2.2). For j = 2nd..last
+/// and i = 1st..j-1, the first matching pair is refused at record j's line.
+/// Same key = equal 65-byte identity; same origin = equal fingerprint and path.
+fn check_record_set(recs: &[KeyRecord], lines: &[usize], source: &str) -> Result<()> {
+    for j in 1..recs.len() {
+        for i in 0..j {
+            let same_key = crate::cmd::xpub_identity_65(&recs[i].xpub)
+                == crate::cmd::xpub_identity_65(&recs[j].xpub);
+            let same_origin =
+                recs[i].fingerprint == recs[j].fingerprint && recs[i].path == recs[j].path;
+            let (lj, li) = (lines[j], lines[i]);
+            let msg = match (same_key, same_origin) {
+                (true, true) => format!(
+                    "{source}:{lj}: this record repeats line {li}; a key is carded once, so a \
+                     repeated record is refused and no card was minted."
+                ),
+                (true, false) => format!(
+                    "{source}:{lj}: this record's key is also on line {li}, with origin {}; one \
+                     key has one origin, so the two records contradict each other and no card \
+                     was minted.",
+                    fmt_origin(&recs[i])
+                ),
+                (false, true) => format!(
+                    "{source}:{lj}: this record's origin {} is also on line {li}, with a \
+                     different key; one origin derives one key (BIP 32), so the two records \
+                     contradict each other and no card was minted.",
+                    fmt_origin(&recs[j])
+                ),
+                (false, false) => continue,
+            };
+            return Err(CliError::UsageError(msg));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

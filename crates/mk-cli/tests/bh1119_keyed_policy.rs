@@ -70,7 +70,7 @@ struct Out {
 fn fx() -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     let w = |n: &str, s: String| std::fs::write(d.path().join(n), s).unwrap();
-    let lines = |c: &[&str]| c.iter().map(|l| format!("{l}\n")).collect::<String>();
+    let lines = |c: &[&str]| c.join("\n") + "\n";
     w("a.md1", lines(&A));
     w("sparse.md1", lines(&SPARSE));
     w("rep.md1", lines(&REP));

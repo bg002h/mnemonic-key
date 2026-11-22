@@ -27,6 +27,9 @@ Next release: 0.18.0
   card (real chain code) is unchanged.
 - **`mk derive` refuses an empty `--path`** (bughunt-1119 bh-mk-I18). `--path ''`, `m` and `m/` used to print the
   parent xpub labelled `child_xpub`; they now exit 64 (`derive needs at least one step`).
+- `mk encode` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.
+- `mk encode --keys`/`--in` refuses (exit 64) a repeated record, one key under two origins, and one origin with two keys, naming both lines.
+- `mk encode` refuses (exit 64) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.
 
 ## [0.17.0] — 2026-11-22
 

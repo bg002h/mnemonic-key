@@ -144,10 +144,10 @@ fn batch_matches_per_key_loop() {
 /// reproduces invariantly.
 ///
 /// The card boundary moves to a stderr label per card, asserted here too. That
-/// is not decoration: a key file carrying the same BIP-380 record twice is
-/// accepted at exit 0 and emits two byte-identical cards sharing one chunk-set
-/// id (F-311), so the boundary is NOT recoverable from the headers, and the
-/// labels are the only signal the duplicate had been accepted.
+/// is not decoration: cards of one key file can share a chunk-set id (F-311),
+/// so the boundary is NOT recoverable from the headers, and the labels are the
+/// card boundary. (A key file carrying the same record twice used to mint two
+/// byte-identical cards; it is now refused, FIX_mk_fe_keyed_policy 2.2.)
 #[test]
 fn stdout_carries_mk1_lines_only_and_stderr_labels_each_card() {
     let body = keyfile_body(&KEYS);
@@ -654,81 +654,5 @@ fn origin_fingerprint_is_checked_where_the_xpub_proves_it() {
         code,
         Some(64),
         "a crossed depth-0 record must be refused: {err}"
-    );
-}
-
-/// Membership is enforced only against a COMPLETE cosigner set.
-///
-/// `TlvSection::pubkeys` is sparse: an md1 may carry keys for some `@N` and not
-/// others, and `md` emits such a card at exit 0. Treating that partial list as
-/// exhaustive refused a legitimate cosigner whose slot simply is not filled in
-/// — with a message asserting they are "not a cosigner", which is false, and
-/// which pushes the operator onto `--policy-id-stub`, the unchecked path this
-/// check exists to close (R7/B2, 2026-08-21).
-///
-/// Over-refusal is the expensive direction: a wrongly refused mint costs a
-/// legitimate backup, where a wrongly accepted one is caught at recovery.
-#[test]
-fn membership_is_enforced_only_when_every_slot_is_keyed() {
-    let md = "/scratch/code/shibboleth/descriptor-mnemonic/target/release/md";
-    if !std::path::Path::new(md).exists() {
-        eprintln!("skipping: md binary not built");
-        return;
-    }
-    let (fp0, path0, x0) = KEYS[0];
-    let (fp1, path1, x1) = KEYS[1];
-
-    // A 2-placeholder policy with ONLY @0 keyed.
-    let out = std::process::Command::new(md)
-        .args([
-            "encode",
-            "wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))",
-            "--key",
-            &format!("@0={x0}"),
-            "--fingerprint",
-            &format!("@0={fp0}"),
-            "--path",
-            &format!("m/{path0}"),
-            "--force-chunked",
-            "--group-size",
-            "0",
-        ])
-        .output()
-        .expect("md encode");
-    let chunks: Vec<String> = String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter(|l| l.starts_with("md1"))
-        .map(str::to_string)
-        .collect();
-    assert!(!chunks.is_empty(), "md must emit a partially-keyed card");
-
-    let mint = |x: &str, fp: &str, path: &str| -> Option<i32> {
-        let mut args = vec![
-            "encode".to_string(),
-            "--xpub".into(),
-            x.into(),
-            "--origin-fingerprint".into(),
-            fp.into(),
-            "--origin-path".into(),
-            format!("m/{path}"),
-            "--group-size".into(),
-            "0".into(),
-        ];
-        for c in &chunks {
-            args.push("--from-md1".into());
-            args.push(c.clone());
-        }
-        mk().args(&args).output().unwrap().status.code()
-    };
-
-    assert_eq!(
-        mint(x0, fp0, path0),
-        Some(0),
-        "the keyed cosigner must mint"
-    );
-    assert_eq!(
-        mint(x1, fp1, path1),
-        Some(0),
-        "a cosigner for an UNFILLED slot must mint — membership is undecidable here"
     );
 }
