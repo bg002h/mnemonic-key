@@ -105,6 +105,7 @@ fn kv_cli_derive_json_warns_depth1_stdout_json() {
 
 #[test]
 fn kv_cli_readers_sentinel_no_warning() {
+    // mk#30 (bh-mk-C1): address and derive refuse a fixed-key card; the sentinel still gets no invalid-card warning.
     for verb in [
         &["inspect"][..],
         &["address", "--count", "1", "--address-type", "p2wpkh"][..],
@@ -113,12 +114,27 @@ fn kv_cli_readers_sentinel_no_warning() {
         let mut a = verb.to_vec();
         a.extend_from_slice(&SENTINEL_ZERO);
         let o = mk(&a);
-        assert_eq!(
-            o.status.code(),
-            Some(0),
-            "{verb:?} stderr: {}",
-            s(&o.stderr)
-        );
+        if verb[0] == "inspect" {
+            assert_eq!(
+                o.status.code(),
+                Some(0),
+                "{verb:?} stderr: {}",
+                s(&o.stderr)
+            );
+        } else {
+            assert_eq!(
+                o.status.code(),
+                Some(64),
+                "{verb:?} stderr: {}",
+                s(&o.stderr)
+            );
+            assert!(
+                s(&o.stderr)
+                    .contains("this card holds one fixed key (depth 0, all-zero chain code;"),
+                "{verb:?} stderr: {}",
+                s(&o.stderr)
+            );
+        }
         assert!(
             !s(&o.stderr).contains("this card is invalid"),
             "{verb:?} stderr: {}",
