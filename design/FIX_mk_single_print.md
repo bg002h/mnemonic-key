@@ -848,8 +848,7 @@ CLI pins, not defaults, so nothing else catches these):
   "print each `mk1` string on stdout in groups".
 - line 57: "Dropdown (`space`|`hyphen`|`comma`; default `space`)" becomes "Dropdown (`space`; default `space`; `hyphen`
   and `comma` were retired in mk-cli 0.14.0 and are refused at exit 64)"; delete the `hyphen` and `comma` outline
-  bullets (lines 67-68) and sections (lines 75-86); lines 59-60 "it affects only the rendered card" becomes "it
-  affects only the printed form".
+  bullets (lines 67-68) and sections (lines 75-85; keep line 86, the `--xpub` heading); lines 59-62 "it affects only the rendered card, not the decoded bytes. The CLI also accepts the literal `-` / `,` / space; the GUI narrows the surface to the three keyword values." become "it affects only the printed form, not the decoded bytes.".
 
 The review's I-3 list also covers md 53/54/5A/5E and ms 63 (those are in md 8b and ms 8b) and
 `82-binary-and-launch.md` (section 8a-bis).
@@ -899,6 +898,7 @@ The builder runs `check_cli_pins.py` (b) and updates every prose mention of a CL
   engraving (default 0 = unbroken). Cosmetic — intake strips separators, so any grouping re-ingests."`
 - `--separator`: `help: "Separator for --group-size: `space` only (hyphen and comma were retired). Cosmetic —
   non-load-bearing."` (the current text still lists `space|hyphen|comma`, stale since mk-cli 0.14.0).
+- `SEPARATORS` (`src/schema/mk.rs:15`) becomes `&["space"]`, as `md.rs:28` already is; the dropdown no longer offers the two values the CLI refuses at exit 64, and the toolkit inventory regenerates with `variants: ["space"]` (step 4).
 - `pinned-upstream.toml` `[mk] tag` moves from `mk-cli-v0.13.0` to the release carrying this change. That jump spans
   0.14.0-0.16.0 too; the gui builder runs `schema-mirror` and folds any other drift it reports.
 
