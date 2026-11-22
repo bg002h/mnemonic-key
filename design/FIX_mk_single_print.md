@@ -863,9 +863,20 @@ md/ms/mk tags, so in the step-4 commit the manual's `[manual-gui]` md/ms/mk tags
 section depends on one fact the builder reads from `scripts/install.sh` and `pinned-upstream.toml` at build time
 (not decided here):
 
-Case A: `toolkit-tag-implied` is still older than the installer's `mnemonic-toolkit` tag (at cdedd8a2: `v0.105.1`
-against `v0.107.0`). The section stays, reduced to `mnemonic`. Lines 44-63 (the section's opening paragraph through
-"First `mnemonic`, three outputs:") become:
+Under section 8.0 the GUI's `mnemonic` tag stays `mnemonic-toolkit-v0.105.1` and the installer's stays newer
+(`v0.107.0` at cdedd8a2), so the section stays, reduced to `mnemonic`. Lines 45-65 of `82-binary-and-launch.md`
+@cdedd8a2 (the opening paragraph through "First `mnemonic`, three outputs:") become the text below; the three
+`mnemonic` bullets (lines 67-85) stay unchanged; lines 87-195 (from "Then `ms`, five outputs:" through the end of
+the `md` list, including the `mk encode` bullet) are deleted. The sentence "The toolkit installer installs newer
+releases of all four (next section)." becomes "The toolkit installer installs a newer release of `mnemonic` (next
+section).", and "the next section lists the four it installs newer than these" becomes "the next section lists
+the one it installs newer than these". In `pinned-upstream.toml`, the comment's first four lines (116-119, "The
+installer runs AHEAD of mnemonic-gui v0.63.0 on four CLIs: ..." through "...shipped before the GUI re-pinned to
+them. This manual keeps documenting the GUI's tier above;") become "# The installer runs AHEAD of mnemonic-gui
+<the step-3 tag> on one CLI: mnemonic 0.107.0 (argv-secret refusals on five" / "# more flags) shipped before the
+GUI re-pinned to it. This manual keeps documenting the GUI's tier above;". STOP instead of editing if, at build
+time, the GUI's `mnemonic` tag equals the installer's or the installer's `mnemonic` tag is no longer
+`mnemonic-toolkit-v0.107.0` (the text below names 0.107.0 and its behaviour).
 
     The toolkit installer currently installs one CLI release newer than
     this GUI was built against: `mnemonic-toolkit-v0.107.0` (the GUI's
@@ -882,21 +893,7 @@ against `v0.107.0`). The section stays, reduced to `mnemonic`. Lines 44-63 (the 
     line of a card; none changes a derived wallet. Three `mnemonic`
     outputs:
 
-(the three `mnemonic` bullets, lines 65-86 at cdedd8a2, stay unchanged). Everything from "Then `ms`, five outputs:"
-through the end of the `md` list (lines 87-195, including the `mk encode` bullet of lines 117-121 that said "`mk
-encode` now prints its grouped card on stderr") is deleted: those outputs belong to releases the GUI is now pinned
-to, not to releases the installer is ahead on. The sentence "The toolkit installer installs newer releases of all
-four (next section)." becomes "The toolkit installer installs a newer release of `mnemonic` (next section).", and
-"the next section lists the four it installs newer than these" becomes "the next section lists the one it installs
-newer than these".
-
-Case B: the GUI's `mnemonic` tag also equals the installer's. Then `pinned-upstream.toml` `[installer-ahead]` is
-deleted whole and the whole `{#installer-ahead}` section (lines 43-195) is deleted, because `check_cli_pins.py` (a)
-requires the section to be absent when the table is. The sentence "The toolkit installer installs newer releases of
-all four (next section)." becomes "The toolkit installer installs exactly these releases.", and "the next section
-lists the four it installs newer than these" is deleted.
-
-In both cases the builder runs `check_cli_pins.py` (b) and updates every prose mention of a CLI version it names.
+The builder runs `check_cli_pins.py` (b) and updates every prose mention of a CLI version it names.
 
 ### 8b. mnemonic-gui (`src/schema/mk.rs`, `ENCODE_FLAGS`), lands in step 3 (the gui release, AHEAD of the toolkit)
 
