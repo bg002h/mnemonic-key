@@ -139,6 +139,7 @@ printed. Row C4 asserts the fields, not the bytes.
    - `OriginParentFingerprintMismatch { origin_fingerprint: Fingerprint, parent_fingerprint: Fingerprint }`,
      `#[error]` = T7. Doc: "A depth-1 card whose origin fingerprint is not the key's parent fingerprint (at depth 1
      the parent is the master). Refused at mint, reported by `KeyCard::validate`, still decoded."
+   - Field doc comments, verbatim: `MasterParentFingerprintNonzero.parent_fingerprint`: ``/// `xpub.parent_fingerprint` as supplied (not 00000000).``; `MasterFingerprintMismatch.origin_fingerprint` and `OriginParentFingerprintMismatch.origin_fingerprint`: ``/// The card's `origin_fingerprint`.``; `MasterFingerprintMismatch.key_fingerprint`: ``/// The key's own fingerprint (`xpub.fingerprint()`).``; `OriginParentFingerprintMismatch.parent_fingerprint`: ``/// `xpub.parent_fingerprint` as supplied.``
    - `Fingerprint` is `bitcoin::bip32::Fingerprint`, imported the way `ChildNumber` is.
    - In the unit test `parameterized_variants_render` (:208-250), add two cases: parent `01010101` renders as T1
      with `01010101`, and origin `deadbeef`/key `751e76e8` renders as T2. Add a parameterized render case: origin
@@ -197,21 +198,26 @@ printed. Row C4 asserts the fields, not the bytes.
    - Any other diff is a build error to stop on.
 7. `Cargo.toml` `version = "0.6.0"`; mk-cli's dependency line becomes `mk-codec = { path = "../mk-codec", version =
    "0.6.0" }`. Refresh `Cargo.lock` for the workspace members only (`cargo update --workspace --offline`), and check
-   that the lock diff is the mk-codec version line alone.
+   that the lock diff is the two version lines alone: mk-cli `0.17.0` -> `0.18.0-dev` and mk-codec `0.5.1` -> `0.6.0`.
 8. `CHANGELOG.md` (crates/mk-codec), under `## [Unreleased]`:
-   - A bold lead line: `**SemVer-minor: \`encode\` refuses cards it used to mint (BIP 32 invalid depth-0 keys,
-     out-of-range path indices). Wire layout unchanged; decoding unchanged.**`
+   - A bold lead line: `**SemVer-minor: \`encode\` refuses cards it used to mint (BIP 32 invalid depth-0 keys, a depth-1 origin
+     fingerprint that is not the parent fingerprint, out-of-range path indices). Wire layout unchanged; decoding
+     unchanged.**`
    - `### Added`:
      - `KeyCard::validate`
      - `Error::MasterParentFingerprintNonzero`
      - `Error::MasterFingerprintMismatch`
      - `Error::OriginParentFingerprintMismatch`
    - `### Changed`:
-     - R1-R3 in one sentence each (texts T1-T3).
+     - **`encode` refuses an origin-path component whose index is 2^31 or more**, in either form, with `Error::InvalidPathComponent` (`component <n> index <i> is out of the BIP 32 range 0..2^31`). Before, it wrote the index with bit 31 set and the card decoded to a different path.
+     - **`encode` refuses a depth-0 key whose parent fingerprint is not 00000000** with `Error::MasterParentFingerprintNonzero` (BIP 32 test vector 5).
+     - **`encode` refuses a depth-0 card whose origin fingerprint is not the key's own** with `Error::MasterFingerprintMismatch`. A key with an all-zero chain code may carry 00000000 instead.
+     - **`encode` refuses a depth-1 card whose origin fingerprint is not the xpub's parent fingerprint** with `Error::OriginParentFingerprintMismatch`.
      - `canonical_payload_bytes` keeps accepting a decoded legacy card.
      - `GENERATOR_FAMILY` is `mk-codec 0.6`; V19 is regenerated as a valid master; both corpus SHAs are re-pinned.
    - `### Compatibility`:
-     - "Decoders: unaffected; a legacy card that breaks R2 or R3 still decodes, and `KeyCard::validate` reports it."
+     - Decoders: unaffected. A card minted before 0.6.0 that breaks one of the three
+       key-origin rules still decodes, and \`KeyCard::validate\` reports it.
      - "`mnemonic-toolkit`: its WIF cards (all-zero chain code, origin fingerprint 00000000) stay valid."
 
 ## 4. mk-cli changes (crates/mk-cli)
@@ -231,7 +237,7 @@ printed. Row C4 asserts the fields, not the bytes.
 3. `src/cmd/verify.rs:75`: immediately after `warn_corrections_applied(...)`, add `card.validate()?;`. An invalid
    card therefore exits 1 even when `--xpub`/`--origin-*`/`--policy-id-stub`/`--from-md1` are given (invalid takes
    precedence over a mismatch). The chunk-set-id and corrections warnings still print first.
-4. Add `pub fn warn_if_invalid(card: &mk_codec::KeyCard)` in `src/cmd/mod.rs`, which `eprintln!`s T5 on `Err(e)`
+4. Add `pub fn warn_if_invalid(card: &mk_codec::KeyCard)` in `src/cmd/mod.rs`, immediately after `derived_chunk_set_id`, which `eprintln!`s T5 on `Err(e)`
    from `card.validate()`. Call it in `src/cmd/decode.rs:49` (immediately after `warn_corrections_applied(...)`), in
    `src/cmd/inspect.rs` right after `warn_chunk_set_id_mismatch(csid, &card);` (:53), and in `src/cmd/address.rs`
    (:84) and `src/cmd/derive.rs` (:54) right after `warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings,
@@ -242,12 +248,11 @@ printed. Row C4 asserts the fields, not the bytes.
    its chunk-set-id comparison must not silently vanish."
 6. `CHANGELOG.md` (crates/mk-cli), under `## [Unreleased]`, `### Changed`:
    - `mk encode` refuses a depth-0 xpub whose parent fingerprint is not 00000000 (exit 64).
-   - `mk verify` reports a card with an invalid depth-0 key as invalid (exit 1, kinds `MasterParentFingerprintNonzero`
-     / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
+   - `mk verify` reports a card whose depth-0 key is not a valid BIP 32 master, or whose depth-1 origin fingerprint is not the xpub's parent fingerprint, as invalid (exit 1, kinds `MasterParentFingerprintNonzero` / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
    - `mk decode`, `inspect`, `address` and `derive` still read such a card and warn on stderr.
    - Requires mk-codec 0.6.0.
 
-   mk-cli's own version is the release step's to set, not this FIX's.
+   `crates/mk-cli/Cargo.toml` `version` becomes `0.18.0-dev`, and the first line under `## [Unreleased]` is `Next release: 0.18.0` followed by a blank line, before `### Changed` (`tests/version_is_honest.rs` requires both; precedent a5d6f1e). The release step sets 0.18.0.
 
 No flag changes, so the GUI schema mirror is not touched.
 
@@ -262,18 +267,19 @@ No flag changes, so the GUI schema mirror is not touched.
   with the hardened marker: a normal index 2³¹+1 would be written as the hardened component 1' and decode as a
   different path (mk-codec 0.6.0+)."
 - After :338 (the `XpubOriginPathMismatch` encoder-side invariant), insert a new paragraph:
-  "Encoder-side invariant (depth-0 key validity; mk-codec 0.6.0+): for a depth-0 card (empty `origin_path`),
+  "Encoder-side invariant (key-origin validity; mk-codec 0.6.0+): for a depth-0 card (empty `origin_path`),
   encoders MUST reject an `xpub.parent_fingerprint` other than `00000000` (BIP 32 serializes a master key with a
   zero parent fingerprint) with `Error::MasterParentFingerprintNonzero`. When `origin_fingerprint` is present,
   encoders MUST also reject one that differs from the key's own fingerprint (the first 4 bytes of HASH160 of
   `xpub.public_key`) with `Error::MasterFingerprintMismatch`. The second rule has one exception: a key with an
   all-zero chain code (the depth-0 form a toolkit builds from a raw WIF, which has no master) may carry origin
-  fingerprint `00000000`. The first rule has none. Unlike the invariants above, these are detectable at decode, but
-  a decoder MUST NOT reject them: cards minted before mk-codec 0.6.0 may carry them and must stay readable. A
-  reader reports them instead. In the reference implementation `KeyCard::validate` returns the error, `mk verify`
-  exits 1 with it, and `mk decode` prints the card with a warning. For a depth-1 card (one `origin_path` component),
-  when `origin_fingerprint` is present, encoders MUST reject one that differs from `xpub.parent_fingerprint`
-  (`Error::OriginParentFingerprintMismatch`): the parent of a depth-1 key is the master."
+  fingerprint `00000000`. The first rule has none. For a depth-1 card (one `origin_path` component), when
+  `origin_fingerprint` is present, encoders MUST reject one that differs from `xpub.parent_fingerprint` with
+  `Error::OriginParentFingerprintMismatch` (the parent of a depth-1 key is the master); this rule has no exception.
+  Unlike the invariants above, these three are detectable at decode, but a decoder MUST NOT reject them: cards
+  minted before mk-codec 0.6.0 may carry them and must stay readable. A reader reports them instead. In the
+  reference implementation `KeyCard::validate` returns the error, `mk verify` exits 1 with it, and `mk decode`,
+  `mk inspect`, `mk address` and `mk derive` print the card with a warning."
 
 ### 5.2 `bip/bip-mnemonic-key.mediawiki`
 
@@ -283,19 +289,19 @@ No flag changes, so the GUI schema mirror is not touched.
   a value cannot be written as one u32 without colliding with the hardened marker: a normal index
   2<sup>31</sup>+1 would be written as the hardened component <code>1'</code> and decode as a different path."
 - After :538 (the compact-73 encoder-side invariant), insert a new paragraph:
-  "'''Encoder-side invariant (depth-0 and depth-1 key origin).''' For a depth-0 card (empty <code>origin_path</code>), an
-  encoder MUST reject an <code>xpub.parent_fingerprint</code> other than <code>00000000</code>
+  "'''Encoder-side invariant (depth-0 and depth-1 key origin).''' For a depth-0 card (empty <code>origin_path</code>),
+  an encoder MUST reject an <code>xpub.parent_fingerprint</code> other than <code>00000000</code>
   (<code>Error::MasterParentFingerprintNonzero</code>): BIP 32 serializes a master key with a zero parent
   fingerprint. When <code>origin_fingerprint</code> is present, the encoder MUST also reject one that differs from
   the key's own fingerprint, the first 4 bytes of HASH160 of <code>xpub.public_key</code>
   (<code>Error::MasterFingerprintMismatch</code>). The second rule has one exception: a key with an all-zero chain
   code (the depth-0 form built from a raw WIF, which has no master) may carry origin fingerprint
-  <code>00000000</code>. The first rule has none. These conditions are visible to a decoder, but a decoder MUST NOT
-  reject them, because cards minted by earlier encoders may carry them. A reader SHOULD report such a card as
-  invalid and MAY still display its fields. For a depth-1 card (one <code>origin_path</code> component), when
-  <code>origin_fingerprint</code> is present, encoders MUST reject one that differs from
+  <code>00000000</code>. The first rule has none. For a depth-1 card (one <code>origin_path</code> component), when
+  <code>origin_fingerprint</code> is present, the encoder MUST reject one that differs from
   <code>xpub.parent_fingerprint</code> (<code>Error::OriginParentFingerprintMismatch</code>): the parent of a depth-1
-  key is the master."
+  key is the master. These three conditions are visible to a decoder, but a decoder MUST NOT reject them, because
+  cards minted by earlier encoders may carry them. A reader SHOULD report such a card as invalid and MAY still
+  display its fields."
 - At :712, append to the paragraph: " The depth-0 card is a valid BIP 32 master (parent fingerprint
   <code>00000000</code>, origin fingerprint equal to the key's own), as regenerated under the <code>mk-codec
   0.6</code> token."
@@ -307,8 +313,7 @@ After the "Decoding an mk1 card" section (ends :86), insert a new section:
     ## Validating a decoded card
 
     `decode` reads every card a conformant encoder could have written, including cards minted before
-    mk-codec 0.6.0 whose depth-0 or depth-1 key origin breaks these rules (a nonzero parent fingerprint, or an origin
-    fingerprint that is not the key's own). `KeyCard::validate()` applies every rule `encode` enforces and
+    mk-codec 0.6.0 whose key origin breaks a rule `encode` now enforces (a depth-0 key with a nonzero parent fingerprint or an origin fingerprint that is not its own, or a depth-1 key whose origin fingerprint is not its parent fingerprint). `KeyCard::validate()` applies every rule `encode` enforces and
     returns `Error::MasterParentFingerprintNonzero`, `Error::MasterFingerprintMismatch` or `Error::OriginParentFingerprintMismatch` for such a card.
     Call it before trusting a decoded card's origin; `mk verify` does, and exits 1 on the error.
 
@@ -336,11 +341,11 @@ report and is direct-pushed after merge.
   origin fingerprint must be the xpub's parent fingerprint. `mk encode` refuses any of these with exit 64 and mints
   nothing."
 - `mk decode` Output, after "`origin_fingerprint` is `null` for privacy-preserving cards." (:166), add: "A card
-  that breaks one of these rules (minted before mk-codec 0.6.0) still reads: `mk decode`, `mk inspect`, `mk address`
+  that breaks one of the key-origin rules in `mk encode` (minted before mk-codec 0.6.0) still reads: `mk decode`, `mk inspect`, `mk address`
   and `mk derive` print it as read and add a `warning: this card is invalid (...)` line on stderr."
 - `mk verify` (:443-446): replace "Exits 0 with `OK: mk1 string(s) decode cleanly ...` on success, exits 4 with a
   `ContentMismatch` error envelope when an expected-* flag disagrees with the decoded value." with "Exits 0 with
-  `OK: mk1 string(s) decode cleanly ...` on success. Exits 1 when the card breaks one of these rules (kind
+  `OK: mk1 string(s) decode cleanly ...` on success. Exits 1 when the card breaks one of the key-origin rules in `mk encode` (kind
   `MasterParentFingerprintNonzero`, `MasterFingerprintMismatch` or `OriginParentFingerprintMismatch`), before any expected-* comparison. Exits 4 with a
   `ContentMismatch` error envelope when an expected-* flag disagrees with the decoded value."
 
@@ -366,7 +371,7 @@ Constants (testnet only; no seed involved):
   `deadbeef`, parent_fp `751e76e8`).
 - `D1_TPUB` = `tpubD984EkAGpvBEL17UyUznoEtTRFfVULe1D6QeTARexMtG9Xvjsqo3cV2EuNcnQmAoodvTVoiLC1W8k4tF8zmrPwM8EuEK2KyvuhnYhYurri4`.
 
-The RED commands, run on base 8a738ab with the three files installed. Logs are at
+The RED commands, run on base 8a738ab with the five files installed. Logs are at
 `/scratch/cache/wt-mkc-keycard-validation-gen/final-red-*.log`.
 
     cargo nextest run --locked --build-jobs 6 -j 6 -p mk-codec --test keycard_validation --no-fail-fast
@@ -1008,8 +1013,9 @@ Expect `459 tests run: 459 passed`. What the gate does not cover:
 
 ## 9. Build order
 
-1. RED commit: the three row files (section 6) only. Re-run the three RED commands and confirm the section 6
-   results.
+1. RED commit: the five row files (sections 6.1-6.5) only. Re-run the five RED commands and confirm
+   the section 6 results (including `keycard_depth1` build FAIL E0599 and `keycard_readers` `9 tests run: 2 passed,
+   7 failed`).
 2. GREEN commit:
    - sections 3 and 4 (codec, CLI, generator, consts, Cargo/lock, CHANGELOGs);
    - the regenerated corpus, with the diff checked against section 3 item 6;
