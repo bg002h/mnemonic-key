@@ -3,13 +3,13 @@
 # bh-mk-I15, sweep-1122 row 15 mk-keys-contradictory-records, mk-dup-stub).
 #
 # What it does: builds `mk` (cargo build --locked -p mk-cli, the repo's pinned
-# 1.85 toolchain, no --release), writes four public md1 fixture policies and
+# 1.85 toolchain, no --release), writes six public md1 fixture policies and
 # the key files below under $WORK, runs every CLI row the document prints and
 # checks it against the MODE's expectation:
 #   red   = the base commit's behaviour (each defect mints at exit 0; controls pass)
 #   green = the fixed behaviour (each refusal exits 64 with the exact section-2
 #           text on stderr and nothing on stdout; controls unchanged)
-# Any row that does not match its expectation fails the script (exit 1).
+# Rows: 29 (red and green). Any row that does not match its expectation fails the script (exit 1).
 #
 # Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
 # the rest (plus a newline; "=" alone means empty).
@@ -71,6 +71,24 @@ md1fhd3vpswwl5z8lphut2hvvpp5wl4l0mn058ndxfl63kufyfsjwlt2vkk2nlqmlvch0wqccjd2vncv
 md1fhd3vps4yav9mj0jnn9svfgll7zvw5qnkxgeal5wa4wy86389z3gq870g9n6rjwuqgwh986tdk7dxr
 md1fhd3vpslkxupyjz229sgx620d93cwcs6he5skltczfzylx0ndtm9fdvtp6hyhacczakufnwezg4mz
 EOF
+# ELIDED (stub 38bd7cec): the same policy as A with the origin elided on the wire (md 0.20.7 `md encode
+# 'wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))' --key @0=X0 --key @1=X1 --fingerprint @0=73c5da0a --fingerprint
+# @1=aabbccdd`, no --path; --network signet with the tpub spellings prints the same strings).
+cat > elided.md1 <<'EOF'
+md1fwlhkpspqggqpsgvzzshs3eutks264w7vm52uzfwaqcl9pvz58pmltjs9tjrg0g2z0agqv9emggu04pqgg
+md1fwlhkpsw67p5s3wem7sgluxl3d2a3syx3m7halwd7s7d5e8l2xm3y3xzfmadfj6e20urqdw3qtwekpkf7e
+md1fwlhkpsh7e30f8tpwunu5uevrz28llsnr4qya3jx00arhdt3p75feg52qpln6pv7sunhqpxvxsstm2usu6
+md1fwlhkpscrmrwqjfp99zcyrd98kjcu8vgdtu6gt04upy3z0n8ek4aj5kk9satjt7uvlfas3hpkyv6wk
+EOF
+# SIGNET (stub 00912ee3): the same command plus --path "m/48'/1'/0'/2'" (inline-origin route).
+cat > signet.md1 <<'EOF'
+md1fx6kzpspq2tvywz2sqrqscy9p0prnchdq442auehg4cyja6p372zc9gwrh7h9q2hyxs7s5mmuyg5wnu8kyf
+md1fx6kzpsgnl2rd0q6gghvalgy07r0ck4wcczrgalt7lhxlg0x6vnl4rdcjgnpya7k5edv4x5l8gpre2xywzw
+md1fx6kzpshcxlmx9ayav9mj0jnn9svfgll7zvw5qnkxgeal5wa4wy86389z3gq870g9n6rjwpwmec4za9gk4u
+md1fx6kzpsmsrmrwqjfp99zcyrd98kjcu8vgdtu6gt04upy3z0n8ek4aj5kk9satjt7uvqwz5x5s5nw4z9m
+EOF
+# X0D0: X0's chain code and key re-serialized at depth 0 (parent fp 00000000, child 0).
+X0D0=xpub661MyMwAqRbcGQnC8zMGwRc4EXYJCgXrxx9kXtw1RXqu4TcW26PxHqssgp6sU4N5CR5o9QcUZPG31fzPeUHEVPkFit1WpVZTmqZLzpvZG2s
 TPL=md1yqpqqxzq2qwfv8urt848e   # keyless template wpkh, stub 559e64b2
 P0="48'/0'/0'/2'"
 printf '[73c5da0a/%s]%s\n[73c5da0a/%s]%s\n' "$P0" "$X0" "$P0" "$X0" > twice.txt
@@ -99,8 +117,9 @@ row() {
   if [ $ok = 1 ]; then echo "OK   $MODE $name rc=$rc"; else
     echo "FAIL $MODE $name rc=$rc (want $want)"; sed 's/^/  out: /' "$f.out"; sed 's/^/  err: /' "$f.err"; FAIL=1; fi
 }
-# Section 2 texts (T-PATH, T-FP, T-REPKEY, T-REC, T-KEY2, T-ORIGIN2, T-STUB).
+# Section 2 texts (T-PATH, T-PATH-STD, T-FP, T-REPKEY, T-REC, T-KEY2, T-ORIGIN2, T-STUB).
 tpath() { printf '%s' "xpub $1 is @$2 of the wallet policy with stub $3, whose origin path for it is $4; the card declares $5. A card whose origin contradicts its own policy is refused; no card was minted."; }
+tpathstd() { printf '%s' "xpub $1 is @$2 of the wallet policy with stub $3, which states no origin path for it, so its policy id uses the standard origin path for its template, $4; the card declares $5. A card whose origin contradicts its own policy is refused; no card was minted. If $5 is this key's origin, re-encode the md1 with the keys' real origins (md encode --path, or the origin in the template) and mint against the new md1."; }
 tfp() { printf '%s' "xpub $1 is @$2 of the wallet policy with stub $3, whose master fingerprint for it is $4; the card declares $5. A card whose origin contradicts its own policy is refused; no card was minted."; }
 trepkey() { printf '%s' "the wallet policy with stub $1 holds xpub $2 at $3; BIP 388 requires the keys of a policy to be pairwise distinct, so the policy is refused and no card was minted."; }
 trec() { printf '%s' "$1:$2: this record repeats line $3; a key is carded once, so a repeated record is refused and no card was minted."; }
@@ -116,6 +135,9 @@ if [ "$MODE" = red ]; then
   row fe_i2_sparse_slot_contradicts_policy 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1
   row fe_i2_batch_record_contradicts_policy 0 mk1 - - -- encode --keys batch9.txt --from-md1-set a.md1
   row fe_i2_policy_repeats_key 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set rep.md1
+  row fe_i2_elided_origin_path_contradicts_policy 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_signet_card 0 mk1 - - -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_master_card 0 mk1 - - -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
   row fe_keys_identical_record_twice 0 mk1 - "card 2 of 2" -- encode --keys twice.txt --policy-id-stub deadbeef
   row fe_keys_identical_record_h_spelling 0 mk1 - "card 2 of 2" -- encode --keys twice_h.txt --policy-id-stub deadbeef
   row fe_keys_one_key_two_origins 0 mk1 - "card 2 of 2" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
@@ -132,6 +154,9 @@ else
   row fe_i2_sparse_slot_contradicts_policy 64 = - "=error: $(tpath "$X0" 0 3a7f6520 "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1
   row fe_i2_batch_record_contradicts_policy 64 = - "=error: $(tpath "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --keys batch9.txt --from-md1-set a.md1
   row fe_i2_policy_repeats_key 64 = - "=error: $(trepkey 58e73a11 "$X0" "@0, @1")" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set rep.md1
+  row fe_i2_elided_origin_path_contradicts_policy 64 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_signet_card 64 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "m/48'/1'/0'/2'")" -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_master_card 64 = - "=error: $(tpathstd "$X0D0" 0 38bd7cec "$M0" m)" -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
   row fe_keys_identical_record_twice 64 = - "=error: $(trec twice.txt 2 1)" -- encode --keys twice.txt --policy-id-stub deadbeef
   row fe_keys_identical_record_h_spelling 64 = - "=error: $(trec twice_h.txt 3 1)" -- encode --keys twice_h.txt --policy-id-stub deadbeef
   row fe_keys_one_key_two_origins 64 = - "=error: $(tkey2 twoorigins.txt 2 1 "[73c5da0a/$P0]")" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
@@ -151,4 +176,6 @@ row fe_control_distinct_records_mint 0 mk1 - "card 3 of 3" -- encode --keys dist
 row fe_control_both_cosigners_mint 0 mk1 - "card 2 of 2" -- encode --keys cosigners.txt --from-md1-set a.md1
 row fe_control_two_distinct_stubs_mint 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --from-md1 "$TPL"
 row fe_control_chunk_set_given_twice_unchanged 1 = - "chunk set incomplete: got 8 chunks, expected 4" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set a.md1 --from-md1-set a.md1
+row fe_control_md_default_elided_origin_mints 0 mk1 - "policy 38bd7cec has 2 cosigner(s); 1 of them carded here, 1 not carded" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+row fe_control_signet_card_against_path_md1_mints 0 mk1 - "policy 00912ee3 has 2 cosigner(s); 1 of them carded here, 1 not carded" -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set signet.md1
 [ $FAIL = 0 ] && echo "ALL ROWS MATCH $MODE" || { echo "ROWS DIFFER FROM $MODE"; exit 1; }
