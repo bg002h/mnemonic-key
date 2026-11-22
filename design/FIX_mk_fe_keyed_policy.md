@@ -66,7 +66,13 @@ So a key file whose records repeat one another reports 2.2 even when a record wo
 
 For every `--from-md1`/`--from-md1-set` card that is a keyed wallet policy, its keyed slots are the
 `md_codec::canonicalize::expand_per_at_n(&descriptor)` entries whose `xpub` is `Some` (origin path,
-optional master fingerprint, key, `@N`). This is the expansion `compute_wallet_policy_id` already
+optional master fingerprint, key, `@N`). A slot's origin path is its `ExpandedKey::origin_path`,
+except that an empty one (an elided origin: what `md encode` writes without `--path`, with or
+without `--network signet`) is `md_codec::canonical_origin::canonical_origin(&descriptor.tree)`, the
+path `compute_wallet_policy_id` hashes for it (identity.rs L230-235), so the stub commits to it; such
+a slot is *standard-filled*. (`canonical_origin` is `None` only for a wrapper whose empty origin
+`expand_per_at_n` already refused with `MissingExplicitOrigin`; if reached, keep the empty path, as
+identity.rs does.) This is the expansion `compute_wallet_policy_id` already
 runs on the same descriptor, so it adds no new failure (map any error with `?`, unreachable for a
 card whose policy id was computed). A keyless template has no keyed slots and nothing is checked
 (unchanged); `--policy-id-stub` is not checked (unchanged). The check runs for a complete AND a
@@ -76,16 +82,19 @@ empty. Key equality is the existing 65-byte identity (`xpub_identity_65`).
 For each card and each keyed policy, let S = the keyed slots holding the card's key:
 - (c) |S| >= 2: refuse with T-REPKEY. `<slots>` = every `@N` in S, ascending, joined by `, `.
 - |S| = 1, slot `@N`:
-  - (a) card path != slot origin path (component-wise: index and hardened flag): refuse with T-PATH.
+  - (a) card path != slot origin path (component-wise: index and hardened flag; a standard-filled
+    slot compares its filled path, so an empty card path does not match it): refuse with T-PATH, or
+    with T-PATH-STD when the slot is standard-filled.
   - (b) else, if BOTH the slot fingerprint and the card fingerprint are present and differ: refuse
     with T-FP. A missing fingerprint on either side is not compared (P2: "Missing fingerprints stay
     accepted"): a `--privacy-preserving` card and a policy without a fingerprint TLV both mint.
 - |S| = 0: unchanged (complete key list: the existing "is not a cosigner" refusal; sparse: mints).
 
-Path rendering in T-PATH: `m`, then `/<index>` per component with `'` after a hardened index
+Path rendering in T-PATH and T-PATH-STD: `m`, then `/<index>` per component with `'` after a hardened index
 (`m/48'/0'/0'/2'`; an empty path renders `m`). Fingerprints: 8 lowercase hex.
 
 - T-PATH: `xpub <xpub> is @<N> of the wallet policy with stub <stub>, whose origin path for it is <policy path>; the card declares <card path>. A card whose origin contradicts its own policy is refused; no card was minted.`
+- T-PATH-STD: `xpub <xpub> is @<N> of the wallet policy with stub <stub>, which states no origin path for it, so its policy id uses the standard origin path for its template, <policy path>; the card declares <card path>. A card whose origin contradicts its own policy is refused; no card was minted. If <card path> is this key's origin, re-encode the md1 with the keys' real origins (md encode --path, or the origin in the template) and mint against the new md1.`
 - T-FP: `xpub <xpub> is @<N> of the wallet policy with stub <stub>, whose master fingerprint for it is <policy fp>; the card declares <card fp>. A card whose origin contradicts its own policy is refused; no card was minted.`
 - T-REPKEY: `the wallet policy with stub <stub> holds xpub <xpub> at <slots>; BIP 388 requires the keys of a policy to be pairwise distinct, so the policy is refused and no card was minted.`
 
@@ -154,7 +163,7 @@ refused).
 - `crates/mk-cli/src/keyfile.rs` L137-152: keep each record's 1-based line number; 2.2 after the
   loop.
 - `crates/mk-cli/CHANGELOG.md` `[Unreleased]` `### Changed` (PROPOSED):
-  `- \`mk encode\` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list), and a policy that holds the key in two slots.`
+  `- \`mk encode\` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.`
   `- \`mk encode --keys\`/\`--in\` refuses (exit 64) a repeated record, one key under two origins, and one origin with two keys, naming both lines.`
   `- \`mk encode\` refuses (exit 64) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.`
 - `SCRIPTS.md`: row for `scripts/mk-fe-keyed-policy-rows.sh` (added on this branch; PR #30 adds its
@@ -166,10 +175,10 @@ Committed runner: `scripts/mk-fe-keyed-policy-rows.sh red|green` (builds `mk` wi
 `cargo build --locked -p mk-cli` on the 1.85 pin, writes the fixtures below under
 `$REPO/target/mk-fe-rows` (override with `WORK`), runs every row, checks the mode's expectation; a
 `=` check compares the whole stream; its header says what it does not cover). Runs: `red` at the
-base code -> `ALL ROWS MATCH red` (24 rows); `green` with a scratch implementation of section 2
-(reverted, not committed) -> `ALL ROWS MATCH green` (24 rows), and the full workspace suite under
+base code -> `ALL ROWS MATCH red` (29 rows); `green` with a scratch implementation of section 2
+(reverted, not committed) -> `ALL ROWS MATCH green` (29 rows), and the full workspace suite under
 that scratch: 460 run, 459 passed, 1 failed (`single_print::encode_keys_labels_each_card_on_stderr`,
-section 6).
+section 6). The I-1 rows (architect-mk18-r1-i1) were added after those runs: the builder re-measures red, green and the suite counts.
 
 Fixtures (public keys only; full strings in the script): X0, X1, X2 = keys_batch.rs `KEYS` xpubs;
 TV1M = BIP-32 TV1 master (fp 3442193e); LEAFM = generator point, zero chain code, depth 0.
@@ -178,7 +187,15 @@ Policies `wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))`, shared origin `m/48'/0'/0'/2'`:
 `sparse.md1` (stub 3a7f6520; @0 `[73c5da0a]X0`, @1 unkeyed; `md encode` 0.20.7 output);
 `rep.md1` (stub 58e73a11; A with @1's key set to X0, built with md_codec 0.42 reassemble/split);
 `nofp.md1` (A without the fingerprint TLV); `TPL` = `md1yqpqqxzq2qwfv8urt848e` (keyless `wpkh`,
-stub 559e64b2). Key files: `twice.txt` (`[73c5da0a/48'/0'/0'/2']X0` twice), `twice_h.txt` (line 1
+stub 559e64b2).
+`elided.md1` (stub 38bd7cec, the same policy as A with the origin elided on the wire: `md encode
+'wsh(multi(2,@0/<0;1>/*,@1/<0;1>/*))' --key @0=X0 --key @1=X1 --fingerprint @0=73c5da0a
+--fingerprint @1=aabbccdd`, md 0.20.7, no `--path`; `--network signet` with the tpub spellings
+prints the same strings); `signet.md1` (stub 00912ee3; the same command plus
+`--path "m/48'/1'/0'/2'"`, byte-identical to `md decompose --emit commands` route 1's
+inline-origin encode); X0D0 = X0's chain code and key re-serialized at depth 0 (parent fp
+00000000, child 0), `xpub661MyMwAqRbcGQnC8zMGwRc4EXYJCgXrxx9kXtw1RXqu4TcW26PxHqssgp6sU4N5CR5o9QcUZPG31fzPeUHEVPkFit1WpVZTmqZLzpvZG2s`.
+Key files: `twice.txt` (`[73c5da0a/48'/0'/0'/2']X0` twice), `twice_h.txt` (line 1
 that record, line 2 a comment, line 3 the `48h/0h/0h/2h` spelling), `twoorigins.txt` (X0 at
 `48'/0'/0'/2'` then `48'/0'/1'/2'`), `twokeys.txt` (X0 line 1, blank line 2, X1 line 3, both
 `[73c5da0a/48'/0'/0'/2']`), `twomasters.txt` (`[3442193e/]TV1M`, `[3442193e/]LEAFM`),
@@ -196,6 +213,9 @@ GREEN refusal rows: exit 64, stdout empty, stderr exactly `error: ` + the text n
 | `fe_i2_sparse_slot_contradicts_policy` | `--xpub X0 --origin-path "m/48'/0'/9'/2'" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1` | exit 0, `mk1qpm2syzqqsqn5lm9ypeutks2lcztpq...`, no note | T-PATH(X0, 0, 3a7f6520, `m/48'/0'/0'/2'`, `m/48'/0'/9'/2'`) |
 | `fe_i2_batch_record_contradicts_policy` | `--keys batch9.txt --from-md1-set a.md1` | exit 0, mk1 strings | T-PATH(X0, 0, 38bd7cec, `m/48'/0'/0'/2'`, `m/48'/0'/9'/2'`) |
 | `fe_i2_policy_repeats_key` | `--xpub X0 --origin-path "m/48'/0'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set rep.md1` | exit 0, `mk1qpv636pqqsq43ee6z9eutks2q5zg3v...`, no note | T-REPKEY(58e73a11, X0, `@0, @1`) |
+| `fe_i2_elided_origin_path_contradicts_policy` | `--xpub X0 --origin-path "m/48'/0'/9'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1` | exit 0, `mk1qpw9gezqqsqn30tua3eutks2lcztpqyqsq...`, coverage note | T-PATH-STD(X0, 0, 38bd7cec, `m/48'/0'/0'/2'`, `m/48'/0'/9'/2'`) |
+| `fe_i2_elided_origin_signet_card` | `--xpub X0 --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1` | exit 0, `mk1qp5864pqqsqn30tua3eutks2z5zg3vs7...`, coverage note | T-PATH-STD(X0, 0, 38bd7cec, `m/48'/0'/0'/2'`, `m/48'/1'/0'/2'`) |
+| `fe_i2_elided_origin_master_card` | `--xpub X0D0 --origin-path "m" --privacy-preserving --from-md1-set elided.md1` | exit 0, `mk1qp0fdvpqqqqn30tuanlqqpygkg0qqqq...`, coverage note | T-PATH-STD(X0D0, 0, 38bd7cec, `m/48'/0'/0'/2'`, `m`) (an empty card path does not match a standard-filled slot) |
 | `fe_keys_identical_record_twice` | `--keys twice.txt --policy-id-stub deadbeef` | exit 0, two identical cards, `card 2 of 2` label | T-REC(twice.txt, 2, 1) |
 | `fe_keys_identical_record_h_spelling` | `--keys twice_h.txt --policy-id-stub deadbeef` | exit 0, `card 2 of 2` | T-REC(twice_h.txt, 3, 1) |
 | `fe_keys_one_key_two_origins` | `--keys twoorigins.txt --policy-id-stub deadbeef` | exit 0, `card 2 of 2` | T-KEY2(twoorigins.txt, 2, 1, `[73c5da0a/48'/0'/0'/2']`) |
@@ -213,6 +233,12 @@ GREEN refusal rows: exit 64, stdout empty, stderr exactly `error: ` + the text n
 | `fe_control_both_cosigners_mint` | `--keys cosigners.txt --from-md1-set a.md1` | exit 0, `card 2 of 2`, no coverage note | unchanged |
 | `fe_control_two_distinct_stubs_mint` | key flags, `--policy-id-stub deadbeef --from-md1 TPL` | exit 0 | unchanged |
 | `fe_control_chunk_set_given_twice_unchanged` | key flags, `--from-md1-set a.md1 --from-md1-set a.md1` | exit 1, stdout empty, `chunk set incomplete: got 8 chunks, expected 4` | unchanged |
+| `fe_control_md_default_elided_origin_mints` | `--xpub X0 --origin-path "m/48'/0'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1` | exit 0, note `policy 38bd7cec has 2 cosigner(s); 1 of them carded here, 1 not carded` | unchanged |
+| `fe_control_signet_card_against_path_md1_mints` | `--xpub X0 --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set signet.md1` | exit 0, note `policy 00912ee3 has 2 cosigner(s); 1 of them carded here, 1 not carded` | unchanged |
+
+GREEN stderr of `fe_i2_elided_origin_path_contradicts_policy`, in full (with X0 written as its literal):
+`error: xpub X0 is @0 of the wallet policy with stub 38bd7cec, which states no origin path for it, so its policy id uses the standard origin path for its template, m/48'/0'/0'/2'; the card declares m/48'/0'/9'/2'. A card whose origin contradicts its own policy is refused; no card was minted. If m/48'/0'/9'/2' is this key's origin, re-encode the md1 with the keys' real origins (md encode --path, or the origin in the template) and mint against the new md1.`
+For the X0D0 row, `<xpub>` is the card's xpub as Display prints it. The builder pins the measured string.
 
 The builder adds these rows as nextest tests in a new `crates/mk-cli/tests/bh1119_keyed_policy.rs`
 (test fns named exactly as the first column, asserting the same exact texts, RED first), plus:
@@ -253,7 +279,10 @@ After the paragraph "At least one of `--policy-id-stub` or `--from-md1` is requi
 > names both lines); a policy stub bound twice across `--policy-id-stub`, `--from-md1` and
 > `--from-md1-set`; and, against a keyed `--from-md1` policy, a card whose origin path or master
 > fingerprint differs from the one the policy gives that key, or a policy that holds the key in two
-> slots. A missing fingerprint on either side is not compared. A key the policy does not list is
+> slots. A policy that states no origin for a key (as `md encode` writes it without `--path`, for
+> any network) gives the template's standard origin, `m/48'/0'/0'/2'` for `wsh(multi(...))`; a
+> card at another path needs the md1 re-encoded with the real origin. A missing fingerprint on
+> either side is not compared. A key the policy does not list is
 > refused only when every slot of the policy is keyed.
 
 No flag-table row changes; no `.out` include file changes (the worked example is a single
@@ -266,6 +295,8 @@ shapes, refusal over de-duplication). Decided here within those rulings, flagged
 round: the origin check covers sparse key lists (2.1); a policy holding the card's key in two slots
 is refused (2.1c, BIP-388 L193); a stub repeated across channels counts as repeated (2.3); a chunk
 set given twice keeps its existing exit-1 refusal (2.3).
+An elided slot origin is standard-filled before (a), compared strictly, and refused with
+T-PATH-STD (architect-mk18-r1-i1, coordinator agent-reports/architect-mk18-r1-i1.md).
 
 ## 9. FOLLOWUPS (listed in the author's report, not appended here)
 
