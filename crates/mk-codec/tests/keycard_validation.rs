@@ -131,3 +131,16 @@ fn kv_i10_index_2_31_minus_1_round_trips() {
     round_trips(&depth1(ChildNumber::Normal { index: 0x7FFF_FFFF }));
     round_trips(&depth1(ChildNumber::Hardened { index: 0x7FFF_FFFF }));
 }
+
+#[test]
+fn kv_i10_index_exactly_2_31_refused() {
+    for n in [
+        ChildNumber::Normal { index: 0x8000_0000 },
+        ChildNumber::Hardened { index: 0x8000_0000 },
+    ] {
+        refused(
+            &depth1(n),
+            "invalid path component: component 1 index 2147483648 is out of the BIP 32 range 0..2^31",
+        );
+    }
+}
