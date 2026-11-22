@@ -63,7 +63,9 @@ pub fn path_strategy() -> impl Strategy<Value = DerivationPath> {
 /// `tests/round_trip.rs::synthetic_xpub`). `depth`/`child_number` are derived
 /// from `path` so they are consistent by construction (sidesteps the
 /// depth/child "lossless by construction" seam — SPEC §3.6 (xpub compact-73)). `public_key`,
-/// `chain_code`, `parent_fingerprint`, and `network` are strategy-varied.
+/// `chain_code`, `parent_fingerprint`, and `network` are strategy-varied; a
+/// depth-0 key always has parent fingerprint `00000000`, so every generated
+/// depth-0 key is a valid BIP 32 master.
 pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
     // `path.as_ref()` → `&[ChildNumber]` (avoids `clippy::into_iter_on_ref`
     // under CI's `-D warnings`; R0 M3). `path` is moved into the closure below.
@@ -95,7 +97,11 @@ pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
                     NetworkKind::Test
                 },
                 depth,
-                parent_fingerprint: Fingerprint::from(pfp),
+                parent_fingerprint: if depth == 0 {
+                    Fingerprint::from([0u8; 4])
+                } else {
+                    Fingerprint::from(pfp)
+                },
                 child_number,
                 public_key: pk,
                 chain_code: ChainCode::from(cc),
@@ -103,7 +109,9 @@ pub fn xpub_strategy(path: DerivationPath) -> impl Strategy<Value = Xpub> {
         })
 }
 
-/// A valid, encodable, depth/child-consistent `KeyCard`. `policy_id_stubs`
+/// A valid, encodable, depth/child-consistent `KeyCard`. A depth-0 card's
+/// origin fingerprint, when present, is the key's own; a depth-1 card's is its
+/// parent fingerprint (so every generated card passes `KeyCard::validate`). `policy_id_stubs`
 /// length 1..=8 (the 255-stub boundary is a separate deterministic cell, T4).
 pub fn keycard_strategy() -> impl Strategy<Value = KeyCard> {
     (
@@ -113,8 +121,14 @@ pub fn keycard_strategy() -> impl Strategy<Value = KeyCard> {
     )
         .prop_flat_map(|(stubs, fp, path)| {
             let p = path.clone();
-            xpub_strategy(path)
-                .prop_map(move |xpub| KeyCard::new(stubs.clone(), fp, p.clone(), xpub))
+            xpub_strategy(path).prop_map(move |xpub| {
+                let fp = match xpub.depth {
+                    0 => fp.map(|_| xpub.fingerprint()),
+                    1 => fp.map(|_| xpub.parent_fingerprint),
+                    _ => fp,
+                };
+                KeyCard::new(stubs.clone(), fp, p.clone(), xpub)
+            })
         })
         .boxed()
 }

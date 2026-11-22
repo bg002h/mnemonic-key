@@ -43,7 +43,7 @@ use sha2::{Digest, Sha256};
 ///
 /// SEPARATE from `tests/vectors.rs::V0_1_SHA256` — the legacy corpus is
 /// untouched by this cycle (plan P0).
-const CSID_EXT_SHA256: &str = "88bbe056e85dde694353475e774a78a00defe75cb8694654c4be1d2467ad68f9";
+const CSID_EXT_SHA256: &str = "3d3d12efabaf00c48401c33469813641a6f942e0b23124b5f6075e529b3d0500";
 
 fn doc() -> Value {
     serde_json::from_str(CSID_EXT_JSON).expect("parse csid_ext_v0.1.json")

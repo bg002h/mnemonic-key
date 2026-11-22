@@ -13,7 +13,7 @@ use serde_json::json;
 
 use crate::cmd::{
     chunk_set_id_comparison, classify_code_variant, correction_counts, fmt_fingerprint, fmt_stub,
-    read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied,
+    read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied, warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -47,6 +47,7 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).
     warn_corrections_applied(&correction_counts(&strings));
+    warn_if_invalid(&card);
     let variant = strings
         .first()
         .map(|s| classify_code_variant(s))

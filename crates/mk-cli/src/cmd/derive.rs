@@ -14,6 +14,7 @@ use serde_json::json;
 use crate::cmd::derive_support::secp_verify;
 use crate::cmd::{
     chunk_set_id_comparison, fmt_fingerprint, read_mk1_strings, warn_chunk_set_id_mismatch,
+    warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -52,6 +53,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     let card = mk_codec::decode(&refs)?;
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
     warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
+    warn_if_invalid(&card);
 
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,

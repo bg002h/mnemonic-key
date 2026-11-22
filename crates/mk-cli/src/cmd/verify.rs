@@ -73,6 +73,8 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).
     warn_corrections_applied(&correction_counts(&strings));
+    // An invalid card exits 1 here, ahead of any expected-* comparison.
+    card.validate()?;
 
     // Parse origin_path once; both the xpub normalization check and the
     // content-match block below consume it (no double-parse).
