@@ -10,10 +10,16 @@
 #           --json error envelope; controls unchanged)
 # Any row that does not match its expectation fails the script (exit 1).
 #
-# What it does NOT cover: the exact refusal wording of C1 (open: see the FIX
-# document's STOP; green checks only exit 64 and that no child address/xpub is
-# printed); the nextest rows in crates/mk-cli/tests/bh1119_derive_guards.rs; fmt,
-# clippy, the full suite, the toolkit manual; non-Linux CI legs.
+# Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
+# the rest (plus a newline; "=" alone means empty). The C1 refusal text is the
+# FIX document's section 2.1 text (Brian's ruling, Option B), built here from the
+# card's xpub string.
+#
+# What it does NOT cover: the nextest rows in
+# crates/mk-cli/tests/bh1119_derive_guards.rs; that the printed `mnemonic convert`
+# command runs (the FIX report runs it once for a mainnet and a signet case); the
+# I18 text beyond a substring; fmt, clippy, the full suite, the toolkit manual;
+# non-Linux CI legs.
 #
 # Usage: scripts/mk-fd-derive-guards-rows.sh red|green   (run from the repo root)
 set -euo pipefail
@@ -29,21 +35,26 @@ cargo --version | grep -q '^cargo 1\.85\.' || { echo "cargo is not the 1.85 pin:
 MK="$CARGO_TARGET_DIR/debug/mk"
 mkdir -p "$WORK"
 cd "$WORK"
-rm -f leaf.mk1 acct.mk1 master.mk1
+rm -f leaf.mk1 leafm.mk1 acct.mk1 master.mk1
 
 # Fixtures (public keys only).
 # LEAF: the generator point G with an all-zero chain code at depth 0 = the toolkit
 # fixed-key card shape (mnemonic-toolkit cmd/bundle.rs {wif} slot).
 LEAF=tpubD6NzVbkrYhZ4WLczPJWReQycCJdd6YVWXubbVUFnJ5KgU5MDQrD998ZJLT5hqNKRA9cJzkh4D7oXwCpwFUWWWkHR9zPeBk1hnWBJKNhyYsn
+# LEAFM: the same shape with mainnet version bytes (generator point, zero chain code).
+LEAFM=xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6QzvJsNBNF5QPBBBg1yVF2LKrcfGdJq86PeLWDMUCYatZPzQu8R
 # X84: BIP-84 account xpub (mk-codec corpus V2), origin m/84'/0'/0'.
 X84=xpub6BmeGmRo4LosAcU21HDaGcvtaQ7GrqQcY48nBkE22qM6KVwQUjRJ1BGzk84SFVHgLcd61Vcnhr8petHexjjn5WbQ9PriVrRhphw4oCp2z6a
 # TV1M: BIP-32 test vector 1 master xpub (depth 0, real chain code): must keep deriving.
 TV1M=xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8
 "$MK" encode --xpub "$LEAF" --origin-path m --privacy-preserving --policy-id-stub deadbeef --out leaf.mk1 2>/dev/null
+"$MK" encode --xpub "$LEAFM" --origin-path m --privacy-preserving --policy-id-stub deadbeef --out leafm.mk1 2>/dev/null
 "$MK" encode --xpub "$X84" --origin-path "m/84'/0'/0'" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --out acct.mk1 2>/dev/null
 "$MK" encode --xpub "$TV1M" --origin-path m --origin-fingerprint 3442193e --policy-id-stub deadbeef --out master.mk1 2>/dev/null
 
 FAIL=0
+# cmpx TEXT FILE: FILE is exactly TEXT + newline (TEXT empty: FILE empty).
+cmpx() { if [ -z "$1" ]; then [ ! -s "$2" ]; else [ "$(cat "$2"; echo x)" = "$1"$'\n'x ]; fi; }
 # row NAME EXPECTED_RC STDOUT_MUST STDOUT_MUST_NOT STDERR_MUST -- ARGS...
 # ("-" = no check)
 row() {
@@ -52,24 +63,50 @@ row() {
   "$MK" "$@" >"$f.out" 2>"$f.err" || rc=$?
   local ok=1
   [ "$rc" = "$want" ] || ok=0
-  [ "$must" = - ] || grep -qF -- "$must" "$f.out" || ok=0
+  if [ "${must:0:1}" = "=" ]; then cmpx "${must:1}" "$f.out" || ok=0
+  else [ "$must" = - ] || grep -qF -- "$must" "$f.out" || ok=0; fi
   [ "$mustnot" = - ] || ! grep -qF -- "$mustnot" "$f.out" || ok=0
-  [ "$errmust" = - ] || grep -qF -- "$errmust" "$f.err" || ok=0
+  if [ "${errmust:0:1}" = "=" ]; then cmpx "${errmust:1}" "$f.err" || ok=0
+  else [ "$errmust" = - ] || grep -qF -- "$errmust" "$f.err" || ok=0; fi
   if [ $ok = 1 ]; then echo "OK   $MODE $name rc=$rc"; else
     echo "FAIL $MODE $name rc=$rc (want $want)"; sed 's/^/  out: /' "$f.out"; sed 's/^/  err: /' "$f.err"; FAIL=1; fi
 }
 CHILD=tb1qgl57xjd595rrxmpwys85q40xh4nmqunqrmrmwp
+CHILDM=bc1qgl57xjd595rrxmpwys85q40xh4nmqunqfacg4j
+# The C1 refusal text (FIX section 2.1, Brian's ruling B): mainnet xpub, then a test-kind xpub.
+C1HEAD="this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub="
+C1MAIN="${C1HEAD}${LEAFM} --to address --path m --script-type <TYPE>"
+C1TEST="${C1HEAD}${LEAF} --to address --path m --script-type <TYPE> --network <testnet|signet|regtest>"
+ENV1='{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"'
+ENV2='"},"schema_version":1}'
 if [ "$MODE" = red ]; then
   row fd_c1_address_refuses_fixed_key_card 0 "$CHILD" - "not the canonical account depth 3" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
+  row fd_c1_address_refuses_fixed_key_card_mainnet 0 "$CHILDM" - "not the canonical account depth 3" -- address --in leafm.mk1 --address-type p2wpkh --count 1
   row fd_c1_derive_refuses_fixed_key_card 0 "child_xpub:" - - -- derive --in leaf.mk1 --index 0
+  row fd_c1_derive_refuses_fixed_key_card_path 0 "child_xpub:" - - -- derive --in leaf.mk1 --path m/0/0
+  row fd_c1_derive_refuses_fixed_key_card_mainnet 0 "child_xpub:" - - -- derive --in leafm.mk1 --index 0
+  # Order controls: at the base each of these errors fires first (exit 64, its own text) or, for the
+  # empty path (I18), the command succeeds; green: the C1 refusal fires first in every case.
+  row "fd_c1_refusal_precedes_other_errors[address-type]" 64 - - "--address-type required" -- address --in leaf.mk1
+  row "fd_c1_refusal_precedes_other_errors[network]" 64 - - "disagrees with the xpub's network" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
+  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 - - "cannot derive hardened children" -- derive --in leaf.mk1 --path "m/0'"
+  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 - - "invalid derivation path" -- derive --in leaf.mk1 --path /
+  row "fd_c1_refusal_precedes_other_errors[empty]" 0 "child_xpub:" - - -- derive --in leaf.mk1 --path ''
   for p in '' m m/; do
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 0 "\"child_xpub\":\"$X84\"" - - -- derive --in acct.mk1 --path "$p" --json
   done
 else
-  row fd_c1_address_refuses_fixed_key_card 64 - "$CHILD" - -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
-  row fd_c1_address_refuses_fixed_key_card_json 64 '"kind":"UsageError"' "$CHILD" - -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
-  row fd_c1_derive_refuses_fixed_key_card 64 - "child_xpub" - -- derive --in leaf.mk1 --index 0
-  row fd_c1_derive_refuses_fixed_key_card_path 64 - "child_xpub" - -- derive --in leaf.mk1 --path m/0/0
+  row fd_c1_address_refuses_fixed_key_card 64 = - "=error: $C1TEST" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
+  row fd_c1_address_refuses_fixed_key_card_json 64 "=$ENV1$C1TEST$ENV2" - = -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
+  row fd_c1_address_refuses_fixed_key_card_mainnet 64 = - "=error: $C1MAIN" -- address --in leafm.mk1 --address-type p2wpkh --count 1
+  row fd_c1_derive_refuses_fixed_key_card 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --index 0
+  row fd_c1_derive_refuses_fixed_key_card_path 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path m/0/0
+  row fd_c1_derive_refuses_fixed_key_card_mainnet 64 = - "=error: $C1MAIN" -- derive --in leafm.mk1 --index 0
+  row "fd_c1_refusal_precedes_other_errors[address-type]" 64 = - "=error: $C1TEST" -- address --in leaf.mk1
+  row "fd_c1_refusal_precedes_other_errors[network]" 64 = - "=error: $C1TEST" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
+  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path "m/0'"
+  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path /
+  row "fd_c1_refusal_precedes_other_errors[empty]" 64 = - "=error: $C1TEST" -- derive --in leaf.mk1 --path ''
   for p in '' m m/; do
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 64 '"kind":"UsageError"' "child_xpub" - -- derive --in acct.mk1 --path "$p" --json
   done

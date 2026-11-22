@@ -11,10 +11,8 @@ row #19, T42 (I18) and P3; Brian's ruling B3 (`memory/product-rulings-sweep-bugh
 `agent-reports/bughunt-1119/grade-mk.md` (C1, I18, F-D); triage `triage-mk-t1.md` (C1),
 `triage-mk-t4.md` (I18).
 
-**Open STOP (section 8) must be answered before the build starts.** It decides only how the C1
-refusal points at the key's own address (and with it the C1 check order and text). Everything
-else below is decided: the I18 half in full, and the C1 predicate, exit code, error variant,
-derive-side placement, spec delta skeleton, rows and controls.
+Section 8 records Brian's ruling (Option B) on how the C1 refusal points at the key's own
+address; with it everything below is decided (no open STOP).
 
 ## 1. Defects (at 8a738ab, rows in section 5 run and seen)
 
@@ -45,13 +43,43 @@ derive-side placement, spec delta skeleton, rows and controls.
   in `--json` mode the existing error envelope on stdout
   (`{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"<text>"},"schema_version":1}`).
   No new variant, flag or type.
-- **`mk derive` placement:** the refusal runs right after `warn_chunk_set_id_mismatch` and before
-  `--path`/`--index` are parsed, so a fixed-key card is refused whatever the path (including an
-  empty or hardened one). Rationale: the card, not the flag, is the problem (same reasoning as the
-  multisig refusal holding even with `--address-type`, SPEC L43).
-- **`mk address` placement and text:** OPEN, section 8 (the two candidate shapes fix different
-  orders).
-- **`mk derive` text:** OPEN, section 8.
+- **Placement (both commands, Brian's ruling B, section 8):** the refusal runs right after
+  `warn_chunk_set_id_mismatch` and before everything else the command checks: for `mk address`
+  before address-type resolution (so before the multisig refusal and the "--address-type
+  required" error), network resolution, the depth advisory and `--count`/`--range`/`--chain`; for
+  `mk derive` before `--path`/`--index` are parsed. A fixed-key card is refused whatever flags
+  are given (`--address-type` absent, `--network` mismatching the xpub, a hardened, empty or
+  unparsable `--path`). Rationale: the card, not the flag, is the problem (same reasoning as the
+  multisig refusal holding even with `--address-type`, SPEC L43). Clap's own argument errors
+  (unknown flag, `--count` with `--range`) still fire first: they run before `run`.
+- **Text (both commands, identical; Brian's ruling B).** `{XPUB}` is the card's xpub as base58
+  (`card.xpub` Display, the string `mk derive` prints as `parent_xpub`); the final clause is
+  appended only when the xpub is test-kind (`card.xpub.network == NetworkKind::Test`), and its
+  `<TYPE>` and `<testnet|signet|regtest>` are printed literally (the holder picks the script type
+  and the network; testnet, signet and regtest share the test-kind version bytes). No trailing
+  period.
+
+  > `this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub={XPUB} --to address --path m --script-type <TYPE>` + (test-kind only) ` --network <testnet|signet|regtest>`
+
+  Printed for the mainnet fixture (`leafm.mk1`, section 5), stderr, exit 64, stdout empty:
+
+  ```
+  error: this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub=xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6QzvJsNBNF5QPBBBg1yVF2LKrcfGdJq86PeLWDMUCYatZPzQu8R --to address --path m --script-type <TYPE>
+  ```
+
+  Printed for the test-kind fixture (`leaf.mk1`):
+
+  ```
+  error: this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub=tpubD6NzVbkrYhZ4WLczPJWReQycCJdd6YVWXubbVUFnJ5KgU5MDQrD998ZJLT5hqNKRA9cJzkh4D7oXwCpwFUWWWkHR9zPeBk1hnWBJKNhyYsn --to address --path m --script-type <TYPE> --network <testnet|signet|regtest>
+  ```
+
+  In `--json` mode the same text is the `message` of the envelope in 2.1 (no escaping applies:
+  the text has no double quote, backslash or control character).
+- **The printed command runs** (toolkit 0.106.0; `<TYPE>` = `p2wpkh`, network `signet`): mainnet
+  fixture -> `address: bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4`; test-kind fixture with
+  `--network signet` -> `address: tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx`; both exit 0.
+- Consequence: mk's text names a toolkit command (precedent: the multisig refusal names
+  `md address`); no address appears in the refusal itself, only from a successful command.
 
 ### 2.2 Empty relative path (I18, T42)
 
@@ -72,60 +100,73 @@ derive-side placement, spec delta skeleton, rows and controls.
 ## 3. Spec delta (`design/SPEC_mk_derive_address.md`)
 
 1. §3.1 address-type resolution, insert before step 1 (L43) a new step 0 (text of the refusal
-   per section 8):
-   > 0. **Fixed-key card refuse (bh-mk-C1, ruling B3).** A card whose xpub has depth 0 and an all-zero chain code holds one fixed key (the toolkit writes a WIF key this way) and has no child keys that any wallet watches. `mk address` refuses it, pointing at the key's own address: `CliError::UsageError` → **exit 64**. [order relative to steps 1-4 and network resolution: per section 8.]
+   per section 2.1):
+   > 0. **Fixed-key card refuse FIRST (bh-mk-C1, ruling B3, Option B).** A card whose xpub has depth 0 and an all-zero chain code holds one fixed key (the toolkit writes a WIF key this way) and has no child keys that any wallet watches. `mk address` refuses it right after the chunk-set-id warning and before steps 1-4 and network resolution, whatever `--address-type`, `--network`, `--count`/`--range` and `--chain` say. The refusal prints the `mnemonic convert --from xpub=<XPUB> --to address --path m --script-type <TYPE>` command that renders the key's own address (plus `--network <testnet|signet|regtest>` for a test-kind xpub). `CliError::UsageError` → **exit 64**.
+1b. §3.1 step 1 (L43): replace "**Multisig refuse FIRST**" with "**Multisig refuse** (first after step 0)".
 2. §3.1 step 5 (L47): replace "then proceed (permissive-with-warning; matches the constellation's
    silent-default-with-stderr-notice convention)." with:
    > then proceed (permissive-with-warning; matches the constellation's silent-default-with-stderr-notice convention). A fixed-key card never reaches this step (step 0).
 3. §3.2 Path bullet (L71), append:
    > A `--path` that parses to no components (`''`, `m`, `m/`) → ERROR `CliError::UsageError` ("derive needs at least one step") → **exit 64** (bh-mk-I18); the card's own key is `mk decode`'s output.
 4. §3.2, new bullet after "Multisig" (L72):
-   > - **Fixed-key card:** refused (bh-mk-C1, ruling B3), before the path is parsed: `CliError::UsageError` → **exit 64**; text per §3.1 step 0's counterpart [section 8].
+   > - **Fixed-key card:** refused (bh-mk-C1, ruling B3), before the path is parsed: `CliError::UsageError` → **exit 64**; same text as §3.1 step 0 (FIX section 2.1).
 5. §5 test plan: add after row 4b:
-   > 4c. **Fixed-key card (C1)** — a depth-0 card with an all-zero chain code → **exit 64** with or without `--address-type`, no address on stdout; a depth-0 BIP-32 master card (real chain code) with `--address-type` still succeeds with the depth advisory.
+   > 4c. **Fixed-key card (C1)** — a depth-0 card with an all-zero chain code → **exit 64** with or without `--address-type` and whatever `--network` says, no address on stdout, the refusal fires before the "--address-type required" and network errors; a depth-0 BIP-32 master card (real chain code) with `--address-type` still succeeds with the depth advisory.
    and after row 11:
    > 11b. Empty relative path (I18) — `--path ''`, `m`, `m/` → **exit 64**, no `child_xpub`; `--path m/0/0` unchanged.
-   > 11c. Fixed-key card (C1) — `mk derive --index 0` and `--path m/0/0` on the fixed-key card → **exit 64**, no `child_xpub`.
+   > 11c. Fixed-key card (C1) — `mk derive --index 0` and `--path m/0/0` on the fixed-key card → **exit 64**, no `child_xpub`; with a hardened, empty or unparsable `--path` the refusal still fires first.
 
 ## 4. Code (anchors at 8a738ab; builder writes the code)
 
 - `crates/mk-cli/src/cmd/derive.rs`: after L54 (`warn_chunk_set_id_mismatch`), the fixed-key
   refusal; in `parse_relative_unhardened` (L118), the empty-path refusal before the hardened check.
-- `crates/mk-cli/src/cmd/address.rs`: the fixed-key refusal at the position section 8 fixes
-  (Option A: after `resolve_network`, L87; Option B: after L84).
+- `crates/mk-cli/src/cmd/address.rs`: the fixed-key refusal after L84 (`warn_chunk_set_id_mismatch`),
+  before L86 (`resolve_address_type`).
 - One shared predicate helper `is_fixed_key_card(&Xpub) -> bool` in
   `crates/mk-cli/src/cmd/derive_support.rs` (both commands call it; unit-tested there with the
-  LEAF and TV1 master xpubs).
+  LEAF and TV1 master xpubs). The refusal text (2.1) is built in one shared function there too, so
+  the two commands cannot drift; `{XPUB}` is `xpub.to_string()` and the network clause keys off
+  `xpub.network`.
 - `--help` texts unchanged (no doc-comment change), so `gen_man` / `gui_schema` outputs and the
   GUI mirror do not move.
 
 ## 5. Rows
 
 Committed runner: `scripts/mk-fd-derive-guards-rows.sh red|green` (builds `mk` with
-`cargo build --locked -p mk-cli` on the 1.85 pin, mints three public-key cards with `mk encode`
+`cargo build --locked -p mk-cli` on the 1.85 pin, mints four public-key cards with `mk encode`
 under `/scratch/cache/mk-fd-derive-guards-rows`, runs every row below, checks the mode's
-expectation; its header says what it does not cover). Run at 8a738ab by the author:
-`red` -> `ALL ROWS MATCH red`; `green` -> `ROWS DIFFER FROM green` (8 FAIL, 3 controls OK). With an
-option-neutral scratch fix (both refusals exit 64; reverted) `green` -> `ALL ROWS MATCH green`.
+expectation; a `=` check compares the whole stream; its header says what it does not cover).
+Runs (after the Option B fold): `red` at the base code -> `ALL ROWS MATCH red`; `green` with a
+scratch Option B implementation (shared predicate and text, empty-path refusal; reverted, not
+committed) -> `ALL ROWS MATCH green`.
 
 Fixtures: `leaf.mk1` = `mk encode --xpub tpubD6NzVbkrYhZ4WLczPJWReQycCJdd6YVWXubbVUFnJ5KgU5MDQrD998ZJLT5hqNKRA9cJzkh4D7oXwCpwFUWWWkHR9zPeBk1hnWBJKNhyYsn --origin-path m --privacy-preserving --policy-id-stub deadbeef`
-(generator point, zero chain code: the fixed-key shape); `acct.mk1` = V2 BIP-84 account
+(generator point, zero chain code, test-kind: the fixed-key shape); `leafm.mk1` = the same with
+`xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6QzvJsNBNF5QPBBBg1yVF2LKrcfGdJq86PeLWDMUCYatZPzQu8R`
+(mainnet version bytes); `acct.mk1` = V2 BIP-84 account
 `xpub6BmeGm...Cp2z6a`, `--origin-path "m/84'/0'/0'" --origin-fingerprint 73c5da0a`;
 `master.mk1` = BIP-32 TV1 master `xpub661MyMwA...EGMcet8`, `--origin-path m --origin-fingerprint 3442193e`.
 
-| row (test fn) | command | RED at 8a738ab (seen) | GREEN |
+In the table, T-TEST and T-MAIN are the two printed texts of section 2.1 (test-kind, mainnet);
+"exact" = the whole stream equals the value plus a newline. GREEN C1 rows: exit 64, stdout empty
+(text mode) and stderr exactly `error: ` + the text.
+
+| row (test fn) | command | RED at fc1dca9 base code (seen) | GREEN |
 |---|---|---|---|
-| `fd_c1_address_refuses_fixed_key_card` | `mk address --in leaf.mk1 --address-type p2wpkh --network signet --count 1` | exit 0, stderr depth advisory, stdout `  0  tb1qgl57xjd595rrxmpwys85q40xh4nmqunqrmrmwp` | exit 64, stdout empty, stderr = section 8 text |
-| same, `--json` | as above + `--json` | exit 0, `{"address_type":"p2wpkh","addresses":[{"address":"tb1qgl57...rmwp",...` | exit 64, stdout envelope `"kind":"UsageError"`, no `tb1qgl57` |
-| `fd_c1_derive_refuses_fixed_key_card` | `mk derive --in leaf.mk1 --index 0` (and `--path m/0/0`) | exit 0, `child_xpub: tpubDAPnywfgE8GS...hcpm8K2`, `depth: 2` | exit 64, stdout empty |
+| `fd_c1_address_refuses_fixed_key_card` | `mk address --in leaf.mk1 --address-type p2wpkh --network signet --count 1` | exit 0, stderr depth advisory, stdout `  0  tb1qgl57xjd595rrxmpwys85q40xh4nmqunqrmrmwp` | exit 64, stdout empty, stderr exact `error: ` T-TEST |
+| `fd_c1_address_refuses_fixed_key_card_json` | as above + `--json` | exit 0, `{"address_type":"p2wpkh","addresses":[{"address":"tb1qgl57...rmwp",...` | exit 64, stderr empty, stdout exact `{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"` T-TEST `"},"schema_version":1}` |
+| `fd_c1_address_refuses_fixed_key_card_mainnet` | `mk address --in leafm.mk1 --address-type p2wpkh --count 1` | exit 0, stderr depth advisory, stdout `  0  bc1qgl57xjd595rrxmpwys85q40xh4nmqunqfacg4j` | exit 64, stdout empty, stderr exact `error: ` T-MAIN |
+| `fd_c1_derive_refuses_fixed_key_card` | `mk derive --in leaf.mk1 --index 0` and `mk derive --in leaf.mk1 --path m/0/0` | exit 0, `child_xpub: tpubDAPnywfgE8GS...hcpm8K2`, `depth: 2` | exit 64, stdout empty, stderr exact `error: ` T-TEST (both) |
+| `fd_c1_derive_refuses_fixed_key_card_mainnet` | `mk derive --in leafm.mk1 --index 0` | exit 0, `child_xpub: xpub6A2AThqzWrJz...wgapAto`, `depth: 2` | exit 64, stdout empty, stderr exact `error: ` T-MAIN |
+| `fd_c1_refusal_precedes_other_errors` (order control) | (a) `mk address --in leaf.mk1` (no address type); (b) `mk address --in leaf.mk1 --address-type p2wpkh --network mainnet` (network kind mismatch); (c) `mk derive --in leaf.mk1 --path "m/0'"` (hardened); (d) `mk derive --in leaf.mk1 --path /` (parser rejects); (e) `mk derive --in leaf.mk1 --path ''` (empty) | exit 64 with the command's own error: (a) `--address-type required: cannot infer ...`, (b) `--network mainnet disagrees with the xpub's network (testnet); ...`, (c) `--path m/0': cannot derive hardened children ...`, (d) `--path invalid derivation path "/": invalid child number format`; (e) exit 0, `child_xpub:` (the I18 defect) | all five: exit 64, stdout empty, stderr exact `error: ` T-TEST (the refusal fires first) |
 | `fd_i18_derive_refuses_empty_path` | `mk derive --in acct.mk1 --path '' --json`; same with `m`, `m/`; text mode with `''` | exit 0, `"child_xpub":"xpub6BmeGm...Cp2z6a"` (= parent), `"relative_path":"m/"`, `"depth":3` | exit 64; `--json`: envelope `"kind":"UsageError"`, no `child_xpub`; text: stderr = the 2.2 text |
 | `fd_c1_master_card_still_derives` (control) | `mk address --in master.mk1 --address-type p2wpkh --count 1`; `mk derive --in master.mk1 --index 0 --json` | exit 0, `bc1qp5wfcq48h6d63wyy9qz0awtpfqwwv4sma86mhz` + depth advisory; child `xpub6AvUGrnEpfvJ...EuMWwnj`, depth 2 | unchanged |
 | `fd_i18_nonempty_path_still_derives` (control) | `mk derive --in acct.mk1 --path m/0/0 --json` | exit 0, child `xpub6Fec2dLaQAfW...Qv8oYaf`, depth 5 | unchanged |
 
-The builder also adds these rows as nextest tests (test fns named exactly as the first column) in a
-new `crates/mk-cli/tests/bh1119_derive_guards.rs`, RED first, plus the `is_fixed_key_card` unit test.
-The rows script stays as the CLI-level check; green asserts only exit/stdout for C1 until section
-8 fixes the text, then the builder adds the text check to both the script and the tests.
+The builder also adds these rows as nextest tests (test fns named exactly as the first column; the
+nextest tests assert the same exact texts as the script) in a new
+`crates/mk-cli/tests/bh1119_derive_guards.rs`, RED first, plus the `is_fixed_key_card` unit test.
+The rows script stays as the CLI-level check.
 
 ## 6. Tests that change
 
@@ -133,13 +174,15 @@ None of the existing tests change: no mk-cli test runs `mk address`/`mk derive` 
 zero-chain-code card or with an empty `--path` (grep of `crates/mk-cli/tests` at 8a738ab for the
 LEAF tpub, `[0u8; 32]`, `"--path", ""`: no hits). `cli_address.rs::leaf_card_requires_then_advises_depth`
 and `nonstandard_requires_address_type_then_succeeds` keep passing (not fixed-key cards). The
-builder confirms with the full suite.
+new check order (fixed-key refusal before address-type, network and path errors) changes no
+existing test: no existing mk-cli test uses a fixed-key card (same grep, plus the mk-cli sources
+for `[0u8; 32]` and `ChainCode::from`: no hit). The builder confirms with the full suite.
 
 ## 7. Toolkit manual lockstep (`docs/manual/src/40-cli-reference/44-mk-cli.md`, master)
 
 - `## mk address` intro paragraph (L486-492), after the sentence ending "...relative to the card's
-  xpub)." insert (PROPOSED; the last clause follows section 8):
-  > A card that holds one fixed key (depth 0 with an all-zero chain code — how the toolkit writes a WIF key) is **refused**: it has no child keys that any wallet watches. [Option A: The refusal prints the key's own address for the `--address-type` and network given.] [Option B: The refusal prints the `mnemonic convert` command that renders the key's own address.]
+  xpub)." insert (PROPOSED wording around Brian's ruling B):
+  > A card that holds one fixed key (depth 0 with an all-zero chain code — how the toolkit writes a WIF key) is **refused** before anything else is checked (exit 64): it has no child keys that any wallet watches. The refusal prints the `mnemonic convert` command that renders the key's own address.
 - `## mk derive` intro paragraph (L541-544), after "hardened components are rejected." insert
   (PROPOSED):
   > A `--path` with no steps (`''`, `m`, `m/`) is rejected (the card's own key is `mk decode`'s output), and a fixed-key card (see `mk address`) is refused.
@@ -147,32 +190,9 @@ builder confirms with the full suite.
   step (e.g. `m/0/5`)" (PROPOSED).
 - No `.out` include file changes (worked examples use an account card).
 
-## 8. STOP: how the C1 refusal points at the key's own address
+## 8. Ruling (closed)
 
-B3 decides refuse and "pointing at the key's own address" but not the mechanism. The two
-readings fix different check orders and texts; I do not choose.
-
-- **Option A: print the address in the refusal.** `mk address` resolves address type (the empty
-  origin requires `--address-type`, so without it the existing "--address-type required" exit 64
-  fires first) and network as today, then refuses with the key's own address (the card's pubkey
-  rendered by `render_address` for that type and network; for p2tr the BIP-86 key-path tweak with
-  no script tree, as `render_address` already does). `mk derive` has no address type, so it points
-  at `mk address`. PROPOSED texts:
-  - address: `this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives no addresses from it. The key's own {type} address on {network} is {address}`
-  - derive: `this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives no child xpub from it. To see the key's own address, run \`mk address\` on the card with \`--address-type\``
-  Consequence: an address appears on stderr at exit 64; `--count`/`--range`/`--chain` are
-  ignored; `--json` carries the address only inside the error message.
-- **Option B: name a command that prints it.** Both commands refuse right after the chunk-set-id
-  warning (before address type, network and path), and print the toolkit command that renders
-  the key's own address from public data. Verified at toolkit 0.106.0:
-  `mnemonic convert --from xpub=tpubD6NzVbkrYhZ4WLczPJWReQycCJdd6YVWXubbVUFnJ5KgU5MDQrD998ZJLT5hqNKRA9cJzkh4D7oXwCpwFUWWWkHR9zPeBk1hnWBJKNhyYsn --to address --path m --script-type p2wpkh --network signet`
-  -> `address: tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx`, exit 0. PROPOSED text (both commands):
-  - `this card holds one fixed key (depth 0, all-zero chain code; the toolkit writes a WIF key this way) and has no child keys any wallet watches, so mk derives nothing from it. The key's own address: mnemonic convert --from xpub={xpub} --to address --path m --script-type <TYPE>` followed, for a test-kind xpub, by ` --network <testnet|signet|regtest>`.
-  Consequence: mk's text names a toolkit command (precedent: the multisig refusal names
-  `md address`); the holder picks the script type.
-
-Question for the architect/Brian: A or B (or another shape)? The answer fixes §3.1 step 0's
-order, the section 2.1/8 texts and the manual sentence; no other part of this document moves.
+Brian 2026-11-22 chose Option B (coordinator memory `mk-c1-refusal-prints-command-2026-11-22.md`): both commands refuse a fixed-key card first (exit 64), right after the chunk-set-id warning, and print the `mnemonic convert` command for the key's own address (text in 2.1; network suffix only for a test-kind xpub).
 
 ## 9. FOLLOWUPS (listed in the author's report, not appended here)
 
@@ -181,6 +201,6 @@ the author's report.
 
 ## 10. Gate
 
-`scripts/mk-fd-derive-guards-rows.sh green` -> `ALL ROWS MATCH green`, then the full CI set:
+`scripts/mk-fd-derive-guards-rows.sh green` -> `ALL ROWS MATCH green` (exact C1 texts, order controls and I18 rows included), then the full CI set:
 `cargo nextest run --locked --workspace --no-fail-fast`, `cargo test --locked --doc --workspace`,
 `cargo +1.95.0 fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`.
