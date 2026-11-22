@@ -50,8 +50,9 @@ pub const CROSS_CHUNK_HASH_BYTES: usize = 4;
 /// bumps missed their token rolls; this token was corrected to
 /// `"mk-codec 0.4"` in the same regeneration that added the depth-0
 /// vector — that vector decodes only under mk-codec v0.4.0+, so the
-/// corpus must not carry an older family token.)
-pub const GENERATOR_FAMILY: &str = "mk-codec 0.5";
+/// corpus must not carry an older family token.) Rolled to
+/// `mk-codec 0.6` with the regeneration that made V19 a valid BIP 32 master.
+pub const GENERATOR_FAMILY: &str = "mk-codec 0.6";
 
 /// Compact-73 xpub byte size (closure Q-7).
 pub const XPUB_COMPACT_BYTES: usize = 73;

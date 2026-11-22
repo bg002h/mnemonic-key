@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// round-trip equality. Drift here means the vector corpus was modified;
 /// any such change is a wire-format-relevant event and MUST be
 /// reviewed before landing.
-const V0_1_SHA256: &str = "c3a13b6767ddb0678800a05c85777a46d8803b231c27baac38a273623b4f1123";
+const V0_1_SHA256: &str = "7591561f61863f91a65f00f8b004d958ee03eb4a2272f593fb48c54c2e5c6caa";
 
 /// On-disk path to the canonical mk-codec vector corpus.
 ///
@@ -130,7 +130,7 @@ fn schema_metadata_pinned() {
     assert_eq!(doc["schema"], Value::from(2u64), "schema version drift");
     assert_eq!(
         doc["family_token"].as_str().unwrap_or(""),
-        "mk-codec 0.5",
+        "mk-codec 0.6",
         "family_token drift — see consts.rs::GENERATOR_FAMILY"
     );
 }

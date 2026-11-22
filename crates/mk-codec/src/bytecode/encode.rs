@@ -11,7 +11,7 @@
 //! [xpub_compact      : 73 B]
 //! ```
 
-use bitcoin::bip32::ChildNumber;
+use bitcoin::bip32::{ChildNumber, Fingerprint};
 
 use crate::bytecode::header::BytecodeHeader;
 use crate::bytecode::path::encode_path;
@@ -21,7 +21,30 @@ use crate::error::{Error, Result};
 use crate::key_card::KeyCard;
 
 /// Encode a `KeyCard` to its canonical bytecode form (pre-chunking).
+///
+/// Refuses a card that fails `KeyCard::validate`.
 pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
+    check_structure(card)?;
+    check_key_rules(card)?;
+    serialize(card)
+}
+
+/// Every check `encode` enforces (`KeyCard::validate`): the structural checks
+/// and the key-origin rules.
+pub(crate) fn validate_card(card: &KeyCard) -> Result<()> {
+    check_structure(card)?;
+    check_key_rules(card)
+}
+
+/// Canonical payload of a card, valid or legacy: the structural checks and the
+/// serialization, without the key-origin rules (`KeyCard::canonical_payload_bytes`).
+pub(crate) fn encode_canonical_payload(card: &KeyCard) -> Result<Vec<u8>> {
+    check_structure(card)?;
+    serialize(card)
+}
+
+/// S1, S2, R1, S4, in that order.
+fn check_structure(card: &KeyCard) -> Result<()> {
     if card.policy_id_stubs.is_empty() {
         return Err(Error::InvalidPolicyIdStubCount);
     }
@@ -59,6 +82,22 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
         return Err(Error::PathTooDeep(reported));
     }
 
+    // R1: every path component's index must be below 2^31, in either form. A
+    // larger value cannot be written as one u32 without colliding with the
+    // hardened marker (bit 31).
+    for (i, component) in card.origin_path.into_iter().enumerate() {
+        let index = match component {
+            ChildNumber::Normal { index } | ChildNumber::Hardened { index } => *index,
+        };
+        if index >= 1 << 31 {
+            return Err(Error::InvalidPathComponent(format!(
+                "component {} index {} is out of the BIP 32 range 0..2^31",
+                i + 1,
+                index
+            )));
+        }
+    }
+
     // Encoder-side invariant (SPEC_mk_v0_1.md §4): compact-73 reconstructs depth/
     // child_number from origin_path on decode; reject any xpub whose depth/
     // child_number disagree, else the emitted card decodes to a different-
@@ -77,7 +116,47 @@ pub fn encode_bytecode(card: &KeyCard) -> Result<Vec<u8>> {
             path_child,
         });
     }
+    Ok(())
+}
 
+/// R2, R3 on a depth-0 card; R4 on a depth-1 card.
+fn check_key_rules(card: &KeyCard) -> Result<()> {
+    let xpub = &card.xpub;
+    if xpub.depth == 0 {
+        // R2: unconditional; an all-zero chain code does not exempt a key.
+        if xpub.parent_fingerprint != Fingerprint::from([0u8; 4]) {
+            return Err(Error::MasterParentFingerprintNonzero {
+                parent_fingerprint: xpub.parent_fingerprint,
+            });
+        }
+        // R3: the one exception is an all-zero chain code with origin 00000000.
+        if let Some(fp) = card.origin_fingerprint {
+            let key_fingerprint = xpub.fingerprint();
+            let zero_ok =
+                xpub.chain_code.to_bytes() == [0u8; 32] && fp == Fingerprint::from([0u8; 4]);
+            if fp != key_fingerprint && !zero_ok {
+                return Err(Error::MasterFingerprintMismatch {
+                    origin_fingerprint: fp,
+                    key_fingerprint,
+                });
+            }
+        }
+    } else if xpub.depth == 1 {
+        // R4: the parent of a depth-1 key is the master. No exemption.
+        if let Some(fp) = card.origin_fingerprint {
+            if fp != xpub.parent_fingerprint {
+                return Err(Error::OriginParentFingerprintMismatch {
+                    origin_fingerprint: fp,
+                    parent_fingerprint: xpub.parent_fingerprint,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Serialize a checked card; the bytes are unchanged from before the split.
+fn serialize(card: &KeyCard) -> Result<Vec<u8>> {
     let header = BytecodeHeader {
         version: 0,
         fingerprint_flag: card.origin_fingerprint.is_some(),

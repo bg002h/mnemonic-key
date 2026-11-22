@@ -259,6 +259,20 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // Narrow, but it is the only mechanical check on whether a record is
     // internally truthful, and it costs nothing (R2, 2026-08-21).
     for (fp, path, xpub) in &cards {
+        // R2 (BIP 32 test vector 5): a depth-0 key must have parent fingerprint
+        // 00000000. Checked before the origin-fingerprint comparison below, so a
+        // key with both defects reports this one.
+        if xpub.depth == 0
+            && path.into_iter().count() == 0
+            && xpub.parent_fingerprint != bitcoin::bip32::Fingerprint::from([0u8; 4])
+        {
+            return Err(CliError::UsageError(format!(
+                "xpub {xpub} is at depth 0 but carries parent fingerprint {}; BIP 32 \
+                 requires 00000000 for a master key, so the xpub is not a valid BIP 32 key \
+                 and no card was minted.",
+                fmt_fingerprint(&xpub.parent_fingerprint),
+            )));
+        }
         let Some(declared) = fp else { continue };
         let depth = path.into_iter().count();
         // Only when the xpub's own depth agrees with the declared path. If they

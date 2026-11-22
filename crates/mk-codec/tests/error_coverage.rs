@@ -75,6 +75,9 @@ enum ErrorVariantName {
     TrailingBytes,
     CardPayloadTooLarge,
     XpubOriginPathMismatch,
+    MasterParentFingerprintNonzero,
+    MasterFingerprintMismatch,
+    OriginParentFingerprintMismatch,
 }
 
 impl ErrorVariantName {
@@ -106,6 +109,9 @@ impl ErrorVariantName {
             Self::TrailingBytes => "trailing bytes after xpub",
             Self::CardPayloadTooLarge => "card payload too large",
             Self::XpubOriginPathMismatch => "xpub origin-path mismatch",
+            Self::MasterParentFingerprintNonzero => "depth-0 key has parent fingerprint",
+            Self::MasterFingerprintMismatch => "origin fingerprint",
+            Self::OriginParentFingerprintMismatch => "origin fingerprint",
         }
     }
 }
@@ -126,6 +132,13 @@ fn is_exempt(variant: &ErrorVariantName) -> Option<&'static str> {
              KeyCard's xpub.depth/child_number disagree with origin_path; not \
              reachable via `decode`'s string-input path (depth/child_number are \
              not carried on-wire, so there is nothing for a decoder to violate).",
+        ),
+        ErrorVariantName::MasterParentFingerprintNonzero
+        | ErrorVariantName::MasterFingerprintMismatch
+        | ErrorVariantName::OriginParentFingerprintMismatch => Some(
+            "encoder-side invariant (T46): `decode` still reads a legacy card that \
+             breaks it, so no negative vector can pin it; `KeyCard::validate` and \
+             `mk verify` report it.",
         ),
         _ => None,
     }

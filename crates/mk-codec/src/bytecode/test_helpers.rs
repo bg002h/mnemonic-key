@@ -32,7 +32,11 @@ pub(crate) fn synthetic_xpub(path: &DerivationPath) -> Xpub {
     Xpub {
         network: NetworkKind::Main,
         depth,
-        parent_fingerprint: Fingerprint::from([0xAA, 0xBB, 0xCC, 0xDD]),
+        parent_fingerprint: if components.is_empty() {
+            Fingerprint::from([0u8; 4])
+        } else {
+            Fingerprint::from([0xAA, 0xBB, 0xCC, 0xDD])
+        },
         child_number,
         public_key: pk,
         chain_code: ChainCode::from([0x55u8; 32]),

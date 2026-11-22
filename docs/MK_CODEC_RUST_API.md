@@ -84,6 +84,13 @@ println!("policy_id_stubs: {} stub(s)", card.policy_id_stubs.len());
 was emitted in privacy-preserving mode); `policy_id_stubs` is
 `Vec<[u8; 4]>` (always non-empty after a successful decode).
 
+## Validating a decoded card
+
+`decode` reads every card a conformant encoder could have written, including cards minted before
+mk-codec 0.6.0 whose key origin breaks a rule `encode` now enforces (a depth-0 key with a nonzero parent fingerprint or an origin fingerprint that is not its own, or a depth-1 key whose origin fingerprint is not its parent fingerprint). `KeyCard::validate()` applies every rule `encode` enforces and
+returns `Error::MasterParentFingerprintNonzero`, `Error::MasterFingerprintMismatch` or `Error::OriginParentFingerprintMismatch` for such a card.
+Call it before trusting a decoded card's origin; `mk verify` does, and exits 1 on the error.
+
 ## Cross-binding with md-codec
 
 Each mk1 card carries one or more 4-byte `policy_id_stub`s. The stub is the top

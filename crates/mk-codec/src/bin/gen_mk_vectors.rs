@@ -381,9 +381,11 @@ fn fixtures() -> Vec<FixtureSpec> {
                  path, e.g. an xpub built from a raw WIF or a master key), \
                  fingerprint present. Exercises the component_count == 0 rule \
                  (mk-codec v0.4.0+): encodes via the 0xFE explicit escape with \
-                 count 0 and reconstructs depth=0, child_number=Normal{0}.",
+                 count 0 and reconstructs depth=0, child_number=Normal{0}. \
+                 A valid BIP 32 master (mk-codec v0.6.0+): parent fingerprint \
+                 00000000 and origin fingerprint equal to the key's own (f150c13c).",
             policy_id_stubs: vec![[0xD0, 0x0D, 0x00, 0x00]],
-            origin_fingerprint: Some([0xD0, 0x0D, 0xCA, 0xFE]),
+            origin_fingerprint: Some([0xF1, 0x50, 0xC1, 0x3C]),
             origin_path: "",
             network: NetworkKind::Main,
             seed_byte: 0x13,
@@ -1005,7 +1007,11 @@ fn synthetic_xpub(network: NetworkKind, seed_byte: u8, path: &DerivationPath) ->
         // Distinct from seed_byte so an attacker can't trivially derive
         // it from public knowledge of the fixture's secret. Vectors
         // exist for testing wire-format conformance, not security.
-        parent_fingerprint: Fingerprint::from([0x10, 0x20, 0x30, seed_byte]),
+        parent_fingerprint: if depth == 0 {
+            Fingerprint::from([0u8; 4])
+        } else {
+            Fingerprint::from([0x10, 0x20, 0x30, seed_byte])
+        },
         child_number,
         public_key: pk,
         chain_code: ChainCode::from([seed_byte ^ 0xAA; 32]),
