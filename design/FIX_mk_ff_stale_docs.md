@@ -158,7 +158,7 @@ C1, N5; I14 bitcoin -> C2, N6; I14 xpub -> C3, N7; I14 Stability paragraph -> N5
 
 ## 5. Tests that change
 
-- New: `crates/mk-cli/tests/bh1119_stale_docs.rs` (Appendix A, verbatim). It reads
+- New: `crates/mk-cli/tests/bh1119_stale_docs.rs` (Appendix A, verbatim; it is `cargo +1.95.0 fmt` clean). It reads
   `bip/bip-mnemonic-key.mediawiki` and `docs/MK_CODEC_RUST_API.md`, which `ci/docs-only-paths.txt`
   treats as docs today, so the same commit adds two `-` rules to that file under a comment
   `# read by crates/mk-cli/tests/bh1119_stale_docs.rs`: `- ^bip/bip-mnemonic-key\.mediawiki$` and
@@ -205,7 +205,7 @@ gate checks it applies: `git apply --check` of Appendix B at 9b0b365 succeeds.
 //! FIX_mk_ff_stale_docs (bughunt-1119 F-F: bh-mk-I5, bh-mk-I14): the printed
 //! recovery recipe and the Rust API guide's consumer example stay runnable.
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -220,7 +220,11 @@ const KEYED: [&str; 4] = [
 ];
 
 fn read(rel: &str) -> String {
-    let root: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).unwrap().into();
+    let root: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .into();
     std::fs::read_to_string(root.join(rel)).unwrap()
 }
 /// Lines from the first line starting with `start` up to (not including) the first later line starting with `end`.
@@ -257,23 +261,42 @@ fn id(d: &md_codec::Descriptor) -> String {
 #[test]
 fn ff_i5_docs_name_no_missing_helper() {
     for f in ["design/SPEC_mk_v0_1.md", "bip/bip-mnemonic-key.mediawiki"] {
-        assert!(!read(f).contains("compute_wallet_instance_id"), "{f} names md-codec's removed compute_wallet_instance_id");
+        assert!(
+            !read(f).contains("compute_wallet_instance_id"),
+            "{f} names md-codec's removed compute_wallet_instance_id"
+        );
     }
 }
 
 #[test]
 fn ff_i5_docs_print_no_xpub_concat_recipe() {
     for f in ["design/SPEC_mk_v0_1.md", "bip/bip-mnemonic-key.mediawiki"] {
-        assert!(!read(f).contains("canonical_xpub_serialization"), "{f} prints the retired 78-byte xpub recipe");
+        assert!(
+            !read(f).contains("canonical_xpub_serialization"),
+            "{f} prints the retired 78-byte xpub recipe"
+        );
     }
 }
 
 #[test]
 fn ff_i5_recovery_step4_names_wallet_policy_id() {
-    let spec = between(&read("design/SPEC_mk_v0_1.md"), "## §5. Linkage to MD", "4. ", "5. ");
-    let bip = between(&read("bip/bip-mnemonic-key.mediawiki"), "Recovery flow (the canonical sequence", "# Reconstruct the full descriptor", "# Reject if mismatch");
+    let spec = between(
+        &read("design/SPEC_mk_v0_1.md"),
+        "## §5. Linkage to MD",
+        "4. ",
+        "5. ",
+    );
+    let bip = between(
+        &read("bip/bip-mnemonic-key.mediawiki"),
+        "Recovery flow (the canonical sequence",
+        "# Reconstruct the full descriptor",
+        "# Reject if mismatch",
+    );
     for (n, t) in [("SPEC §5 step 4", spec), ("BIP recovery step 4", bip)] {
-        assert!(t.contains("compute_wallet_policy_id"), "{n} does not name compute_wallet_policy_id:\n{t}");
+        assert!(
+            t.contains("compute_wallet_policy_id"),
+            "{n} does not name compute_wallet_policy_id:\n{t}"
+        );
     }
 }
 
@@ -299,12 +322,18 @@ fn ff_i5_assembled_policy_id_reproduces_keyed_card() {
     for x in [X0, X1] {
         pre.extend_from_slice(&Xpub::from_str(x).unwrap().encode());
     }
-    assert_eq!(hex::encode(&sha256::Hash::hash(&pre).to_byte_array()[..16]), "c86829b5ab2090a5b712b7ba1e64386c");
+    assert_eq!(
+        hex::encode(&sha256::Hash::hash(&pre).to_byte_array()[..16]),
+        "c86829b5ab2090a5b712b7ba1e64386c"
+    );
 }
 
 #[test]
 fn ff_i14_guide_pins_no_stale_tag() {
-    assert!(!read("docs/MK_CODEC_RUST_API.md").contains("v0.2.2"), "the guide still pins or names mk-codec v0.2.2");
+    assert!(
+        !read("docs/MK_CODEC_RUST_API.md").contains("v0.2.2"),
+        "the guide still pins or names mk-codec v0.2.2"
+    );
 }
 
 #[test]
@@ -316,15 +345,22 @@ fn ff_i14_guide_manifest_names_bitcoin() {
         .find(|l| l.starts_with("bitcoin = "))
         .expect("mk-codec's bitcoin requirement")
         .to_string();
-    assert!(manifest.lines().any(|l| l == req), "guide manifest lacks `{req}`:\n{manifest}");
+    assert!(
+        manifest.lines().any(|l| l == req),
+        "guide manifest lacks `{req}`:\n{manifest}"
+    );
 }
 
 #[test]
 fn ff_i14_guide_example_xpub_encodes() {
     let guide = read("docs/MK_CODEC_RUST_API.md");
-    let line = guide.lines().find(|l| l.starts_with("let xpub: Xpub = \"")).expect("example xpub line");
+    let line = guide
+        .lines()
+        .find(|l| l.starts_with("let xpub: Xpub = \""))
+        .expect("example xpub line");
     let lit = line.split('"').nth(1).unwrap();
-    let xpub = Xpub::from_str(lit).unwrap_or_else(|e| panic!("guide example xpub {lit:?} does not parse: {e}"));
+    let xpub = Xpub::from_str(lit)
+        .unwrap_or_else(|e| panic!("guide example xpub {lit:?} does not parse: {e}"));
     let card = mk_codec::KeyCard::new(
         vec![[0u8; 4]],
         Some(Fingerprint::from([0x73, 0xc5, 0xda, 0x0a])),
