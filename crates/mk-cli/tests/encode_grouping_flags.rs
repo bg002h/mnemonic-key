@@ -138,7 +138,7 @@ fn retired_separator_keywords_are_refused() {
         );
         let stderr = stderr_of(&out);
         assert!(
-            stderr.contains("space"),
+            stderr.contains("Use `--separator space`"),
             "the refusal must name what replaced it; stderr={stderr:?}"
         );
     }
