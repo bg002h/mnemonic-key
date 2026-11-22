@@ -10,7 +10,8 @@
 #        job's own "Use the lane's toolchain" step to a scratch GITHUB_ENV,
 #        then runs the job's own "Check the lane runs its labelled compiler"
 #        step, and asserts unqualified `rustc --version` equals
-#        `rustc +<label> --version`. A static row checks the build job's
+#        `rustc +<label> --version`, and runs the check step again without
+#        the pin step, which must fail. A static row checks the build job's
 #        beta label and continue-on-error, and that CHECK_NAME equals the name.
 #   I12  Extracts the release-creating command of ci.yml, musl-binaries.yml
 #        and release.yml and runs it under `bash -e` with a mocked `gh` in
@@ -95,11 +96,17 @@ i11_lane() { # <job id> <label>
     else echo "chk_rc=absent" >"$WORK/chk-$job.rc"; fi
     echo "$(rustc --version)|$(rustc +"$label" --version)"
   ) >"$WORK/i11-$job.out" 2>&1
+  # the check must FAIL when the pin step is absent (else it is a gate that cannot fail)
+  local nopin=absent
+  if [ -n "$chk" ]; then
+    ( cd "$repo" || exit 9; export RUSTUP_HOME=$rh; unset RUSTUP_TOOLCHAIN
+      LANE_TOOLCHAIN=$label bash -e -c "$chk" ) >"$WORK/chk-nopin-$job.out" 2>&1 && nopin=0 || nopin=$?
+  fi
   got=$(tail -1 "$WORK/i11-$job.out" | cut -d'|' -f1); want=$(tail -1 "$WORK/i11-$job.out" | cut -d'|' -f2)
   chk_rc=$(sed 's/chk_rc=//' "$WORK/chk-$job.rc" 2>/dev/null)
   local pass=0
-  [ "$got" = "$want" ] && [ "$wired" = 1 ] && [ "$chk_rc" = 0 ] && pass=1
-  row "i11_${job}_lane_runs_label" "$pass" "label=$label unqualified: $got | labelled: $want | wired=$wired check-step=$chk_rc"
+  [ "$got" = "$want" ] && [ "$wired" = 1 ] && [ "$chk_rc" = 0 ] && [ "$nopin" != absent ] && [ "$nopin" != 0 ] && pass=1
+  row "i11_${job}_lane_runs_label" "$pass" "label=$label unqualified: $got | labelled: $want | wired=$wired check-step=$chk_rc check-without-pin=$nopin"
 }
 i11_lane build stable
 i11_lane fmt 1.95.0

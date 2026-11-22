@@ -194,7 +194,8 @@ plus (already on this branch) `scripts/mk-fg-ci-gates-rows.sh`, `SCRIPTS.md`,
 Committed runner: `scripts/mk-fg-ci-gates-rows.sh red|green` (its header lists what it does and
 does not cover). It reads the real workflow and doc text of the checkout: I11 rows emulate each
 lane in a scratch RUSTUP_HOME (whose `toolchains/` links to yours; nothing is installed), apply the
-job's own two steps (2.1) and compare unqualified `rustc --version` with `rustc +<label>`; I12 rows
+job's own two steps (2.1) and compare unqualified `rustc --version` with `rustc +<label>`, and run
+the check step again without the pin step, which must fail; I12 rows
 run each site's command under `bash -e` with a mocked `gh`; I13 rows run the 9.3 fence in a scratch
 git repo (HEAD committed 2020-01-01, epoch 1577836800) with `cross` mocked. Scratch under
 `target/mk-fg-rows` (override `WORK`).
@@ -205,9 +206,9 @@ of sections 2 and 4 (applied, run, reverted; patch kept at
 
 | row | what | RED at 9b0b365 (seen) | GREEN (seen on the scratch fix) |
 |---|---|---|---|
-| `i11_build_lane_runs_label` | build lane, label `stable` | `unqualified: rustc 1.85.0 (4d91de4e4 2025-02-17) \| labelled: rustc 1.98.0 (88d9e12ae 2026-08-18) \| wired=0 check-step=absent` | `unqualified: rustc 1.98.0 ... \| labelled: rustc 1.98.0 ... \| wired=1 check-step=0` |
-| `i11_fmt_lane_runs_label` | fmt job, label `1.95.0` | `unqualified: rustc 1.85.0 ... \| labelled: rustc 1.95.0 (59807616e 2026-04-14)`, wired=0, absent | both `rustc 1.95.0`, wired=1, check-step=0 |
-| `i11_vectors-roundtrip_lane_runs_label` | vectors-roundtrip, label `stable` | `unqualified: rustc 1.85.0 ... \| labelled: rustc 1.98.0`, wired=0, absent | both `rustc 1.98.0`, wired=1, check-step=0 |
+| `i11_build_lane_runs_label` | build lane, label `stable` | `unqualified: rustc 1.85.0 (4d91de4e4 2025-02-17) \| labelled: rustc 1.98.0 (88d9e12ae 2026-08-18) \| wired=0 check-step=absent check-without-pin=absent` | `unqualified: rustc 1.98.0 ... \| labelled: rustc 1.98.0 ... \| wired=1 check-step=0 check-without-pin=1` |
+| `i11_fmt_lane_runs_label` | fmt job, label `1.95.0` | `unqualified: rustc 1.85.0 ... \| labelled: rustc 1.95.0 (59807616e 2026-04-14)`, wired=0, absent, check-without-pin=absent | both `rustc 1.95.0`, wired=1, check-step=0, check-without-pin=1 |
+| `i11_vectors-roundtrip_lane_runs_label` | vectors-roundtrip, label `stable` | `unqualified: rustc 1.85.0 ... \| labelled: rustc 1.98.0`, wired=0, absent, check-without-pin=absent | both `rustc 1.98.0`, wired=1, check-step=0, check-without-pin=1 |
 | `i11_beta_lane_labelled_non_blocking` | build job name, `continue-on-error`, `CHECK_NAME` (static) | name `build (${{ matrix.toolchain }} on ${{ matrix.os }})`, continue-on-error empty | name and CHECK_NAME = the 2.2 expression, continue-on-error `${{ matrix.toolchain == 'beta' }}` |
 | `i12_ci_release_on_tag_fails_without_release` | ci.yml step block, 4 gh cases | `exists rc=0 (creates=0) created rc=0 raced rc=0 still-missing rc=0` | `... raced rc=0 still-missing rc=1` |
 | `i12_musl_ensure_release_fails_without_release` | musl-binaries.yml L350 | same as above, still-missing rc=0 | still-missing rc=1 |
