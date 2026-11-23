@@ -495,21 +495,6 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     Ok(0)
 }
 
-/// Read the md1 strings out of a `--from-md1-set` file.
-///
-/// **Every line that is not an md1 string is skipped**, which is what makes this
-/// flag independent of which era wrote the file: today `md encode` prints a
-/// `chunk-set-id: 0x…` header on stdout ahead of the artifact, and after SPEC
-/// §6a that header is on stderr. Blank lines, `#` comments and an operator's own
-/// annotations are skipped for the same reason. Display separators are stripped
-/// first, so a grouped file and an unbroken file bind identically -- measured on
-/// a real four-chunk set, byte-identical mk1 out.
-///
-/// **A file with NO md1 string in it is refused**, naming the file. Skipping is
-/// what makes the flag tolerant; unguarded, it is also what would let a mistyped
-/// path to a README bind zero stubs and then fail with a message about flags the
-/// operator did supply -- or mint against a `--policy-id-stub` they also passed,
-/// silently dropping the wallet they meant to bind.
 /// Render a path as `m` then `/<index>` per component, `'` after a hardened one.
 fn fmt_origin_path(components: &[(bool, u32)]) -> String {
     let mut out = String::from("m");
@@ -593,6 +578,21 @@ fn check_card_against_slots(
     }
 }
 
+/// Read the md1 strings out of a `--from-md1-set` file.
+///
+/// **Every line that is not an md1 string is skipped**, which is what makes this
+/// flag independent of which era wrote the file: today `md encode` prints a
+/// `chunk-set-id: 0x…` header on stdout ahead of the artifact, and after SPEC
+/// §6a that header is on stderr. Blank lines, `#` comments and an operator's own
+/// annotations are skipped for the same reason. Display separators are stripped
+/// first, so a grouped file and an unbroken file bind identically -- measured on
+/// a real four-chunk set, byte-identical mk1 out.
+///
+/// **A file with NO md1 string in it is refused**, naming the file. Skipping is
+/// what makes the flag tolerant; unguarded, it is also what would let a mistyped
+/// path to a README bind zero stubs and then fail with a message about flags the
+/// operator did supply -- or mint against a `--policy-id-stub` they also passed,
+/// silently dropping the wallet they meant to bind.
 fn read_md1_set(path: &str) -> Result<Vec<String>> {
     let buf = std::fs::read_to_string(path)
         .map_err(|e| CliError::UsageError(format!("--from-md1-set {path}: {e}")))?;
