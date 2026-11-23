@@ -9,7 +9,7 @@
 #   red   = the base commit's behaviour (each defect mints at exit 0; controls pass)
 #   green = the fixed behaviour (each refusal exits 64 with the exact section-2
 #           text on stderr and nothing on stdout; controls unchanged)
-# Rows: 29 (red and green). Any row that does not match its expectation fails the script (exit 1).
+# Rows: 31 (red and green). Any row that does not match its expectation fails the script (exit 1).
 #
 # Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
 # the rest (plus a newline; "=" alone means empty).
@@ -93,6 +93,7 @@ TPL=md1yqpqqxzq2qwfv8urt848e   # keyless template wpkh, stub 559e64b2
 P0="48'/0'/0'/2'"
 printf '[73c5da0a/%s]%s\n[73c5da0a/%s]%s\n' "$P0" "$X0" "$P0" "$X0" > twice.txt
 printf '[73c5da0a/%s]%s\n# same record, h spelling\n[73c5da0a/48h/0h/0h/2h]%s\n' "$P0" "$X0" "$X0" > twice_h.txt
+printf "[73c5da0a/%s]%s\n[73c5da0a/48'/0'/1'/2']%s\n[73c5da0a/%s]%s\n" "$P0" "$X0" "$X1" "$P0" "$X0" > rep13.txt
 printf "[73c5da0a/%s]%s\n[73c5da0a/48'/0'/1'/2']%s\n" "$P0" "$X0" "$X0" > twoorigins.txt
 printf '[73c5da0a/%s]%s\n\n[73c5da0a/%s]%s\n' "$P0" "$X0" "$P0" "$X1" > twokeys.txt
 printf '[3442193e/]%s\n[3442193e/]%s\n' "$TV1M" "$LEAFM" > twomasters.txt
@@ -140,10 +141,12 @@ if [ "$MODE" = red ]; then
   row fe_i2_elided_origin_master_card 0 mk1 - - -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
   row fe_keys_identical_record_twice 0 mk1 - "card 2 of 2" -- encode --keys twice.txt --policy-id-stub deadbeef
   row fe_keys_identical_record_h_spelling 0 mk1 - "card 2 of 2" -- encode --keys twice_h.txt --policy-id-stub deadbeef
+  row fe_keys_identical_record_non_adjacent 0 mk1 - "card 3 of 3" -- encode --keys rep13.txt --policy-id-stub deadbeef
   row fe_keys_one_key_two_origins 0 mk1 - "card 2 of 2" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
   row fe_keys_one_origin_two_keys 0 mk1 - "card 2 of 2" -- encode --keys twokeys.txt --policy-id-stub deadbeef
   row fe_keys_one_origin_two_masters 64 = - "does not match the xpub" -- encode --keys twomasters.txt --policy-id-stub deadbeef
   row fe_stub_repeated_policy_id_stub 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
   row fe_stub_repeated_from_md1 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
   row fe_stub_repeated_across_channels 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 else
@@ -159,10 +162,12 @@ else
   row fe_i2_elided_origin_master_card 64 = - "=error: $(tpathstd "$X0D0" 0 38bd7cec "$M0" m)" -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
   row fe_keys_identical_record_twice 64 = - "=error: $(trec twice.txt 2 1)" -- encode --keys twice.txt --policy-id-stub deadbeef
   row fe_keys_identical_record_h_spelling 64 = - "=error: $(trec twice_h.txt 3 1)" -- encode --keys twice_h.txt --policy-id-stub deadbeef
+  row fe_keys_identical_record_non_adjacent 64 = - "=error: $(trec rep13.txt 3 1)" -- encode --keys rep13.txt --policy-id-stub deadbeef
   row fe_keys_one_key_two_origins 64 = - "=error: $(tkey2 twoorigins.txt 2 1 "[73c5da0a/$P0]")" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
   row fe_keys_one_origin_two_keys 64 = - "=error: $(torigin2 twokeys.txt 3 "[73c5da0a/$P0]" 1)" -- encode --keys twokeys.txt --policy-id-stub deadbeef
   row fe_keys_one_origin_two_masters 64 = - "=error: $(torigin2 twomasters.txt 2 "[3442193e/]" 1)" -- encode --keys twomasters.txt --policy-id-stub deadbeef
   row fe_stub_repeated_policy_id_stub 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
   row fe_stub_repeated_from_md1 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
   row fe_stub_repeated_across_channels 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 fi

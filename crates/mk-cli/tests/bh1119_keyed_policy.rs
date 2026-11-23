@@ -86,6 +86,10 @@ fn fx() -> tempfile::TempDir {
         format!("[73c5da0a/{P0}]{X0}\n# same record, h spelling\n[73c5da0a/48h/0h/0h/2h]{X0}\n"),
     );
     w(
+        "rep13.txt",
+        format!("[73c5da0a/{P0}]{X0}\n[73c5da0a/48'/0'/1'/2']{X1}\n[73c5da0a/{P0}]{X0}\n"),
+    );
+    w(
         "twoorigins.txt",
         format!("[73c5da0a/{P0}]{X0}\n[73c5da0a/48'/0'/1'/2']{X0}\n"),
     );
@@ -373,6 +377,18 @@ fn fe_keys_in_flag_and_stdin_same_checks() {
     refused(&o, &t_rec("<stdin>", 2, 1));
 }
 
+#[test]
+fn fe_keys_identical_record_non_adjacent() {
+    let o = run(&[
+        "encode",
+        "--keys",
+        "rep13.txt",
+        "--policy-id-stub",
+        "deadbeef",
+    ]);
+    refused(&o, &t_rec("rep13.txt", 3, 1));
+}
+
 // ---- mk-dup-stub ----
 
 #[test]
@@ -384,6 +400,24 @@ fn fe_stub_repeated_policy_id_stub() {
         &[
             "--policy-id-stub",
             "deadbeef",
+            "--policy-id-stub",
+            "deadbeef",
+        ],
+    ));
+    refused(&o, &t_stub("deadbeef"));
+}
+
+#[test]
+fn fe_stub_repeated_non_adjacent() {
+    let o = run(&card(
+        X0,
+        M0,
+        "73c5da0a",
+        &[
+            "--policy-id-stub",
+            "deadbeef",
+            "--policy-id-stub",
+            "11111111",
             "--policy-id-stub",
             "deadbeef",
         ],
