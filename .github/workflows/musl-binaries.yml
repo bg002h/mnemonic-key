@@ -347,7 +347,7 @@ jobs:
 
       - name: ensure-release
         if: startsWith(github.ref, 'refs/tags/mk-cli-v')
-        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes || true
+        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes || gh release view "$REF_NAME" >/dev/null
       - name: upload
         if: startsWith(github.ref, 'refs/tags/mk-cli-v')
         run: |

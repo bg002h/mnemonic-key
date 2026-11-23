@@ -306,20 +306,28 @@ sets `CARGO_HOME=/cargo`. So the in-container compiler sees the source at
 Run from the repo root (where `Cross.toml` + `vendor/` are committed):
 
 ```sh
-SOURCE_DATE_EPOCH=$(git show -s --format=%ct <tagged-commit-SHA>) \
-LC_ALL=C TZ=UTC \
-CARGO_BUILD_RUSTFLAGS="--remap-path-prefix=/project=/build --remap-path-prefix=/cargo=/cargo" \
-CFLAGS="-ffile-prefix-map=/project=/build -ffile-prefix-map=/cargo=/cargo" \
-CFLAGS_aarch64_unknown_linux_musl="-ffile-prefix-map=/project=/build -ffile-prefix-map=/cargo=/cargo" \
-cross build --locked --offline --release \
-  --target aarch64-unknown-linux-musl -p mk-cli --bin mk \
-  --config 'source.crates-io.replace-with="vendored-sources"' \
-  --config 'source.vendored-sources.directory="vendor"'
-
-tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" \
-  -cf - -C target/aarch64-unknown-linux-musl/release mk \
-  | gzip -n -9 > mk-<VER>-aarch64-linux-musl.tar.gz
+(
+  set -euo pipefail
+  SOURCE_DATE_EPOCH=$(git show -s --format=%ct <tagged-commit-SHA>)
+  export SOURCE_DATE_EPOCH
+  LC_ALL=C TZ=UTC \
+  CARGO_BUILD_RUSTFLAGS="--remap-path-prefix=/project=/build --remap-path-prefix=/cargo=/cargo" \
+  CFLAGS="-ffile-prefix-map=/project=/build -ffile-prefix-map=/cargo=/cargo" \
+  CFLAGS_aarch64_unknown_linux_musl="-ffile-prefix-map=/project=/build -ffile-prefix-map=/cargo=/cargo" \
+  cross build --locked --offline --release \
+    --target aarch64-unknown-linux-musl -p mk-cli --bin mk \
+    --config 'source.crates-io.replace-with="vendored-sources"' \
+    --config 'source.vendored-sources.directory="vendor"'
+  tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" \
+    -cf - -C target/aarch64-unknown-linux-musl/release mk \
+    | gzip -n -9 > mk-<VER>-aarch64-linux-musl.tar.gz
+)
 ```
+
+The parentheses run the recipe in a subshell with `set -euo pipefail`: a failed
+build stops it with a nonzero status before any archive is written, and the
+shell you paste it into keeps its own options. `SOURCE_DATE_EPOCH` is set and
+exported once, so `cross` and `tar` use the same commit time.
 
 The same TWO-block `[source]` activation (mk is fork-free), the same `--locked
 --offline`, the same gzip-pinned tar as the x86_64 leg. `cross` forwards the
