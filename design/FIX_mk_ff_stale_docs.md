@@ -51,8 +51,7 @@ triage `triage-mk-t2.md` (I5) and `triage-mk-t3.md` (I14).
   L49/L637/L651 use it as the name of the step-4 check, and they stay true); only its definition changes.
 - **Fingerprint presence is part of the recipe.** The WalletPolicyId is presence-significant on
   fingerprints: the same assembly without fingerprints gives `949c621144d15257e4cc94921c8dbbc3`
-  (row N4). The new step 4 says to give an `@N` an origin fingerprint exactly when the compared
-  record had one (PROPOSED wording below). Swapped slots give `780f6305cae4a2412ab398ff78dc426a`.
+  (row N4). The new step 4 names the source (key card's `origin_fingerprint` or the policy card's, reject if they differ) and the fallback when no card carries the fingerprint the expected identity used (another record of the wallet, else first-address verification; architect-mk-ff-i2). Swapped slots give `780f6305cae4a2412ab398ff78dc426a`.
 - **Guide pin: tag `mk-codec-v0.5.1`** (latest tag; the triage's proven GREEN). crates.io has
   0.5.0 at most and the repo is at 0.6.0 unreleased, so a 0.6.0 pin would fail as printed. The
   guide's existing "Validating a decoded card" section already names mk-codec 0.6.0 for
@@ -77,11 +76,7 @@ present once in its file.
   (md SPEC v0.13 §5.3). With concrete xpubs in its @N slots the identity's preimage covers them,
   so this one value is the per-instance check; there is no separate instance hash (md BIP §"Policy
   identifier"). The preimage takes each xpub's 65-byte wire form (chain code || compressed public
-  key), not its 78-byte BIP 32 serialization. / The value is presence-significant on fingerprints
-  as well as xpubs: give an @N an origin fingerprint exactly when the record you compare against was
-  computed with one (a privacy-preserving key card carries none). Compare against the wallet
-  identity the user expected to recover (e.g., a separately-anchored WalletPolicyId, its 12-word
-  phrase from WalletPolicyId::to_phrase, or a digital backup record). Reject on mismatch."
+  key), not its 78-byte BIP 32 serialization. / The value is presence-significant on fingerprints as well as xpubs. An @N's origin fingerprint in the assembled descriptor is its key card's origin_fingerprint or the policy card's fingerprint for that @N; if both cards carry one and they differ, reject the assembly. An @N that neither card gives one has none (a privacy-preserving key card carries none). Compare against the wallet identity the user expected to recover (e.g., a separately-anchored WalletPolicyId, its 12-word phrase from WalletPolicyId::to_phrase, or a digital backup record). Reject on mismatch, with one exception: when some @N has no fingerprint, the expected identity may have been computed with one, so first take those fingerprints from another record of the same wallet (its descriptor backup, or the master fingerprint of that cosigner's seed) and recompute. If no record supplies them, step 4 cannot confirm the wallet: say so, and verify the first address derived from the assembled descriptor against an independently-recorded expected address (§6) before any funds move. Fingerprints do not change addresses."
 - L379, replace the whole line with:
   `**Implementation note:** step 4 is md-codec's `compute_wallet_policy_id` applied to the assembled descriptor. mk1 implementations SHOULD call it directly rather than reimplementing the preimage construction.`
 
@@ -91,13 +86,13 @@ present once in its file.
    with `an encoder-divergence-free hash of an MD-encoded policy: the template, the per-<code>@N</code> paths and, when the card carries them, the concrete fingerprints and xpubs (presence-significant). A template card's value is therefore one-to-many over actual wallets; a card with concrete xpubs identifies one wallet instance (see '''Wallet Instance ID''').`
    (Not in the grader's line list; needed because the old sentence contradicts the new L39.)
 2. L39, replace the whole bullet with:
-   `* '''Wallet Instance ID''': the 16-byte '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id</code>) of the assembled descriptor — the policy template with each <code>@N</code> slot's concrete xpub filled in (and its origin fingerprint, when the record compared against has one). Its preimage covers those keys, so it identifies a wallet instance — a template plus a specific cosigner xpub set; there is no separate instance hash (MD BIP §"Policy identifier"). Recovery tools compute it on demand from policy + assembled xpubs.`
+   `* '''Wallet Instance ID''': the 16-byte '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id</code>) of the assembled descriptor — the policy template with each <code>@N</code> slot's concrete xpub filled in (and its origin fingerprint, from the MK or MD card as recovery step 4 states). Its preimage covers those keys, so it identifies a wallet instance — a template plus a specific cosigner xpub set; there is no separate instance hash (MD BIP §"Policy identifier"). Recovery tools compute it on demand from policy + assembled xpubs.`
 3. L47, replace the whole item with:
    `# Defined a new derived '''Wallet Instance ID''' as a recovery-time computation, documented in the MD BIP but not carried by any physical card. Its v0.8.0 formula is retired: the Wallet Instance ID is now the WalletPolicyId of the assembled descriptor (see the glossary).`
 4. L48, replace `(The Wallet Instance ID is unaffected.)` with
    `(The Wallet Instance ID is the same WalletPolicyId, computed over the descriptor with its concrete xpubs; see the glossary.)`
 5. L602, replace `Compute the Wallet Instance ID = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> where <code>canonical_xpub_serialization</code> is the concatenation of each <code>@N</code>-placeholder's resolved 78-byte xpub serialization in placeholder-index order.`
-   with `Compute the Wallet Instance ID = <code>md_codec::compute_wallet_policy_id(assembled_descriptor)</code>, the WalletPolicyId of the assembled descriptor (its preimage takes each xpub's 65-byte wire form, not the 78-byte BIP 32 serialization). Give an <code>@N</code> an origin fingerprint exactly when the record compared against was computed with one: the value is presence-significant on fingerprints and xpubs.`
+   with `Compute the Wallet Instance ID = <code>md_codec::compute_wallet_policy_id(assembled_descriptor)</code>, the WalletPolicyId of the assembled descriptor (its preimage takes each xpub's 65-byte wire form, not the 78-byte BIP 32 serialization). The value is presence-significant on fingerprints and xpubs: an <code>@N</code>'s origin fingerprint is its MK card's <code>origin_fingerprint</code> or the MD policy card's fingerprint for that <code>@N</code>; if both cards carry one and they differ, reject the assembly; an <code>@N</code> that neither card gives one has none. Verify the Wallet Instance ID matches the wallet the user expected to recover (e.g., compared against a separately-anchored WalletPolicyId phrase, or against a digital backup record). If it does not match while some <code>@N</code> has no fingerprint, first take those fingerprints from another record of the same wallet (its descriptor backup, or the master fingerprint of that cosigner's seed) and recompute. If no record supplies them, the Wallet Instance ID cannot confirm the wallet: say so, and instead of the next step verify the first address derived from the assembled descriptor against an independently-recorded expected address (§"Privacy considerations") before any funds move. Fingerprints do not change addresses.`
 6. L602, replace `compared against a separately-anchored Wallet Instance ID phrase, or against`
    with `compared against a separately-anchored WalletPolicyId phrase, or against`.
 
@@ -139,7 +134,7 @@ needs network; header says what it does not cover). Runs:
   and `mk1qpe9m4pp0f30mtxzd65mvwcur9usdatwuqvq6z70r9nwrgk6xn6l8gy6n0yhwh6mr79jfqallmwff`.
 
 Nextest rows (new file `crates/mk-cli/tests/bh1119_stale_docs.rs`, text in Appendix A; run by the
-author: at 9b0b365 6 FAIL + 1 PASS, with section 3 applied 7 PASS). Command:
+author: at 9b0b365 7 FAIL + 1 PASS, with section 3 applied 8 PASS). Command:
 `cargo nextest run --locked -p mk-cli --test bh1119_stale_docs --no-fail-fast`.
 
 | row (test fn) | at 9b0b365 | after section 3 |
@@ -151,10 +146,11 @@ author: at 9b0b365 6 FAIL + 1 PASS, with section 3 applied 7 PASS). Command:
 | N5 `ff_i14_guide_pins_no_stale_tag` | FAIL `the guide still pins or names mk-codec v0.2.2` | PASS |
 | N6 `ff_i14_guide_manifest_names_bitcoin` | FAIL ``guide manifest lacks `bitcoin = "0.32"`:`` | PASS |
 | N7 `ff_i14_guide_example_xpub_encodes` | FAIL `guide example xpub "xpub6CatWdiZi..." does not parse: base58 encoding error` | PASS |
+| N8 `ff_i5_step4_names_fingerprint_source` | FAIL `SPEC §5 step 4 does not state "origin_fingerprint":` (also at 6388394's Appendix B) | PASS |
 
 Coverage map: I5 SPEC step 4 -> D2, D3, N2, N3, N4; I5 SPEC note -> D1, N1; I5 BIP L39/L47/L602
 -> D1, D2, D3, N1, N2, N3; I5 BIP L37/L48 consistency -> review only (no machine row); I14 tag ->
-C1, N5; I14 bitcoin -> C2, N6; I14 xpub -> C3, N7; I14 Stability paragraph -> N5.
+C1, N5; I14 bitcoin -> C2, N6; I14 xpub -> C3, N7; I14 Stability paragraph -> N5; I5 step-4 fingerprint source/fallback -> N8.
 
 ## 5. Tests that change
 
@@ -371,6 +367,49 @@ fn ff_i14_guide_example_xpub_encodes() {
     let refs: Vec<&str> = strings.iter().map(String::as_str).collect();
     assert_eq!(mk_codec::decode(&refs).unwrap().xpub, xpub);
 }
+
+/// I-2 (architect-mk-ff-i2): step 4 names where an `@N`'s fingerprint comes from and what to do
+/// when no card supplies the one the expected identity was computed with; the fact behind the
+/// fallback is that the fingerprints change the identity but not the addresses.
+#[test]
+fn ff_i5_step4_names_fingerprint_source() {
+    let spec = between(
+        &read("design/SPEC_mk_v0_1.md"),
+        "## §5. Linkage to MD",
+        "4. ",
+        "5. ",
+    );
+    let bip = between(
+        &read("bip/bip-mnemonic-key.mediawiki"),
+        "Recovery flow (the canonical sequence",
+        "# Reconstruct the full descriptor",
+        "# Reject if mismatch",
+    );
+    for (n, t) in [("SPEC §5 step 4", spec), ("BIP recovery step 4", bip)] {
+        for want in [
+            "origin_fingerprint",
+            "they differ, reject the assembly",
+            "first address",
+        ] {
+            assert!(t.contains(want), "{n} does not state {want:?}:\n{t}");
+        }
+    }
+    let mut assembled = md_codec::reassemble(&KEYED).unwrap();
+    assembled.tlv.pubkeys = Some(vec![(0, wire65(X0)), (1, wire65(X1))]);
+    let mut no_fp = assembled.clone();
+    no_fp.tlv.fingerprints = None;
+    assert_ne!(id(&assembled), id(&no_fp));
+    for chain in [0, 1] {
+        assert_eq!(
+            assembled
+                .derive_address(chain, 0, bitcoin::Network::Bitcoin)
+                .unwrap(),
+            no_fp
+                .derive_address(chain, 0, bitcoin::Network::Bitcoin)
+                .unwrap()
+        );
+    }
+}
 ```
 
 ## Appendix B: section 3 as a patch against 9b0b365 (the GREEN run's scratch edit)
@@ -388,7 +427,7 @@ index f069d31..4c790a1 100644
 +* '''Policy ID''' (a.k.a. '''WalletPolicyId'''): the 16-byte canonical-''expanded'' policy identity <code>md_codec::compute_wallet_policy_id(descriptor)</code> (md SPEC v0.13 §5.3), an encoder-divergence-free hash of an MD-encoded policy: the template, the per-<code>@N</code> paths and, when the card carries them, the concrete fingerprints and xpubs (presence-significant). A template card's value is therefore one-to-many over actual wallets; a card with concrete xpubs identifies one wallet instance (see '''Wallet Instance ID'''). It '''supersedes''' the earlier v0.8.0 "Policy ID" = <code>SHA-256(canonical_bytecode)[0..16]</code> (the encoding-sensitive md1 bytecode hash <code>Md1EncodingId</code>, itself renamed from "wallet ID" in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]); the bytecode hash predated WalletPolicyId and is not stable under re-encoding the same logical wallet. See the naming note below (audit I1, 2026-06-10).
  * '''Policy ID stub''': the top 4 bytes of a '''form-aware''' MD identity — the '''WalletPolicyId''' for a keyed wallet-policy card, the '''WalletDescriptorTemplateId''' for a keyless template card. Carried by MK cards as an indexing aid. See "Policy ID stubs" and "Linkage to MD".
 -* '''Wallet Instance ID''': the derived 16-byte value <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> uniquely identifying a wallet instance — i.e., a template plus a specific cosigner xpub set. Defined in [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.8.0 md-codec v0.8.0]'s BIP for cross-tool consistency. Recovery tools compute it on demand from policy + assembled xpubs.
-+* '''Wallet Instance ID''': the 16-byte '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id</code>) of the assembled descriptor — the policy template with each <code>@N</code> slot's concrete xpub filled in (and its origin fingerprint, when the record compared against has one). Its preimage covers those keys, so it identifies a wallet instance — a template plus a specific cosigner xpub set; there is no separate instance hash (MD BIP §"Policy identifier"). Recovery tools compute it on demand from policy + assembled xpubs.
++* '''Wallet Instance ID''': the 16-byte '''WalletPolicyId''' (<code>md_codec::compute_wallet_policy_id</code>) of the assembled descriptor — the policy template with each <code>@N</code> slot's concrete xpub filled in (and its origin fingerprint, from the MK or MD card as recovery step 4 states). Its preimage covers those keys, so it identifies a wallet instance — a template plus a specific cosigner xpub set; there is no separate instance hash (MD BIP §"Policy identifier"). Recovery tools compute it on demand from policy + assembled xpubs.
  * '''<code>chunk_set_id</code>''': a 20-bit per-encoding tag carried in the chunked-string header, derived from the payload (see below), used for reassembly mismatch detection. Each chunk of a multi-chunk MK card carries the same <code>chunk_set_id</code>; a decoder rejects assemblies with mismatched values. (md-codec v0.8.x originally called this field "wallet identifier"; [https://github.com/bg002h/descriptor-mnemonic/releases/tag/md-codec-v0.9.0 md-codec v0.9.0] renamed it to <code>chunk_set_id</code> across both the BIP draft and the reference implementation. Wire format unchanged.)
  
  ===Naming note (Policy ID vs Wallet Instance ID, and <code>chunk_set_id</code>)===
@@ -408,7 +447,7 @@ index f069d31..4c790a1 100644
  ## Reject the card unless <code>policy_stub</code> matches one of its stubs.
  # For each accepted MK card, plug its xpub into the corresponding <code>@N</code> slot in the policy template (matched by origin path, by user assignment, or by the cosigner-name metadata that future MK versions may carry).
 -# Reconstruct the full descriptor with concrete xpubs. Compute the Wallet Instance ID = <code>SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]</code> where <code>canonical_xpub_serialization</code> is the concatenation of each <code>@N</code>-placeholder's resolved 78-byte xpub serialization in placeholder-index order. Verify the Wallet Instance ID matches the wallet the user expected to recover (e.g., compared against a separately-anchored Wallet Instance ID phrase, or against a digital backup record).
-+# Reconstruct the full descriptor with concrete xpubs. Compute the Wallet Instance ID = <code>md_codec::compute_wallet_policy_id(assembled_descriptor)</code>, the WalletPolicyId of the assembled descriptor (its preimage takes each xpub's 65-byte wire form, not the 78-byte BIP 32 serialization). Give an <code>@N</code> an origin fingerprint exactly when the record compared against was computed with one: the value is presence-significant on fingerprints and xpubs. Verify the Wallet Instance ID matches the wallet the user expected to recover (e.g., compared against a separately-anchored WalletPolicyId phrase, or against a digital backup record).
++# Reconstruct the full descriptor with concrete xpubs. Compute the Wallet Instance ID = <code>md_codec::compute_wallet_policy_id(assembled_descriptor)</code>, the WalletPolicyId of the assembled descriptor (its preimage takes each xpub's 65-byte wire form, not the 78-byte BIP 32 serialization). The value is presence-significant on fingerprints and xpubs: an <code>@N</code>'s origin fingerprint is its MK card's <code>origin_fingerprint</code> or the MD policy card's fingerprint for that <code>@N</code>; if both cards carry one and they differ, reject the assembly; an <code>@N</code> that neither card gives one has none. Verify the Wallet Instance ID matches the wallet the user expected to recover (e.g., compared against a separately-anchored WalletPolicyId phrase, or against a digital backup record). If it does not match while some <code>@N</code> has no fingerprint, first take those fingerprints from another record of the same wallet (its descriptor backup, or the master fingerprint of that cosigner's seed) and recompute. If no record supplies them, the Wallet Instance ID cannot confirm the wallet: say so, and instead of the next step verify the first address derived from the assembled descriptor against an independently-recorded expected address (§"Privacy considerations") before any funds move. Fingerprints do not change addresses.
  # Reject if mismatch. Accept and proceed to address derivation if match.
  
  Step 2 is the indexing aid — fast filter, template-level. Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
@@ -428,7 +467,7 @@ index 1350765..c707f10 100644
 -   ```
 -
 -   where `canonical_xpub_serialization` is the concatenation of each `@N`-resolved xpub's full 78-byte BIP 32 serialization, in placeholder-index order. Compare against the wallet identity the user expected to recover (e.g., a separately-anchored Wallet Instance ID, or against a digital backup record). Reject on mismatch.
-+   The value is presence-significant on fingerprints as well as xpubs: give an `@N` an origin fingerprint exactly when the record you compare against was computed with one (a privacy-preserving key card carries none). Compare against the wallet identity the user expected to recover (e.g., a separately-anchored WalletPolicyId, its 12-word phrase from `WalletPolicyId::to_phrase`, or a digital backup record). Reject on mismatch.
++   The value is presence-significant on fingerprints as well as xpubs. An `@N`'s origin fingerprint in the assembled descriptor is its key card's `origin_fingerprint` or the policy card's fingerprint for that `@N`; if both cards carry one and they differ, reject the assembly. An `@N` that neither card gives one has none (a privacy-preserving key card carries none). Compare against the wallet identity the user expected to recover (e.g., a separately-anchored WalletPolicyId, its 12-word phrase from `WalletPolicyId::to_phrase`, or a digital backup record). Reject on mismatch, with one exception: when some `@N` has no fingerprint, the expected identity may have been computed with one, so first take those fingerprints from another record of the same wallet (its descriptor backup, or the master fingerprint of that cosigner's seed) and recompute. If no record supplies them, step 4 cannot confirm the wallet: say so, and verify the first address derived from the assembled descriptor against an independently-recorded expected address (§6) before any funds move. Fingerprints do not change addresses.
  5. Accept and proceed to address derivation.
  
  Step 2 is the indexing aid (fast filter, template-level). Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
