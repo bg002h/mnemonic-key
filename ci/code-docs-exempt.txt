@@ -7,3 +7,7 @@
 # hand before the build and its reviews. It reads that document and the
 # FOLLOWUPS file to check them.
 ^scripts/mk-output-sink-fix-gate\.sh$
+
+# Not run by CI: the RED/GREEN rows of the mk F-G CI-gates FIX document, run
+# by hand. It reads the workflows and docs/verify-reproducibility.md to check them.
+^scripts/mk-fg-ci-gates-rows\.sh$

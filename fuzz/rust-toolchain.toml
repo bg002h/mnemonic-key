@@ -3,15 +3,12 @@
 # rustup resolves rust-toolchain.toml from the cwd UPWARD, so it only applies
 # when invoking cargo inside fuzz/ and does NOT affect the repo root.
 #
-# INTENTIONAL — and it does NOT violate mnemonic-key's no-root-toolchain rule:
-# the repo deliberately has no ROOT rust-toolchain.toml (the fmt job in
-# .github/workflows/ci.yml pins rustfmt to 1.95.0 via dtolnay/rust-toolchain
-# and its comment notes "A committed rust-toolchain.toml would override this
-# pin too (rustup file-beats-default precedence) — keep the repo free of
-# one."). A fuzz/-SCOPED pin is invisible to the root (rustup never walks
-# DOWN into fuzz/), so the fmt job at the repo root still sees no toolchain
-# file and uses its dtolnay-pinned 1.95.0. Do NOT "promote" this file to the
-# repo root.
+# INTENTIONAL. The repo ROOT also has a rust-toolchain.toml (1.85.0, the
+# release-build pin); CI jobs at the root override it with RUSTUP_TOOLCHAIN set
+# from the toolchain they install (see the fmt job in .github/workflows/ci.yml,
+# bh-mk-I11). rustup uses the nearest file upward from the cwd, so inside fuzz/
+# this fuzz/-SCOPED file wins and the root file never applies. Do NOT "promote"
+# this file to the repo root.
 #
 # Pinned to a dated nightly per the R0 design (M5); the constellation-wide
 # FOLLOWUP `fuzz-nightly-quarterly-bump` (toolkit repo) tracks refreshing this
