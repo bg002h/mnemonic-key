@@ -9,7 +9,7 @@
 #   red   = the base commit's behaviour (each defect mints at exit 0; controls pass)
 #   green = the fixed behaviour (each refusal exits 64 with the exact section-2
 #           text on stderr and nothing on stdout; controls unchanged)
-# Rows: 31 (red and green). Any row that does not match its expectation fails the script (exit 1).
+# Rows: 32 (red and green). Any row that does not match its expectation fails the script (exit 1).
 #
 # Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
 # the rest (plus a newline; "=" alone means empty).
@@ -147,6 +147,7 @@ if [ "$MODE" = red ]; then
   row fe_keys_one_origin_two_masters 64 = - "does not match the xpub" -- encode --keys twomasters.txt --policy-id-stub deadbeef
   row fe_stub_repeated_policy_id_stub 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
   row fe_stub_repeated_non_adjacent 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent_tail 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub 11111111
   row fe_stub_repeated_from_md1 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
   row fe_stub_repeated_across_channels 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 else
@@ -168,6 +169,7 @@ else
   row fe_keys_one_origin_two_masters 64 = - "=error: $(torigin2 twomasters.txt 2 "[3442193e/]" 1)" -- encode --keys twomasters.txt --policy-id-stub deadbeef
   row fe_stub_repeated_policy_id_stub 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
   row fe_stub_repeated_non_adjacent 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent_tail 64 = - "=error: $(tstub 11111111)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub 11111111
   row fe_stub_repeated_from_md1 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
   row fe_stub_repeated_across_channels 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 fi

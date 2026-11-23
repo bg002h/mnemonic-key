@@ -426,6 +426,24 @@ fn fe_stub_repeated_non_adjacent() {
 }
 
 #[test]
+fn fe_stub_repeated_non_adjacent_tail() {
+    let o = run(&card(
+        X0,
+        M0,
+        "73c5da0a",
+        &[
+            "--policy-id-stub",
+            "deadbeef",
+            "--policy-id-stub",
+            "11111111",
+            "--policy-id-stub",
+            "11111111",
+        ],
+    ));
+    refused(&o, &t_stub("11111111"));
+}
+
+#[test]
 fn fe_stub_repeated_from_md1() {
     let o = run(&card(
         X0,
