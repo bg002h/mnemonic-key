@@ -105,6 +105,11 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
 /// out of another flag's mouth sends an operator to edit a command line they
 /// did not type: the same defect F-294 files against the shared crate's refusal
 /// text, one binary smaller.
+///
+/// Input encoding (B1, FIX_mk_fa_line_readers): a leading UTF-8 BOM is removed
+/// and CRLF is a line end; any other CR, any other line-break character, and
+/// any U+FEFF after the first character, is refused naming its line, before
+/// comments are stripped.
 pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     let (buf, source) = if path == "-" {
         let mut buf = String::new();
@@ -126,8 +131,8 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     //     into it -- a SHORT BUNDLE, which is the failure mode this project
     //     most wants to be loud.
     //
-    // CRLF needs no special case: the trailing `\r` is whitespace and `trim()`
-    // below removes it.
+    // CRLF is a line end and any other CR, line break or U+FEFF is refused: see
+    // `refuse_line_encoding`, the one rule both line readers share.
     let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
     if buf.contains('\r') && !buf.contains('\n') {
         return Err(CliError::UsageError(format!(
@@ -136,6 +141,21 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
              CRLF."
         )));
     }
+
+    refuse_line_encoding(buf, |line, o| match o {
+        LineOffence::BareCr => format!(
+            "{flag} {source}:{line}: this line holds a carriage return (CR) with no line feed \
+             (LF) after it, so the text after the CR would be read as part of line {line} and \
+             a key record after it could be lost. Convert the file to LF or CRLF line endings."
+        ),
+        LineOffence::StrayBom => format!("{flag} {source}:{line}: {BOM_TEXT}"),
+        LineOffence::Break(what) => format!(
+            "{flag} {source}:{line}: this line holds a {what}, a line break this reader does \
+             not split lines on, so the text after it would be read as part of line {line} \
+             and a key record after it could be lost. Replace it with an ordinary line end \
+             (LF or CRLF)."
+        ),
+    })?;
 
     let mut out = Vec::new();
     // 1-based file line of each record (blank and comment lines count), for
@@ -158,6 +178,55 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         )));
     }
     Ok(out)
+}
+
+/// The text after `<flag> <source>:<n>: ` for a stray U+FEFF (both readers).
+pub(crate) const BOM_TEXT: &str = "this line holds a byte-order mark (U+FEFF), which is accepted \
+only as the first character of the file. Joining two files can leave the second file's mark inside \
+the result: if the mark starts the line, delete it; if other text comes before it on the line, \
+replace it with a line break.";
+
+/// What `refuse_line_encoding` found.
+pub(crate) enum LineOffence {
+    /// A CR not immediately followed by LF (a CR last in the input counts).
+    BareCr,
+    /// A U+FEFF anywhere in the input it is given.
+    StrayBom,
+    /// VT, FF, NEL, LS or PS; the payload names it.
+    Break(&'static str),
+}
+
+/// The one input-encoding rule of both line readers (B1,
+/// FIX_mk_fa_line_readers). The caller has already removed a leading BOM; CRLF is
+/// fine here (a CR before LF is not an offence). Scans from the
+/// start for the first bare CR, other line break or stray BOM and refuses it
+/// (exit 64) with `text(line, offence)`, where `line` is 1 plus the number of
+/// LF before it. Runs before any line is parsed, stripped or skipped.
+pub(crate) fn refuse_line_encoding(
+    buf: &str,
+    text: impl Fn(usize, &LineOffence) -> String,
+) -> Result<()> {
+    let mut line = 1usize;
+    let mut it = buf.chars().peekable();
+    while let Some(c) = it.next() {
+        let o = match c {
+            '\n' => {
+                line += 1;
+                continue;
+            }
+            '\r' if it.peek() == Some(&'\n') => continue,
+            '\r' => LineOffence::BareCr,
+            '\u{feff}' => LineOffence::StrayBom,
+            '\u{000B}' => LineOffence::Break("vertical tab (U+000B)"),
+            '\u{000C}' => LineOffence::Break("form feed (U+000C)"),
+            '\u{0085}' => LineOffence::Break("next-line character (U+0085)"),
+            '\u{2028}' => LineOffence::Break("line separator (U+2028)"),
+            '\u{2029}' => LineOffence::Break("paragraph separator (U+2029)"),
+            _ => continue,
+        };
+        return Err(CliError::UsageError(text(line, &o)));
+    }
+    Ok(())
 }
 
 /// An origin as BIP-380 notation, `[<fp>/<path>]` (an empty path renders `[fp/]`).
