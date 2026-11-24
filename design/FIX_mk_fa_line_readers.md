@@ -149,6 +149,8 @@ af12fea (section 5.1 holds the run).
 | `fa_i4_md1_set_bom_after_first_char_refused` | SET on `A<LF><BOM>B<LF>` | exit 0, stdout differs from want_set (B dropped) | exit 64, `error: ` T-SBOM[s_bom_mid.txt, 2] |
 | `fa_i4_md1_set_cr_only_refused` | SET on `A<CR>B<CR>` | exit 1, `error: md1 input rejected: codex32 decode error: character '1' not in codex32 alphabet` (A and B glued; cause not named) | exit 64, `error: ` T-SCR[s_cr_only.txt, 1] |
 | `fa_i4_md1_set_trailing_bare_cr_refused` | SET on `A<LF>B<CR>` | exit 0, stdout identical to want_set (behaviour change, 2.2) | exit 64, `error: ` T-SCR[s_trailing_cr.txt, 2] |
+| `fa_i3_keys_line_separator_after_comment_refused` | KEYS on `R0 # first<LS>R1<LF>` (`<LS>` = U+2028, bytes e2 80 a8) | exit 0, `"card_count":1` | exit 64, stdout empty, stderr exactly `error: ` T-KLB[--keys, k_ls_comment.txt, 1, `line separator (U+2028)`] |
+| `fa_i4_md1_set_nel_after_comment_refused` | SET on `# note<NEL>A<LF>B<LF>` (`<NEL>` = U+0085, bytes c2 85) | exit 0, stdout differs from want_set (A dropped) | exit 64, `error: ` T-SLB[s_nel_comment.txt, 1, `next-line character (U+0085)`] |
 | `fa_control_keys_lf_mints_two` | KEYS `--json` on `R0 # first<LF>R1<LF>` | exit 0, `"card_count":2` | same |
 | `fa_control_keys_crlf_mints_two` | KEYS `--json` on `R0<CR><LF>R1<CR><LF>` | exit 0, `"card_count":2` | same |
 | `fa_control_keys_leading_bom_mints_two` | KEYS `--json` on `<BOM>R0<LF>R1<LF>` | exit 0, `"card_count":2` | same |
@@ -157,8 +159,8 @@ af12fea (section 5.1 holds the run).
 
 ### 5.1 RED run at af12fea
 
-`CARGO_BUILD_JOBS=2 scripts/mk-fa-line-readers-rows.sh red` at af12fea, cargo 1.85.0, script sha256
-c2cb3d7dbd2ba920de2fdc643dd013f8ef74d9dfd546a98c709ed99d56badcbe:
+`CARGO_BUILD_JOBS=4 scripts/mk-fa-line-readers-rows.sh red` at af12fea (the script printed in this commit), cargo 1.85.0, script sha256
+9e7c6f9f9a409f1ebba74ac2c8fbd42730051f2c1c34ade70a4cc42501f8094c, 18 rows:
 
 ```
 OK   red fa_i3_keys_file_bare_cr_after_comment_refused rc=0
@@ -172,6 +174,8 @@ OK   red fa_i4_md1_set_bare_cr_after_comment_refused rc=0
 OK   red fa_i4_md1_set_bom_after_first_char_refused rc=0
 OK   red fa_i4_md1_set_cr_only_refused rc=1
 OK   red fa_i4_md1_set_trailing_bare_cr_refused rc=0
+OK   red fa_i3_keys_line_separator_after_comment_refused rc=0
+OK   red fa_i4_md1_set_nel_after_comment_refused rc=0
 OK   red fa_control_keys_lf_mints_two rc=0
 OK   red fa_control_keys_crlf_mints_two rc=0
 OK   red fa_control_keys_leading_bom_mints_two rc=0
