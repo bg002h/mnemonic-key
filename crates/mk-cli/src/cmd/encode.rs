@@ -592,9 +592,32 @@ fn check_card_against_slots(
 /// path to a README bind zero stubs and then fail with a message about flags the
 /// operator did supply -- or mint against a `--policy-id-stub` they also passed,
 /// silently dropping the wallet they meant to bind.
+///
+/// Input encoding (B1, FIX_mk_fa_line_readers): a leading UTF-8 BOM is removed
+/// and CRLF is a line end; any other CR, any other line-break character, and
+/// any U+FEFF after the first character, is refused naming its line, before any
+/// line is skipped.
 fn read_md1_set(path: &str) -> Result<Vec<String>> {
     let buf = std::fs::read_to_string(path)
         .map_err(|e| CliError::UsageError(format!("--from-md1-set {path}: {e}")))?;
+    let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
+    crate::keyfile::refuse_line_encoding(buf, |line, o| match o {
+        crate::keyfile::LineOffence::BareCr => format!(
+            "--from-md1-set {path}:{line}: this line holds a carriage return (CR) with no line \
+             feed (LF) after it, so the text after the CR would be read as part of line {line} \
+             and an md1 string after it could be skipped. Convert the file to LF or CRLF line \
+             endings."
+        ),
+        crate::keyfile::LineOffence::StrayBom => {
+            format!("--from-md1-set {path}:{line}: {}", crate::keyfile::BOM_TEXT)
+        }
+        crate::keyfile::LineOffence::Break(what) => format!(
+            "--from-md1-set {path}:{line}: this line holds a {what}, a line break this reader \
+             does not split lines on, so the text after it would be read as part of line {line} \
+             and an md1 string after it could be skipped. Replace it with an ordinary line end \
+             (LF or CRLF)."
+        ),
+    })?;
     let mut out = Vec::new();
     for line in buf.lines() {
         let s = crate::format::strip_display_separators(line);
