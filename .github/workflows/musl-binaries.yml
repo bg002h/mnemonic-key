@@ -38,6 +38,10 @@ on:
       - 'mk-cli-v*'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ── REPRODUCIBILITY: the toolkit-homed gate (a codec re-home) ───────────────
   # Calls the centralized reusable workflow from mnemonic-toolkit (F6: ONE
