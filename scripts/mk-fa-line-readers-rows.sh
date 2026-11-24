@@ -58,6 +58,9 @@ put k_bom_mid.txt   "$R0$LF$BOM$R1$LF"
 put k_crlf.txt      "$R0$CR$LF$R1$CR$LF"
 put k_bom.txt       "$BOM$R0$LF$R1$LF"
 put k_cr_only.txt   "$R0$CR$R1$CR"
+LS=$'\xe2\x80\xa8'
+NEL=$'\xc2\x85'
+put k_ls_comment.txt "$R0 # first$LS$R1$LF"
 # md1-set files (--from-md1-set).
 put s_plain.txt      "$A$LF$B$LF"
 put s_bom.txt        "$BOM$A$LF$B$LF"
@@ -66,6 +69,7 @@ put s_bom_mid.txt    "$A$LF$BOM$B$LF"
 put s_cr_only.txt    "$A$CR$B$CR"
 put s_trailing_cr.txt "$A$LF$B$CR"
 put s_crlf.txt       "$A$CR$LF$B$CR$LF"
+put s_nel_comment.txt "# note$NEL$A$LF$B$LF"
 # A four-chunk keyed policy (from_md1_set.rs KEYED_POLICY_A) and a cosigner of it (V1).
 KA=(md1fj5r4pspq2tvyyy4qqxppsg2z7z883w6pt24menw3tsf9m5rru59s2su80aw2q4wgdpapguu6w2y2jygprc
     md1fj5r4psf875x67p5s3wem7sgluxl3d2a3syx3m7halwd7s7d5e8l2xm3y3xzfmadfj6e2wnj3gvx34m0wnt
@@ -111,8 +115,10 @@ ONE='~"card_count":1'
 # The section 2 texts (PROPOSED, architect confirms).
 kcr() { printf '%s' "$1 $2:$3: this line holds a carriage return (CR) with no line feed (LF) after it, so the text after the CR would be read as part of line $3 and a key record after it could be lost. Convert the file to LF or CRLF line endings."; }
 scr() { printf '%s' "--from-md1-set $1:$2: this line holds a carriage return (CR) with no line feed (LF) after it, so the text after the CR would be read as part of line $2 and an md1 string after it could be skipped. Convert the file to LF or CRLF line endings."; }
-kbom() { printf '%s' "$1 $2:$3: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Remove it (joining two files can leave the second file's mark inside the result)."; }
-sbom() { printf '%s' "--from-md1-set $1:$2: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Remove it (joining two files can leave the second file's mark inside the result)."; }
+kbom() { printf '%s' "$1 $2:$3: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Joining two files can leave the second file's mark inside the result: if the mark starts the line, delete it; if other text comes before it on the line, replace it with a line break."; }
+klb() { printf '%s' "$1 $2:$3: this line holds a $4, a line break this reader does not split lines on, so the text after it would be read as part of line $3 and a key record after it could be lost. Replace it with an ordinary line end (LF or CRLF)."; }
+slb() { printf '%s' "--from-md1-set $1:$2: this line holds a $3, a line break this reader does not split lines on, so the text after it would be read as part of line $2 and an md1 string after it could be skipped. Replace it with an ordinary line end (LF or CRLF)."; }
+sbom() { printf '%s' "--from-md1-set $1:$2: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Joining two files can leave the second file's mark inside the result: if the mark starts the line, delete it; if other text comes before it on the line, replace it with a line break."; }
 ENV1='{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"'
 ENV2='"},"schema_version":1}'
 KEYS=(--policy-id-stub deadbeef --json)
@@ -129,6 +135,8 @@ if [ "$MODE" = red ]; then
   row fa_i4_md1_set_bom_after_first_char_refused 0 "!@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_bom_mid.txt
   row fa_i4_md1_set_cr_only_refused 1 = "=error: md1 input rejected: codex32 decode error: character '1' not in codex32 alphabet" -- "${ENC_SET[@]}" --from-md1-set s_cr_only.txt
   row fa_i4_md1_set_trailing_bare_cr_refused 0 "@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_trailing_cr.txt
+  row fa_i3_keys_line_separator_after_comment_refused 0 "$ONE" - -- encode --keys k_ls_comment.txt "${KEYS[@]}"
+  row fa_i4_md1_set_nel_after_comment_refused 0 "!@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_nel_comment.txt
 else
   row fa_i3_keys_file_bare_cr_after_comment_refused 64 = "=error: $(kcr --keys k_cr_comment.txt 1)" -- encode --keys k_cr_comment.txt --policy-id-stub deadbeef
   row fa_i3_keys_file_bare_cr_after_comment_refused_json 64 "=$ENV1$(kcr --keys k_cr_comment.txt 1)$ENV2" = -- encode --keys k_cr_comment.txt "${KEYS[@]}"
@@ -142,6 +150,8 @@ else
   row fa_i4_md1_set_bom_after_first_char_refused 64 = "=error: $(sbom s_bom_mid.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_bom_mid.txt
   row fa_i4_md1_set_cr_only_refused 64 = "=error: $(scr s_cr_only.txt 1)" -- "${ENC_SET[@]}" --from-md1-set s_cr_only.txt
   row fa_i4_md1_set_trailing_bare_cr_refused 64 = "=error: $(scr s_trailing_cr.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_trailing_cr.txt
+  row fa_i3_keys_line_separator_after_comment_refused 64 = "=error: $(klb --keys k_ls_comment.txt 1 'line separator (U+2028)')" -- encode --keys k_ls_comment.txt --policy-id-stub deadbeef
+  row fa_i4_md1_set_nel_after_comment_refused 64 = "=error: $(slb s_nel_comment.txt 1 'next-line character (U+0085)')" -- "${ENC_SET[@]}" --from-md1-set s_nel_comment.txt
 fi
 # Controls: identical in both modes.
 row fa_control_keys_lf_mints_two 0 "$TWO" - -- encode --keys k_lf.txt "${KEYS[@]}"

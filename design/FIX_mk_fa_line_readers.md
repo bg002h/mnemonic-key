@@ -26,7 +26,7 @@ P1; Brian's ruling B1 (`memory/product-rulings-sweep-bughunt-2026-11-22.md`: "ne
   different stub array (and, for a chunked policy, a broken set).
 
 Root cause shared by both: no single policy for the two input-encoding variants a hand-edited or cross-platform
-file carries. B1 gives it: normalise a leading BOM and CRLF; refuse every other CR and every other U+FEFF.
+file carries. B1 gives it: normalise a leading BOM and CRLF; refuse every other CR, every other line-break character and every other U+FEFF.
 
 Out of scope (measured, not changed): `read_mk1_strings` / `push_stripped_lines` (`crates/mk-cli/src/cmd/mod.rs:438-485`,
 the mk1 `--in` / `-` reader of decode, inspect, verify, address, derive, repair). There, every non-empty line becomes
@@ -47,7 +47,7 @@ is parsed or skipped (comment and skipped lines included):
    refusal fires first, with its text unchanged:
    `{flag} {source}: the file uses CR-only line endings (classic Mac), so every record after the first would be read as part of line 1. Convert it to LF or CRLF.`
 4. **Otherwise the input is scanned from the start for the first "bare CR" (a CR not immediately followed by LF;
-   a CR as the last character of the input counts) or "stray BOM" (a U+FEFF at any position after rule 1). The
+   a CR as the last character of the input counts), "other line break" (any of U+000B vertical tab, U+000C form feed, U+0085 next-line character, U+2028 line separator, U+2029 paragraph separator; the Unicode mandatory breaks other than CR and LF, UAX #14) or "stray BOM" (a U+FEFF at any position after rule 1). The
    first one found, by position, is refused** at exit 64 (`UsageError`), naming the 1-based line it is on: 1 plus
    the number of LF characters before it, counted in the input after rule 1 (the same numbering the key reader's
    record errors already use). Nothing is minted; stdout is empty (text mode) or holds only the `--json` error
@@ -69,9 +69,13 @@ stdout under `--json`)
 - T-SCR (`--from-md1-set`, bare CR, including a CR-only file):
   `--from-md1-set {path}:{n}: this line holds a carriage return (CR) with no line feed (LF) after it, so the text after the CR would be read as part of line {n} and an md1 string after it could be skipped. Convert the file to LF or CRLF line endings.`
 - T-KBOM (key reader, stray BOM):
-  `{flag} {source}:{n}: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Remove it (joining two files can leave the second file's mark inside the result).`
+  `{flag} {source}:{n}: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Joining two files can leave the second file's mark inside the result: if the mark starts the line, delete it; if other text comes before it on the line, replace it with a line break.`
 - T-SBOM (`--from-md1-set`, stray BOM):
-  `--from-md1-set {path}:{n}: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Remove it (joining two files can leave the second file's mark inside the result).`
+  `--from-md1-set {path}:{n}: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Joining two files can leave the second file's mark inside the result: if the mark starts the line, delete it; if other text comes before it on the line, replace it with a line break.`
+- T-KLB (key reader, other line break; `{what}` is one of `vertical tab (U+000B)`, `form feed (U+000C)`, `next-line character (U+0085)`, `line separator (U+2028)`, `paragraph separator (U+2029)`):
+  `{flag} {source}:{n}: this line holds a {what}, a line break this reader does not split lines on, so the text after it would be read as part of line {n} and a key record after it could be lost. Replace it with an ordinary line end (LF or CRLF).`
+- T-SLB (`--from-md1-set`, other line break; `{what}` as for T-KLB):
+  `--from-md1-set {path}:{n}: this line holds a {what}, a line break this reader does not split lines on, so the text after it would be read as part of line {n} and an md1 string after it could be skipped. Replace it with an ordinary line end (LF or CRLF).`
 
 ### 2.2 Edge cases (decided here by B1; listed so the reviewer can check each against the ruling)
 
@@ -112,7 +116,7 @@ Source files this FIX changes:
   the existing `lines()` loop unchanged)
 - `crates/mk-cli/tests/bh1119_line_readers.rs` (new, section 6)
 - `scripts/mk-fa-line-readers-rows.sh` and its `SCRIPTS.md` row (committed with this document)
-- `CHANGELOG.md` (mk-cli entry under the next unreleased version: "`mk encode --keys/--in` and `--from-md1-set`
+- `crates/mk-cli/CHANGELOG.md` (entry under `## [Unreleased]`, next release 0.18.0: "`mk encode --keys/--in` and `--from-md1-set`
   refuse a bare carriage return or a byte-order mark after the first character, naming the line;
   `--from-md1-set` now accepts a leading byte-order mark (bh-mk-I3, bh-mk-I4)." PROPOSED wording.)
 
@@ -194,10 +198,10 @@ readers) made `scripts/mk-fa-line-readers-rows.sh green` print `ALL ROWS MATCH g
 No flag changes (no GUI schema change). Two table rows gain a clause (PROPOSED wording):
 
 - L39 `--from-md1-set <FILE>`: after "... are skipped" insert "; a leading byte-order mark is removed and CRLF
-  line ends are read as LF; any other carriage return, or a byte-order mark after the first character, is refused
+  line ends are read as LF; any other carriage return or line-break character, or a byte-order mark after the first character, is refused
   (exit 64) naming the line".
 - L40 `--keys <FILE>`: after "blanks and `#` comments ignored" append "; a leading byte-order mark is removed and
-  CRLF line ends are read as LF; a CR-only file, any other carriage return, or a byte-order mark after the first
+  CRLF line ends are read as LF; a CR-only file, any other carriage return or line-break character, or a byte-order mark after the first
   character, is refused (exit 64) naming the line". (L41 `--in` says "the same reader `--keys` uses" and needs no
   change.)
 
