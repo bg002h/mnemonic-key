@@ -75,6 +75,15 @@ notmp() { [ -z "$(find . -maxdepth 2 -name '*.tmp' -print -quit)" ]; }
 R="so writing the card would replace the input mk is reading. Write to a new name."
 S="so the card would go into the file mk reads its input from. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name."
 ENC=(encode --in keys --policy-id-stub deadbeef)
+# o20: io-lib 0.1.2 @e09d538d truncates s.txt behind /dev/stdout (no state sentence may follow); a fixed
+# io-lib that appends leaves s.txt intact (". /dev/stdout is unchanged." is then true). Either is GREEN; a
+# sentence that is false of s.txt is not.
+o20_state_is_true() {
+  local L="mk: cannot write the output: /dev/stdout: File too large (os error 27)" err; err=$(cat e.txt)
+  if [ "$err" = "$L" ]; then ! [ "$(cat s.txt)" = "OLD BACKUP" ]
+  elif [ "$err" = "$L. /dev/stdout is unchanged." ]; then [ "$(cat s.txt)" = "OLD BACKUP" ]
+  else false; fi
+}
 
 # --- I1: a failed --out write (R1, R3)
 fresh; fsize8 "$MK" "${ENC[@]}" --out F; rc=$?
@@ -94,7 +103,7 @@ if [ "$MODE" = red ]; then check o12 $rc 0 "~note: stdout is watch-only" "same r
 else check o12 $rc 1 "=mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged." "same ro/F ro.orig|ro/F unchanged"; fi
 fresh; printf 'OLD BACKUP\n' > s.txt; bash -c "trap '' XFSZ; exec prlimit --fsize=8 \"\$@\"" _ "$MK" "${ENC[@]}" --out /dev/stdout >>s.txt 2> >(cat > e.txt); rc=$?; sleep 0.5
 if [ "$MODE" = red ]; then check o20 $rc 64 "=error: --out /dev/stdout: File too large (os error 27)"
-else check o20 $rc 1 "=mk: cannot write the output: /dev/stdout: File too large (os error 27)"; fi
+else check o20 $rc 1 "~mk: cannot write the output: /dev/stdout: File too large (os error 27)" "o20_state_is_true|the state sentence is true of s.txt"; fi
 
 # --- I6: --out names an input (R2)
 fresh; "$MK" "${ENC[@]}" --out keys >o.txt 2>e.txt; rc=$?

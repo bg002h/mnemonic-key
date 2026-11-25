@@ -104,19 +104,18 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   `<FILE>` is `--out` as typed; `<error>` is the `std::io::Error` Display, unmodified (e.g. `File too large (os error
   27)`). Exit **1** (was exit 64 and `error: --out <FILE>: <error>`). Stdout is empty in both modes: in `--json` mode no
   envelope is printed (T6 gives the one line). Nothing else follows on stderr (no `card N of M` lines, no watch-only
-  note): the run stops at the failed write. The second look is what keeps the sentence true for a standard-stream
-  name (`--out /dev/stdout >>s.txt`), which io-lib writes in place after truncating s.txt (row o20).
+  note): the run stops at the failed write. The second look keeps the sentence true for a standard-stream name (`--out /dev/stdout >>s.txt`): io-lib 0.1.2 @e09d538d truncates s.txt there before the failing write, so no sentence follows; an io-lib that appends leaves s.txt intact, and the line ends `. /dev/stdout is unchanged.` (row o20 accepts either, never a false one).
   Implementation note (builder's choice): the encode arm may print through `crate::out::stderr_write` and return
   `Ok(1)`, which `main` passes through `out::exit_code` unchanged; or add a `CliError` variant whose rendering is this
   line in both modes. The stdout sink's own line (`mk: cannot write the output: <error>`, `out.rs:80`) is unchanged.
-- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, the R2
-  check runs with `out` = `Endpoint::Stdout` and the same `inputs`. On a match mk refuses with text X2, exit **64**,
+- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, or `--json` is given (stdout then carries the JSON or an error envelope), the R2 check runs with `out` = `Endpoint::Stdout` and the same `inputs`, BEFORE the R2 `--out` check. On a match mk refuses with text X2, exit **64**,
   and writes nothing to stdout. X2 is printed on **stderr in both modes**: in `--json` mode it is NOT an envelope on
   stdout, because stdout is the input file and an envelope there would be written into it. This refuses
   `mk encode --in K ... >>K`, `>K` (the shell has already emptied K; X2 replaces the misleading "no key records found"),
   `--in - <K >>K`, and the same for `--keys` and `--from-md1-set`. A pipe, tty or `/dev/null` on stdout never matches.
 - **R5 (help).** The `mk encode --out` help (`encode.rs:53-54`, its first paragraph; the NOTE paragraph stays) becomes
   H1. No flag is added, removed or renamed, so the mnemonic-gui mk schema mirror is not touched.
+- **R6 (T7):** `mk encode --json --out FILE` writes both: FILE receives exactly the bytes `mk encode --out FILE` writes without `--json` (the mk1 strings, one per line, grouped under `--group-size`), through `write_private` (R1, R3); stdout carries the same JSON document `mk encode --json` prints without `--out`, printed after the FILE write succeeds. If the FILE write fails, R3 applies and stdout stays empty (row o4 unchanged). The SPEC §6b comment at encode.rs:468-469 becomes `// SPEC §6b: stdout is used when --out is not given; with --out the strings go to the file, and with --json the JSON also goes to stdout (T7).`
 - **Not changed:** `mk vectors --out DIR` and `mk gen-man --out DIR` (directory writers with `std::fs::write`, not
   through `write_private`; out of this row, section 8). The read verbs (`decode`, `inspect`, `verify`, `address`,
   `derive`, `repair`) with `--in FILE` and stdout appended to FILE are not refused by this row (section 6 line
@@ -133,6 +132,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   `error: standard output is the same file as <INPUT>, so the card would go into the file mk reads its input from. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name.`
   (`<INPUT>` as in X1. The `>` sentence follows mt's ruled stdout mechanism: the shell truncates before mk runs, and mk
   cannot undo that.)
+- **X3, PROPOSED (ms #11 E2 with ms -> mk):** `error: --out <OUT> and standard output are the same file (the same path, a symlink or a hard link), so what mk prints on stdout would go into the file it writes. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name.`
 - **H1, `mk encode --out` help, first paragraph (`encode.rs:53-54`), PROPOSED:**
   `/// Write the mk1 artifact to FILE, created 0600, instead of to stdout.`
   `/// OVERWRITES an existing file (operator ruling, 2026-08-26); a failed write`
@@ -140,7 +140,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   `/// `--keys`, `--from-md1-set`). SPEC §6b.`
 - **M1, toolkit manual `docs/manual/src/40-cli-reference/44-mk-cli.md:42` (the `mk encode` `--out` row, toolkit master
   e30985a5), PROPOSED, whole row:**
-  ``| `--out <FILE>` | write the mk1 artifact to FILE, created `0600`, instead of stdout; the file holds exactly what stdout would (grouped under `--group-size`); overwrites an existing file (operator ruling 2026-08-26). The new contents go to a temporary `FILE.<pid>.<n>.tmp` beside FILE that then replaces it, so a failed write leaves an existing FILE unchanged, FILE's directory must be writable, and a run killed mid-write can leave that owner-only temporary behind. A symlink is followed and its target replaced. FILE may not be one of the inputs (`--in`, `--keys`, `--from-md1-set`, or standard input): that is refused (exit `64`) before anything is read or written |``
+  ``| `--out <FILE>` | write the mk1 artifact to FILE, created `0600`, instead of stdout; the file holds exactly what stdout would without `--json` (grouped under `--group-size`); with `--json` the file still gets the mk1 string(s) and the JSON goes to stdout; overwrites an existing file (operator ruling 2026-08-26). The new contents go to a temporary `FILE.<pid>.<n>.tmp` beside FILE that then replaces it, so a failed write leaves an existing FILE unchanged, FILE's directory must be writable, and a run killed mid-write can leave that owner-only temporary behind. A symlink is followed and its target replaced. FILE may not be one of the inputs (`--in`, `--keys`, `--from-md1-set`, or standard input): that is refused (exit `64`) before anything is read or written |``
 - **M2, manual `44-mk-cli.md:622` (exit code `1` row), PROPOSED, whole row:**
   ``| 1 | mk1 format violation; codec rejected the input. Maps to `Error::*` kinds except `UnsupportedVersion`. Also an I/O error reading stdin, or writing `mk encode --out` / `mk vectors --out` / `mk gen-man --out` (an unreadable `--in FILE` is `64`). |``
 - **M3, manual `44-mk-cli.md:629` (the paragraph after the exit-code table), PROPOSED, two sentences appended:**
@@ -148,6 +148,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
 - **C1, `crates/mk-cli/CHANGELOG.md` `## [Unreleased]` / `### Changed`, PROPOSED (two bullets, after the existing ones):**
   - ``**A failed `mk encode --out` write no longer destroys the existing file** (bughunt-1119 bh-mk-I1). The card is written to a temporary file beside FILE and renamed over it (mnemonic-io-lib 0.1.2), so a full disk or quota leaves the old file byte-identical, and FILE's directory must now be writable. The error is now `mk: cannot write the output: FILE: <error>`, saying whether FILE is unchanged, at exit 1 (was `error: --out FILE: <error>`, exit 64).``
   - ``**`mk encode` refuses an output that is one of its inputs** (bughunt-1119 bh-mk-I6). `--out` naming the `--in`, `--keys` or `--from-md1-set` file (the same path, a symlink or a hard link), or stdout redirected into one of them, exits 64 naming both, before anything is read or written; it used to replace or extend the input at exit 0.``
+  - **`mk encode --json --out FILE` writes both** (bughunt-1119 T7). The mk1 strings go to FILE and the JSON to stdout, as in md and ms; before, FILE held the JSON and stdout was empty. With `--json`, a stdout that is one of the inputs or the `--out` file is refused (exit 64).
 
 Each of E, X1, X2, H1, M1-M3 gets a `design/WORDING_REVIEW.md` row (R5); those rows are direct-to-master records,
 listed in the author's report, not appended here.
@@ -159,7 +160,7 @@ The rows script `design/FIX_bh1119_mk_out_writes/rows.sh red|green` runs every r
 failed`; `green` on the base `rows: 4 passed, 17 failed` (only the four controls); `green` on the author's prototype
 (io-lib 0.1.2 path patch + R2-R4) `rows: 21 passed, 0 failed`; `red` on the prototype `rows: 4 passed, 17 failed`.
 The builder also writes each row as a nextest test in `crates/mk-cli/tests/bh1119_mk_out_writes.rs`, named exactly as
-the "test" column (Linux-only rows `#[cfg(target_os = "linux")]`: FSIZE8 needs `prlimit`). In every row: `ENC` =
+the "test" column `crates/mk-cli/tests/bh1119_mk_out_writes.rs` starts with `#![cfg(unix)]` (as `tests/channels.rs` gates its `--out` tests: on Windows io-lib's `same_file` detects no hard link and no redirected stdin/stdout, and the mode and read-only-directory rows are Unix semantics); the FSIZE8 rows o1, o2, o4 and o20 are also `#[cfg(target_os = "linux")]` (`prlimit`); o12 returns early, passing, when `libc::geteuid() == 0` (root ignores directory modes; ms #11 o6 does the same), and rows.sh skips o12 under root the same way. On Linux the count stays as section 5 says.. In every row: `ENC` =
 `mk encode --in keys --policy-id-stub deadbeef`; `keys` holds the one key record; `F` holds `PRIOR-CARD\n`; `R` =
 `so writing the card would replace the input mk is reading. Write to a new name.`; `S` = the X2 tail after
 `<INPUT>, `.
@@ -171,7 +172,7 @@ the "test" column (Linux-only rows `#[cfg(target_os = "linux")]`: FSIZE8 needs `
 | o3 | `i1_missing_directory_prints_the_t6_line` | `ENC --out nodir/F` | exit 64, `error: --out nodir/F: No such file or directory (os error 2)` | exit 1, `mk: cannot write the output: nodir/F: No such file or directory (os error 2). Nothing was written.`, stdout empty |
 | o4 | `i1_json_failed_write_keeps_stdout_empty` | FSIZE8 `ENC --json --out F` | exit 64, envelope on stdout, F destroyed | exit 1, stderr the o1 line, stdout empty, F byte-identical |
 | o12 | `i1_read_only_directory_refused_file_unchanged` | `ENC --out ro/F`, ro mode 555, ro/F 0644 `PRIOR\n` | exit 0, ro/F = the card (written in place) | exit 1, `mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged.`, ro/F byte-identical |
-| o20 | `i1_stdio_alias_onto_a_file_names_no_state` | FSIZE8 `ENC --out /dev/stdout >>s.txt`, s.txt `OLD BACKUP\n` | exit 64, `error: --out /dev/stdout: File too large (os error 27)` | exit 1, stderr exactly `mk: cannot write the output: /dev/stdout: File too large (os error 27)` (no state sentence) |
+| o20 | `i1_stdio_alias_onto_a_file_names_no_state` | FSIZE8 `ENC --out /dev/stdout >>s.txt`, s.txt `OLD BACKUP\n` | exit 64, `error: --out /dev/stdout: File too large (os error 27)` | exit 1, stderr starts `mk: cannot write the output: /dev/stdout: File too large (os error 27)`, and its state sentence is true of s.txt: no sentence and s.txt no longer `OLD BACKUP\n` (io-lib 0.1.2 @e09d538d truncates behind a stdio alias), or `. /dev/stdout is unchanged.` and s.txt still `OLD BACKUP\n` (an io-lib that appends); anything else fails |
 | o5 | `i6_out_same_path_as_in_refuses` | `ENC --out keys` | exit 0, keys = the card | exit 64, `error: --out keys is the same file as --in keys, R`, keys byte-identical, stdout empty |
 | o6 | `i6_out_aliasing_source_refuses` | `ln keys hl`; `ENC --out hl` | exit 0, keys = the card | exit 64, `error: --out hl is the same file as --in keys, R`, keys byte-identical |
 | o7 | `i6_out_symlink_to_in_refuses` | `ln -s keys sl`; `ENC --out sl` | exit 0, keys = the card | exit 64, `error: --out sl is the same file as --in keys, R` |
@@ -187,8 +188,15 @@ the "test" column (Linux-only rows `#[cfg(target_os = "linux")]`: FSIZE8 needs `
 | o13 | `control_out_symlink_replaces_its_target` | `ln -s F lk`; `ENC --out lk` | exit 0, F = the card, lk still a symlink | same |
 | o14 | `control_out_overwrites_and_tightens` | F mode 0644; `ENC --out F` | exit 0, F = the card, mode 0600, no `*.tmp` | same |
 | o19 | `control_stdout_pipe_is_not_an_input` | `ENC \| cat` | exit 0, the card on the pipe, keys untouched | same |
+| t1 | `i1_t7_json_out_writes_both` | `ENC --json --out F` (F absent) | rc 0, F == J, stdout empty | rc 0, F == C mode 600, stdout == J |
+| t2 | `i1_t7_json_out_grouped_file_unbroken_json` | `ENC --json --group-size 5 --out F` | rc 0, F == J | rc 0, F == C5, stdout == J |
+| t3 | `i6_json_out_stdout_appended_to_in_refuses` | `ENC --json --out G >>keys` | rc 0, keys untouched (JSON to G) | rc 64, stderr exactly the o15 line, keys byte-identical, G absent |
+| t4 | `i6_json_out_names_in_and_stdout_appends_to_it` | `ENC --json --out keys >>keys` | rc 0, keys replaced | rc 64, stderr the o15 line, keys byte-identical (no envelope appended) |
+| t5 | `i6_json_usage_error_never_appends_to_in` | `mk encode --in keys --policy-id-stub zz --json --out G >>keys` | rc 64, envelope appended to keys | rc 64, stderr the o15 line, keys byte-identical |
+| t6 | `i1_t7_json_stdout_is_out_refused` | `ENC --json --out F >F` | rc 0, F == J | rc 64, stderr empty, F holds the envelope with `"message":"<X3 with OUT=F, no error: prefix>"` |
+| t7 | `control_json_out_piped_writes_both` | `ENC --json --out F \| cat` | rc 0, pipe empty | rc 0, F == C, pipe == J |
 
-o20 also catches a build that skips R3's second look: with a first look only, `/dev/stdout` resolves to the regular
+o20 also catches a build that skips R3's second look (on io-lib 0.1.2 @e09d538d): with a first look only, `/dev/stdout` resolves to the regular
 s.txt and the line would end `. /dev/stdout is unchanged.` while s.txt was truncated (reasoned from io-lib
 `write.rs:101-121,165-167` @e09d538d; that plant was not run by the author).
 
@@ -237,8 +245,6 @@ call with `CARGO_BUILD_JOBS=6`:
 - `mk vectors --out DIR`, `mk gen-man --out DIR`: per-file `std::fs::write` into a directory; not this row's keys.
 - The read verbs' stdout alias (`mk decode --in C >>C` and five more): the same class the architect filed for md as
   `md-out-names-input`; FOLLOWUPS line `bh-mk-read-verbs-stdout-names-input`.
-- `mk encode --json --out FILE` writes the JSON to FILE and nothing to stdout; T7 ("write both") was ruled for md
-  only. Not changed here; noted for the architect in the author's report.
 - Build order against other open mk rows: F-F stale docs (`fix/mk-ff-stale-docs`) touches docs only; this row touches
   `crates/mk-cli/{Cargo.toml,CHANGELOG.md,src/cmd/encode.rs}`, `Cargo.lock`, `vendor/mnemonic-io-lib/`, a new test
   file, `scripts/`. No overlap.
