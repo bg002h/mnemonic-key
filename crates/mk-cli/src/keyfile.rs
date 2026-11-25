@@ -51,10 +51,13 @@ pub struct KeyRecord {
 pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     let s = line.trim();
     // Bug hunt 2026-11-25 mk#4 (and review r1 I1): no refusal here quotes the
-    // record. The wrong file holds anything -- a WIF, a seed phrase, a wallet
-    // export -- and the caller already names the file and the line, so the
-    // shape of the problem is all an error needs. A private extended key gets
-    // its own fixed message first.
+    // record, except that an invalid key in a `[fp/path]<key>` record reaches
+    // `invalid_xpub`, which shows its first four characters and its length
+    // (review r2 M1, FOLLOWUPS mk-bh1125-r2-m1-keyfile-four-char-head). The
+    // wrong file holds anything -- a WIF, a seed phrase, a wallet export --
+    // and the caller already names the file and the line, so the shape of the
+    // problem is all an error needs. A private extended key gets its own fixed
+    // message first.
     if crate::slip132::contains_private_key_text(s) {
         return Err(crate::slip132::private_key_refusal());
     }

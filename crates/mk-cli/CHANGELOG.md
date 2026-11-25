@@ -36,8 +36,10 @@ Next release: 0.18.0
   the `--json` envelope (`invalid xpub "xprv9s21…"`). It is now refused (exit 64, as before) with a fixed message
   that names the mistake and never quotes the value. Other unparsable key text given to `--xpub` is named by its
   first four characters and its length (`invalid xpub (begins "xpub", 111 characters): ...`) instead of being quoted
-  whole, and a `--keys`/`--in` key-file record is never quoted back at all (a WIF, a seed phrase or any other line of
-  the wrong file): its errors name the file, the line and the shape of the problem only.
+  whole. A `--keys`/`--in` key-file record (a WIF, a seed phrase or any other line of the wrong file) is not quoted
+  back: its errors name the file, the line and the shape of the problem, except that a `[fp/path]<key>` record whose
+  key is not a valid xpub still shows the key's first four characters and its length (FOLLOWUPS
+  `mk-bh1125-r2-m1-keyfile-four-char-head`).
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
   byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark
