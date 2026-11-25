@@ -72,6 +72,8 @@ Edge cases, decided:
 - `--output <dir>/v0.1.json` or any other name not aliasing the sibling: unchanged (row C1).
 - `<P>` exists as a hard link or symlink to `<C>`: Rule B, exit 1 (rows R3, R4). After the T2 exit the shared
   file holds the csid_ext corpus, which is the correct content for `<C>`; nothing else on disk is touched.
+- `<C>` exists as a symlink to `<P>` (the reverse link): Rule B, exit 1 (row R5). The csid_ext write goes through
+  the link, so after the T2 exit the name `<P>` holds the csid_ext rows and its previous content is gone.
 - Case variants of the name on a case-sensitive filesystem (Linux) are different files and are written
   normally; on a case-insensitive one Rule B fires. Rule A stays exact-match on purpose.
 - Argument errors (`--output` without a value, an unknown argument) keep their existing panics: out of scope.
@@ -140,12 +142,14 @@ carry these names. Each row runs in a fresh directory.
 | R2 | `gen_vectors_refuses_bare_csid_ext_name` | in an empty `<d>`: `gen_mk_vectors --output csid_ext_v0.1.json` | exit 0; `wrote 41 vectors to csid_ext_v0.1.json ...`; file holds no `"vectors"` | exit 64; stderr exactly T1 with `<P>`=`csid_ext_v0.1.json`; `<d>` stays empty |
 | R3 | `gen_vectors_reports_hard_link_alias` | `<d>/csid_ext_v0.1.json` = `x\n`, hard link `<d>/v.json`; `--output <d>/v.json` | exit 0; `wrote 41 vectors to <d>/v.json ...`; `v.json` holds no `"vectors"` | exit 1; stderr exactly T2 with `<P>`=`<d>/v.json`, `<C>`=`<d>/csid_ext_v0.1.json`, `<N>`=41; no `wrote` line |
 | R4 | `gen_vectors_reports_symlink_alias` (`#[cfg(unix)]`) | as R3 with a symlink `v.json -> csid_ext_v0.1.json` | as R3 | as R3 |
+| R5 | `gen_vectors_reports_reverse_symlink_alias` (`#[cfg(unix)]`) | `<d>/v.json` = `x\n`, symlink `<d>/csid_ext_v0.1.json -> v.json`; `--output <d>/v.json` | exit 0; `wrote 41 vectors to <d>/v.json ...`; `v.json` holds no `"vectors"` | exit 1; stderr exactly T2 with `<P>`=`<d>/v.json`, `<C>`=`<d>/csid_ext_v0.1.json`, `<N>`=41; no `wrote` line; `v.json` holds the csid_ext corpus |
 | C1 | `gen_vectors_writes_both_corpora` (control) | `--output <d>/v0.1.json` | exit 0; stderr exactly `wrote 41 vectors to <d>/v0.1.json (35615 bytes)\nwrote 21 csid_ext rows to <d>/csid_ext_v0.1.json (17476 bytes)\n`; both files byte-equal to `crates/mk-codec/src/test_vectors/` | the same |
 
 The nextest rows compare against `<N>` and `<R>` parsed from `mk_codec::test_vectors::V0_1_JSON` and
 `test_vectors::csid_ext::CSID_EXT_JSON` and the byte counts from their lengths, not hard-coded 41/21; their
 directories live under `env!("CARGO_TARGET_TMPDIR")`; the file starts `#![cfg(feature = "gen-vectors")]` and
-uses `env!("CARGO_BIN_EXE_gen_mk_vectors")`.
+uses `env!("CARGO_BIN_EXE_gen_mk_vectors")`. R3, R4 and R5 also check the disk state after the T2 exit: the shared
+file holds the csid_ext corpus (R3, R4: `<C>`; R5: `<P>`).
 
 Seen (author, 2026-11-24, on 826c2e6):
 
@@ -190,12 +194,12 @@ The author also checked that section 2 is buildable and that the green rows matc
 `scripts/mk-gen-vectors-rows.sh green` (exit 0, `ALL OK (green)`), plus the repo's CI jobs locally:
 `cargo +1.95.0 fmt --all -- --check`; `cargo build --locked --workspace`;
 `cargo nextest run --locked --workspace --no-fail-fast`; `cargo test --locked --workspace --doc`;
-`cargo clippy --locked --workspace --all-targets -- -D warnings`; and, because no CI job enables the feature,
+`cargo clippy --locked --workspace --all-targets -- -D warnings`; and
 `cargo clippy --locked -p mk-codec --features gen-vectors --all-targets -- -D warnings`.
 
-Not covered by CI: the default `cargo nextest run --workspace` does not enable `gen-vectors`, so the new test
-file compiles to nothing there. A CI step for it is a `.github/` change, filed as a FOLLOWUPS line (report),
-not done here.
+The default `cargo nextest run --workspace` does not enable `gen-vectors`, so the new test file compiles to
+nothing there; the `ci.yml` step of section 3.4 runs these rows (nextest and clippy with `--features gen-vectors`)
+in both lane jobs.
 
 ## 8. FOLLOWUPS
 

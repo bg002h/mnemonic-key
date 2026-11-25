@@ -14,6 +14,12 @@
 //!   --output crates/mk-codec/src/test_vectors/v0.1.json
 //! ```
 //!
+//! The tool also writes `csid_ext_v0.1.json` in the same directory as
+//! `--output`. An `--output` named `csid_ext_v0.1.json` is refused (exit 64,
+//! nothing written); an `--output` that is the same file as that sibling (a
+//! hard or symbolic link, or a case variant on a case-insensitive filesystem)
+//! ends with exit 1 and no `wrote` line.
+//!
 //! Cross-implementations validate against the JSON file's pinned
 //! SHA-256 (in `crates/mk-codec/tests/vectors.rs`) plus per-vector
 //! round-trip equality. The output is byte-deterministic in the
@@ -1398,8 +1404,9 @@ fn csid_ext_document() -> Value {
 
 /// Serialize a pre-built `Value` document with the corpus's canonicality
 /// discipline (2-space indent, lowercase hex already enforced upstream,
-/// LF line endings, trailing newline) and write it to `path`.
-fn write_json_document(document: &Value, path: &PathBuf) -> usize {
+/// LF line endings, trailing newline) and write it to `path`. Returns the
+/// bytes written.
+fn write_json_document(document: &Value, path: &PathBuf) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     serde_json::to_writer_pretty(&mut buf, document)
         .expect("serializing pre-built Value cannot fail");
@@ -1410,8 +1417,11 @@ fn write_json_document(document: &Value, path: &PathBuf) -> usize {
     let mut out = fs::File::create(path).expect("create output file");
     out.write_all(&buf).expect("write vector JSON");
     out.flush().expect("flush vector JSON");
-    buf.len()
+    buf
 }
+
+/// File name of the csid_ext corpus, always written beside the primary output.
+const CSID_EXT_FILE_NAME: &str = "csid_ext_v0.1.json";
 
 fn main() {
     // Resolve --output (default: crates/mk-codec/src/test_vectors/v0.1.json
@@ -1431,34 +1441,60 @@ fn main() {
     let output_path =
         output_path.unwrap_or_else(|| PathBuf::from("crates/mk-codec/src/test_vectors/v0.1.json"));
 
+    // Rule A: refuse an --output that is itself the csid_ext sibling, before
+    // anything is built, created or written.
+    if output_path.file_name() == Some(std::ffi::OsStr::new(CSID_EXT_FILE_NAME)) {
+        eprintln!(
+            "gen_mk_vectors: refused: --output {} is named {CSID_EXT_FILE_NAME}, the csid_ext file this tool writes beside it; nothing was written",
+            output_path.display()
+        );
+        std::process::exit(64);
+    }
+
     let vectors_json: Vec<Value> = fixtures().iter().map(fixture_to_value).collect();
     let document = json!({
         "schema": 2,
         "family_token": mk_codec::GENERATOR_FAMILY,
         "vectors": vectors_json,
     });
+    let vector_count = vectors_json.len();
     let v01_bytes = write_json_document(&document, &output_path);
-    eprintln!(
-        "wrote {} vectors to {} ({} bytes)",
-        fixtures().len(),
-        output_path.display(),
-        v01_bytes
-    );
 
-    // csid_ext_v0.1.json — always a sibling of the primary output file,
-    // regardless of --output overrides.
+    // csid_ext_v0.1.json is always written beside the primary output file,
+    // whatever --output says. An --output with that name is refused above
+    // (exit 64); an --output that is the same file under another name is
+    // caught by the read-back below (exit 1).
     let csid_ext_path = output_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
-        .join("csid_ext_v0.1.json");
+        .join(CSID_EXT_FILE_NAME);
     let csid_ext_doc = csid_ext_document();
     let csid_ext_row_count = csid_ext_doc["rows"]
         .as_array()
         .expect("csid_ext rows is array")
         .len();
     let csid_ext_bytes = write_json_document(&csid_ext_doc, &csid_ext_path);
+
+    // Rule B: the vectors file must still hold what was written to it.
+    let read_back = fs::read(&output_path).expect("read back vector output");
+    if read_back != v01_bytes {
+        eprintln!(
+            "gen_mk_vectors: error: {} no longer holds the {vector_count} vectors after {} was written; it is the same file as {} or was changed meanwhile",
+            output_path.display(),
+            csid_ext_path.display(),
+            csid_ext_path.display()
+        );
+        std::process::exit(1);
+    }
+
     eprintln!(
-        "wrote {csid_ext_row_count} csid_ext rows to {} ({csid_ext_bytes} bytes)",
-        csid_ext_path.display()
+        "wrote {vector_count} vectors to {} ({} bytes)",
+        output_path.display(),
+        v01_bytes.len()
+    );
+    eprintln!(
+        "wrote {csid_ext_row_count} csid_ext rows to {} ({} bytes)",
+        csid_ext_path.display(),
+        csid_ext_bytes.len()
     );
 }

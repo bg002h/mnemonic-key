@@ -143,6 +143,10 @@ jobs:
       - name: Test
         if: steps.docs.outputs.docs_only != 'true'
         run: cargo nextest run --workspace --no-fail-fast
+      - name: nextest + clippy with gen-vectors (gen_mk_vectors output rows)
+        run: |
+          cargo nextest run --locked -p mk-codec --features gen-vectors --no-fail-fast
+          cargo clippy --locked -p mk-codec --features gen-vectors --all-targets -- -D warnings
       # nextest does not run doc-tests; this step keeps them.
       - name: Doc-tests
         if: steps.docs.outputs.docs_only != 'true'
@@ -239,6 +243,10 @@ jobs:
       - name: Test
         if: steps.docs.outputs.docs_only != 'true'
         run: cargo nextest run --workspace --no-fail-fast
+      - name: nextest + clippy with gen-vectors (gen_mk_vectors output rows)
+        run: |
+          cargo nextest run --locked -p mk-codec --features gen-vectors --no-fail-fast
+          cargo clippy --locked -p mk-codec --features gen-vectors --all-targets -- -D warnings
       # nextest does not run doc-tests; this step keeps them.
       - name: Doc-tests
         if: steps.docs.outputs.docs_only != 'true'

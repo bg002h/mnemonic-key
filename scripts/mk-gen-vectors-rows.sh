@@ -4,7 +4,7 @@
 # same file, and prints "wrote N vectors" for a file that no longer holds them).
 #
 # What it does: builds the gen_mk_vectors binary (feature gen-vectors, --locked,
-# CARGO_BUILD_JOBS=6 unless set) and runs rows R1-R4 plus control C1 against it,
+# CARGO_BUILD_JOBS=6 unless set) and runs rows R1-R5 plus control C1 against it,
 # each in a fresh directory under target/. Checks each row against MODE:
 #   red   = the base commit's behaviour (each defect shows; C1 passes)
 #   green = the fixed behaviour (exact exit code and exact stderr per the FIX doc)
@@ -15,8 +15,8 @@
 # What it does NOT cover: fmt, clippy, the full workspace suite, doc-tests,
 # non-Linux legs (R4 uses a symlink; case-insensitive filesystems are not run),
 # the generator's other panics (bad arguments, I/O errors), and CI (the default
-# `cargo nextest run --workspace` does not enable gen-vectors, so CI never runs
-# the nextest rows; see the FIX doc section 7).
+# `cargo nextest run --workspace` does not enable gen-vectors; the ci.yml step of
+# FIX doc section 3.4 runs the nextest rows).
 #
 # Usage: scripts/mk-gen-vectors-rows.sh red|green   (run from the repo root)
 set -euo pipefail
@@ -107,6 +107,7 @@ if [ "$MODE" = red ]; then
   else bad R5_reverse_symlink_alias "defect not shown (exit $RC)"; fi
 else
   check R5_reverse_symlink_alias 1 "$(t2 "$P" "$C")"
+  cmp -s "$P" "$CORPUS/csid_ext_v0.1.json" || bad R5_disk_state "P does not hold the csid_ext corpus"
 fi
 
 # C1 (control, both modes): --output <dir>/v0.1.json writes both corpora, byte-equal
