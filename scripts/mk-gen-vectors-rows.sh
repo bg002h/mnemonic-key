@@ -83,6 +83,7 @@ if [ "$MODE" = red ]; then
   else bad R3_hard_link_alias "defect not shown (exit $RC)"; fi
 else
   check R3_hard_link_alias 1 "$(t2 "$P" "$C")"
+  cmp -s "$C" "$CORPUS/csid_ext_v0.1.json" || bad R3_disk_state "shared file does not hold the csid_ext corpus"
 fi
 
 # R4: symlink v.json -> csid_ext_v0.1.json (same directory).
@@ -94,6 +95,18 @@ if [ "$MODE" = red ]; then
   else bad R4_symlink_alias "defect not shown (exit $RC)"; fi
 else
   check R4_symlink_alias 1 "$(t2 "$P" "$C")"
+  cmp -s "$C" "$CORPUS/csid_ext_v0.1.json" || bad R4_disk_state "shared file does not hold the csid_ext corpus"
+fi
+
+# R5: reverse link, csid_ext_v0.1.json -> v.json (the sibling is the link).
+d=$W/r5; mkdir "$d"; C=$d/csid_ext_v0.1.json; P=$d/v.json; printf 'x\n' > "$P"; ln -s v.json "$C"
+run "$d" --output "$P"
+if [ "$MODE" = red ]; then
+  if [ "$RC" = 0 ] && grep -qF "wrote $N vectors to $P" <<<"$ERR" && ! holds_vectors "$P"; then
+    ok "R5_reverse_symlink_alias (defect: exit 0, claims $N vectors, file holds none)"
+  else bad R5_reverse_symlink_alias "defect not shown (exit $RC)"; fi
+else
+  check R5_reverse_symlink_alias 1 "$(t2 "$P" "$C")"
 fi
 
 # C1 (control, both modes): --output <dir>/v0.1.json writes both corpora, byte-equal

@@ -87,11 +87,22 @@ Edge cases, decided:
 - `main` (L1416-1464): Rule A right after `output_path` is resolved (L1431-1432); remove the `eprintln!` at
   L1441-1446 from between the writes; after the csid_ext write (L1459) do the Rule B read-back; then print the
   two "wrote" lines. `<N>` comes from the generated vectors list (no second `fixtures()` call is required).
-- Replace the comment at L1448-1449 ("always a sibling ... regardless of --output overrides") with one that also
-  says an `--output` named `csid_ext_v0.1.json` is refused and an aliased one is caught by the read-back.
-- Module rustdoc (L10-15): after the run example add one paragraph: the tool also writes `csid_ext_v0.1.json`
-  in the same directory as `--output`; `--output` may not be named `csid_ext_v0.1.json` (exit 64, nothing
-  written), and an `--output` that is the same file as that sibling ends with exit 1.
+- Replace the comment at L1448-1449 with exactly:
+  ```
+      // csid_ext_v0.1.json is always written beside the primary output file,
+      // whatever --output says. An --output with that name is refused above
+      // (exit 64); an --output that is the same file under another name is
+      // caught by the read-back below (exit 1).
+  ```
+- Module rustdoc: after the closing ```` ``` ```` of the run example (L15), add exactly:
+  ```
+  //!
+  //! The tool also writes `csid_ext_v0.1.json` in the same directory as
+  //! `--output`. An `--output` named `csid_ext_v0.1.json` is refused (exit 64,
+  //! nothing written); an `--output` that is the same file as that sibling (a
+  //! hard or symbolic link, or a case variant on a case-insensitive filesystem)
+  //! ends with exit 1 and no `wrote` line.
+  ```
 
 ### 3.2 `crates/mk-codec/CHANGELOG.md` (`[Unreleased]`, L13-38)
 
@@ -106,7 +117,16 @@ The SemVer headline line of `[Unreleased]` does not change (no library change).
 
 No `Cargo.toml`/`Cargo.lock` change, no corpus change (C1 checks the bytes), no `docs/MK_CODEC_RUST_API.md`
 change (no `pub` item changes; the binary is not API). No toolkit-manual lockstep and no GUI mirror: neither
-`mk` nor `md-cli` flags or printed text change. No `.github/` change.
+`mk` nor `md-cli` flags or printed text change.
+
+### 3.4 `.github/workflows/ci.yml` (allowed in a reviewed PR per RULES.md; the PR description says so)
+In each lane job that runs nextest (after L145 and after L241), add:
+```
+      - name: nextest + clippy with gen-vectors (gen_mk_vectors output rows)
+        run: |
+          cargo nextest run --locked -p mk-codec --features gen-vectors --no-fail-fast
+          cargo clippy --locked -p mk-codec --features gen-vectors --all-targets -- -D warnings
+```
 
 ## 4. RED rows
 
