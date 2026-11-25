@@ -10,8 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use mk_codec::test_vectors::csid_ext::CSID_EXT_JSON;
 use mk_codec::test_vectors::V0_1_JSON;
+use mk_codec::test_vectors::csid_ext::CSID_EXT_JSON;
 
 struct Run {
     code: Option<i32>,
