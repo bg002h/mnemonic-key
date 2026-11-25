@@ -318,6 +318,27 @@ pub fn xpub_identity_65(x: &Xpub) -> [u8; 65] {
 pub struct Md1Card {
     pub stub: [u8; 4],
     pub cosigners: Option<Vec<[u8; 65]>>,
+    /// The keyed slots of a wallet policy (empty for a keyless template), in
+    /// `@N` order. Unlike `cosigners` this is kept for a SPARSE key list too:
+    /// a slot that holds a key states that key's origin even when other slots
+    /// are empty.
+    pub keyed: Vec<KeyedSlot>,
+}
+
+/// One keyed `@N` slot of a wallet policy (FIX_mk_fe_keyed_policy 2.1).
+pub struct KeyedSlot {
+    /// Placeholder index `@N`.
+    pub idx: u8,
+    /// The slot's origin path as `(hardened, index)` components. An elided
+    /// origin is already replaced by the template's standard origin.
+    pub origin: Vec<(bool, u32)>,
+    /// True when the policy states no origin for this slot and `origin` is the
+    /// standard origin its policy id commits to.
+    pub standard_filled: bool,
+    /// The slot's master fingerprint, if the policy carries one.
+    pub fingerprint: Option<[u8; 4]>,
+    /// The slot's 65-byte key identity.
+    pub key: [u8; 65],
 }
 
 /// Decode ONE card -- a single complete md1 string, or the full set of its
@@ -361,7 +382,39 @@ pub fn decode_md1_card(card: &[&str]) -> Result<Md1Card> {
         .filter(|v| v.len() == descriptor.n as usize)
         .map(|v| v.iter().map(|(_, k)| *k).collect());
 
-    Ok(Md1Card { stub, cosigners })
+    // The keyed slots (2.1): an elided origin is the template's standard origin,
+    // the path `compute_wallet_policy_id` hashes for it. `canonical_origin` is
+    // None only where `expand_per_at_n` already refused; keep the empty path.
+    let mut keyed = Vec::new();
+    if descriptor.is_wallet_policy() {
+        for e in md_codec::canonicalize::expand_per_at_n(&descriptor)? {
+            let Some(key) = e.xpub else { continue };
+            let standard_filled = e.origin_path.components.is_empty();
+            let path = if standard_filled {
+                md_codec::canonical_origin::canonical_origin(&descriptor.tree)
+                    .unwrap_or_else(|| e.origin_path.clone())
+            } else {
+                e.origin_path.clone()
+            };
+            keyed.push(KeyedSlot {
+                idx: e.idx,
+                origin: path
+                    .components
+                    .iter()
+                    .map(|c| (c.hardened, c.value))
+                    .collect(),
+                standard_filled,
+                fingerprint: e.fingerprint,
+                key,
+            });
+        }
+    }
+
+    Ok(Md1Card {
+        stub,
+        cosigners,
+        keyed,
+    })
 }
 
 /// Format `policy_id_stub` bytes as 8 lowercase hex chars.

@@ -37,6 +37,15 @@ on:
     tags:
       - 'mk-cli-v*'
   workflow_dispatch:
+    inputs:
+      full:
+        description: "also run the nightly jobs (no nightly jobs in this workflow; accepted so the release gate can pass -f full=true everywhere)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # ── REPRODUCIBILITY: the toolkit-homed gate (a codec re-home) ───────────────
@@ -347,7 +356,7 @@ jobs:
 
       - name: ensure-release
         if: startsWith(github.ref, 'refs/tags/mk-cli-v')
-        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes || true
+        run: gh release view "$REF_NAME" >/dev/null 2>&1 || gh release create "$REF_NAME" --generate-notes || gh release view "$REF_NAME" >/dev/null
       - name: upload
         if: startsWith(github.ref, 'refs/tags/mk-cli-v')
         run: |

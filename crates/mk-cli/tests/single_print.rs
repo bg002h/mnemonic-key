@@ -17,6 +17,8 @@ use assert_cmd::cargo::CommandCargoExt;
 /// master fingerprint 73c5da0a. Public material only.
 const TPUB: &str = "tpubDC9Go1KDateW3gS8VXZ6DD1Xu7PgoTdPcf1MX9Z6qVLiHbaeDJ78swPyuQ8YQY19QjtrzkfkZSXwqCcb7XArtid1iLq8Vy55Ydfm4giZh6X";
 const STUB: &str = "deadbeef";
+const X0: &str = "xpub6DkFAXWQ2dHxq2vatrt9qyA3bXYU4ToWQwCHbf5XB2mSTexcHZCeKS1VZYcPoBd5X8yVcbXFHJR9R8UCVpt82VX1VhR28mCyxUFL4r6KFrf";
+const X1: &str = "xpub6DzhyrnFFYQ1HimDiM388xHnDiRPNdZJFBmmxge3Y1WWcHLtMJLfRuhRHqnQCPbTj3fGKTuKFLHzzwpJkp5Dtc3UtLKZKaVZe1yqMBXd6Vk";
 const NOTE: &str = "note: stdout is watch-only \u{2014} public keys only, cannot spend\n";
 
 fn mk() -> Command {
@@ -92,12 +94,15 @@ fn encode_out_writes_the_stdout_bytes() {
 
 #[test]
 fn encode_keys_labels_each_card_on_stderr() {
-    // The same record twice: F-311's duplicate, which mints two byte-identical
-    // cards. The labels are the only thing that shows there were two.
+    // Two distinct records. The labels are the card boundary: cards of one key
+    // file can share a chunk-set id, so the strings alone do not show it.
     let dir = tempfile::tempdir().unwrap();
     let kf = dir.path().join("keys.txt");
-    let rec = format!("[73c5da0a/84'/1'/0']{TPUB}\n");
-    std::fs::write(&kf, format!("{rec}{rec}")).unwrap();
+    std::fs::write(
+        &kf,
+        format!("[73c5da0a/48'/0'/0'/2']{X0}\n[73c5da0a/48'/0'/1'/2']{X1}\n"),
+    )
+    .unwrap();
     let o = mk()
         .args([
             "encode",
@@ -112,11 +117,11 @@ fn encode_keys_labels_each_card_on_stderr() {
     let out = text(&o.stdout);
     assert_eq!(
         out.lines().count(),
-        4,
-        "two cards of two strings; got {out:?}"
+        5,
+        "two cards of two and three strings; got {out:?}"
     );
     assert_eq!(
         text(&o.stderr),
-        format!("card 1 of 2: lines 1-2\ncard 2 of 2: lines 3-4\n{NOTE}")
+        format!("card 1 of 2: lines 1-2\ncard 2 of 2: lines 3-5\n{NOTE}")
     );
 }

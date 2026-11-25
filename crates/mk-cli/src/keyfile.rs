@@ -19,9 +19,12 @@
 //! fingerprint, path and key together, so they cannot be misaligned BY THE
 //! TOOL the way three parallel lists can.
 //!
+//! Records are compared pairwise (FIX_mk_fe_keyed_policy 2.2): a repeated
+//! record, one key under two origins and one origin with two keys are refused.
 //! What this does NOT do is check that a record is internally truthful. A
 //! record pairing a real xpub with a DIFFERENT key's fingerprint and path is
-//! accepted whenever the xpub's own depth still matches (the encoder checks
+//! accepted whenever the xpub's own depth still matches and no keyed policy states
+//! that key's origin (the encoder checks
 //! depth and child number, not whose key it is), so two same-depth cosigners
 //! can be crossed by an operator editing the file. The earlier wording here
 //! claimed records "cannot come apart", which over-claims a real but narrower
@@ -102,6 +105,11 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
 /// out of another flag's mouth sends an operator to edit a command line they
 /// did not type: the same defect F-294 files against the shared crate's refusal
 /// text, one binary smaller.
+///
+/// Input encoding (B1, FIX_mk_fa_line_readers): a leading UTF-8 BOM is removed
+/// and CRLF is a line end; any other CR, any other line-break character, and
+/// any U+FEFF after the first character, is refused naming its line, before
+/// comments are stripped.
 pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     let (buf, source) = if path == "-" {
         let mut buf = String::new();
@@ -123,8 +131,8 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     //     into it -- a SHORT BUNDLE, which is the failure mode this project
     //     most wants to be loud.
     //
-    // CRLF needs no special case: the trailing `\r` is whitespace and `trim()`
-    // below removes it.
+    // CRLF is a line end and any other CR, line break or U+FEFF is refused: see
+    // `refuse_line_encoding`, the one rule both line readers share.
     let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
     if buf.contains('\r') && !buf.contains('\n') {
         return Err(CliError::UsageError(format!(
@@ -134,7 +142,25 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         )));
     }
 
+    refuse_line_encoding(buf, |line, o| match o {
+        LineOffence::BareCr => format!(
+            "{flag} {source}:{line}: this line holds a carriage return (CR) with no line feed \
+             (LF) after it, so the text after the CR would be read as part of line {line} and \
+             a key record after it could be lost. Convert the file to LF or CRLF line endings."
+        ),
+        LineOffence::StrayBom => format!("{flag} {source}:{line}: {BOM_TEXT}"),
+        LineOffence::Break(what) => format!(
+            "{flag} {source}:{line}: this line holds a {what}, a line break this reader does \
+             not split lines on, so the text after it would be read as part of line {line} \
+             and a key record after it could be lost. Replace it with an ordinary line end \
+             (LF or CRLF)."
+        ),
+    })?;
+
     let mut out = Vec::new();
+    // 1-based file line of each record (blank and comment lines count), for
+    // the pairwise checks below.
+    let mut lines: Vec<usize> = Vec::new();
     for (i, raw) in buf.lines().enumerate() {
         let line = raw.split('#').next().unwrap_or("").trim();
         if line.is_empty() {
@@ -143,13 +169,109 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         let rec = parse_key_record(line)
             .map_err(|e| CliError::UsageError(format!("{source}:{}: {}", i + 1, e.message())))?;
         out.push(rec);
+        lines.push(i + 1);
     }
+    check_record_set(&out, &lines, &source)?;
     if out.is_empty() {
         return Err(CliError::UsageError(format!(
             "{flag} {source}: no key records found (blank lines and `#` comments are ignored)"
         )));
     }
     Ok(out)
+}
+
+/// The text after `<flag> <source>:<n>: ` for a stray U+FEFF (both readers).
+pub(crate) const BOM_TEXT: &str = "this line holds a byte-order mark (U+FEFF), which is accepted \
+only as the first character of the file. Joining two files can leave the second file's mark inside \
+the result: if the mark starts the line, delete it; if other text comes before it on the line, \
+replace it with a line break.";
+
+/// What `refuse_line_encoding` found.
+pub(crate) enum LineOffence {
+    /// A CR not immediately followed by LF (a CR last in the input counts).
+    BareCr,
+    /// A U+FEFF anywhere in the input it is given.
+    StrayBom,
+    /// VT, FF, NEL, LS or PS; the payload names it.
+    Break(&'static str),
+}
+
+/// The one input-encoding rule of both line readers (B1,
+/// FIX_mk_fa_line_readers). The caller has already removed a leading BOM; CRLF is
+/// fine here (a CR before LF is not an offence). Scans from the
+/// start for the first bare CR, other line break or stray BOM and refuses it
+/// (exit 64) with `text(line, offence)`, where `line` is 1 plus the number of
+/// LF before it. Runs before any line is parsed, stripped or skipped.
+pub(crate) fn refuse_line_encoding(
+    buf: &str,
+    text: impl Fn(usize, &LineOffence) -> String,
+) -> Result<()> {
+    let mut line = 1usize;
+    let mut it = buf.chars().peekable();
+    while let Some(c) = it.next() {
+        let o = match c {
+            '\n' => {
+                line += 1;
+                continue;
+            }
+            '\r' if it.peek() == Some(&'\n') => continue,
+            '\r' => LineOffence::BareCr,
+            '\u{feff}' => LineOffence::StrayBom,
+            '\u{000B}' => LineOffence::Break("vertical tab (U+000B)"),
+            '\u{000C}' => LineOffence::Break("form feed (U+000C)"),
+            '\u{0085}' => LineOffence::Break("next-line character (U+0085)"),
+            '\u{2028}' => LineOffence::Break("line separator (U+2028)"),
+            '\u{2029}' => LineOffence::Break("paragraph separator (U+2029)"),
+            _ => continue,
+        };
+        return Err(CliError::UsageError(text(line, &o)));
+    }
+    Ok(())
+}
+
+/// An origin as BIP-380 notation, `[<fp>/<path>]` (an empty path renders `[fp/]`).
+fn fmt_origin(r: &KeyRecord) -> String {
+    format!(
+        "[{}/{}]",
+        crate::cmd::fmt_fingerprint(&r.fingerprint),
+        r.path
+    )
+}
+
+/// Compare every pair of records (FIX_mk_fe_keyed_policy 2.2). For j = 2nd..last
+/// and i = 1st..j-1, the first matching pair is refused at record j's line.
+/// Same key = equal 65-byte identity; same origin = equal fingerprint and path.
+fn check_record_set(recs: &[KeyRecord], lines: &[usize], source: &str) -> Result<()> {
+    for j in 1..recs.len() {
+        for i in 0..j {
+            let same_key = crate::cmd::xpub_identity_65(&recs[i].xpub)
+                == crate::cmd::xpub_identity_65(&recs[j].xpub);
+            let same_origin =
+                recs[i].fingerprint == recs[j].fingerprint && recs[i].path == recs[j].path;
+            let (lj, li) = (lines[j], lines[i]);
+            let msg = match (same_key, same_origin) {
+                (true, true) => format!(
+                    "{source}:{lj}: this record repeats line {li}; a key is carded once, so a \
+                     repeated record is refused and no card was minted."
+                ),
+                (true, false) => format!(
+                    "{source}:{lj}: this record's key is also on line {li}, with origin {}; one \
+                     key has one origin, so the two records contradict each other and no card \
+                     was minted.",
+                    fmt_origin(&recs[i])
+                ),
+                (false, true) => format!(
+                    "{source}:{lj}: this record's origin {} is also on line {li}, with a \
+                     different key; one origin derives one key (BIP 32), so the two records \
+                     contradict each other and no card was minted.",
+                    fmt_origin(&recs[j])
+                ),
+                (false, false) => continue,
+            };
+            return Err(CliError::UsageError(msg));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

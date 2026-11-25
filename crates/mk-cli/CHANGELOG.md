@@ -13,6 +13,11 @@ Next release: 0.18.0
 
 ### Changed
 
+- **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
+  byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
+  byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark
+  (it used to drop the first md1 string silently). Any other CR, any of U+000B, U+000C, U+0085, U+2028, U+2029, and any
+  U+FEFF after the first character is refused at exit 64 instead of silently dropping a key record or an md1 string.
 - `mk encode` refuses a depth-0 xpub whose parent fingerprint is not 00000000 (exit 64).
 - `mk verify` reports a card whose depth-0 key is not a valid BIP 32 master, or whose depth-1 origin fingerprint is not the xpub's parent fingerprint, as invalid (exit 1, kinds `MasterParentFingerprintNonzero` / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
 - `mk decode`, `inspect`, `address` and `derive` still read such a card and warn on stderr.
@@ -27,6 +32,9 @@ Next release: 0.18.0
   card (real chain code) is unchanged.
 - **`mk derive` refuses an empty `--path`** (bughunt-1119 bh-mk-I18). `--path ''`, `m` and `m/` used to print the
   parent xpub labelled `child_xpub`; they now exit 64 (`derive needs at least one step`).
+- `mk encode` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.
+- `mk encode --keys`/`--in` refuses (exit 64) a repeated record, one key under two origins, and one origin with two keys, naming both lines.
+- `mk encode` refuses (exit 64) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.
 
 ## [0.17.0] — 2026-11-22
 
