@@ -50,9 +50,22 @@ pub struct KeyRecord {
 /// Parse one BIP-380 origin-notation record: `[fingerprint/path]xpub`.
 pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     let s = line.trim();
+    // Bug hunt 2026-11-25 mk#4 (and review r1 I1): no refusal here quotes the
+    // record, except that an invalid key in a `[fp/path]<key>` record reaches
+    // `invalid_xpub`, which shows its first four characters and its length
+    // (review r2 M1, FOLLOWUPS mk-bh1125-r2-m1-keyfile-four-char-head). The
+    // wrong file holds anything -- a WIF, a seed phrase, a wallet export --
+    // and the caller already names the file and the line, so the shape of the
+    // problem is all an error needs. A private extended key gets its own fixed
+    // message first.
+    if crate::slip132::contains_private_key_text(s) {
+        return Err(crate::slip132::private_key_refusal());
+    }
     let usage = || {
         CliError::UsageError(format!(
-            "expected BIP-380 origin notation `[fingerprint/path]xpub`, got {s:?}"
+            "expected BIP-380 origin notation `[fingerprint/path]xpub`; this record \
+             ({} characters) does not have that shape (the record is not shown)",
+            s.chars().count()
         ))
     };
 
@@ -63,9 +76,15 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     // rather than defaulted to `m` -- a card engraved at the wrong depth is
     // indistinguishable from a correct one until recovery fails.
     let (fp_str, path_rest) = origin.split_once('/').ok_or_else(|| {
+        // Quote the origin only when it is a fingerprint (8 hex characters).
+        let fp = if origin.len() == 8 && origin.chars().all(|c| c.is_ascii_hexdigit()) {
+            origin
+        } else {
+            "73c5da0a"
+        };
         CliError::UsageError(format!(
-            "origin {origin:?} has no derivation path; a key card must declare one \
-             (e.g. `[{origin}/48'/0'/0'/2']`)"
+            "the record's origin has no derivation path; a key card must declare one \
+             (e.g. `[{fp}/48'/0'/0'/2']`)"
         ))
     })?;
 
@@ -73,19 +92,30 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     // a policy, not where it was derived; accepting it silently would engrave
     // an origin the wallet never had.
     if xpub_str.contains('/') {
-        return Err(CliError::UsageError(format!(
-            "key {xpub_str:?} carries a derivation suffix; `--keys` records hold an \
+        return Err(CliError::UsageError(
+            "the record's key carries a derivation suffix; `--keys` records hold an \
              ORIGIN and a bare xpub, not a use-site path"
-        )));
+                .into(),
+        ));
     }
     if xpub_str.is_empty() {
-        return Err(CliError::UsageError(format!(
-            "record {s:?} declares an origin but no xpub"
-        )));
+        return Err(CliError::UsageError(
+            "the record declares an origin but no xpub".into(),
+        ));
     }
 
-    let fingerprint = parse_fingerprint(fp_str)?;
-    let path = parse_derivation_path(&format!("m/{path_rest}"))?;
+    // The flag-oriented parsers quote their input; a record is not re-quoted.
+    let fingerprint = parse_fingerprint(fp_str).map_err(|_| {
+        CliError::UsageError(
+            "the record's origin fingerprint is not 8 hex characters (the record is not shown)"
+                .into(),
+        )
+    })?;
+    let path = parse_derivation_path(&format!("m/{path_rest}")).map_err(|_| {
+        CliError::UsageError(
+            "the record's origin derivation path does not parse (the record is not shown)".into(),
+        )
+    })?;
     let xpub = parse_xpub_normalized(xpub_str, Some(&path))?;
     Ok(KeyRecord {
         fingerprint,

@@ -13,6 +13,33 @@ Next release: 0.18.0
 
 ### Changed
 
+- **A non-ASCII character in an md1 string is refused on `--from-md1`, `--from-md1-set` and `mk verify --from-md1`**
+  (bug hunt 2026-11-25 mk#3). md-codec 0.42.0 (the newest on crates.io, which mk-cli resolves) read U+0171 as `q`,
+  so an md1 the sibling `md` refuses bound as the card it aliases, exit 0. mk-cli now refuses it itself (exit 1,
+  `md1 input rejected: codex32 decode error: character 'ű' not in codex32 alphabet`, as md-codec 0.48.5 says).
+- **A wire-version-8 md1 names the limit** (bug hunt 2026-11-25 mk#1). Still refused (exit 1); the error now adds
+  that this mk reads md1 wire version 4 only, and that `--policy-id-stub` skips the cosigner and origin checks.
+  The md-codec pin cannot move until a release that reads wire version 8 is published on crates.io (FOLLOWUPS
+  `mk-cli-md-codec-pin-unpublished`).
+- **`mk verify --from-md1` checks the card's key against the policy's keys, not only its stub** (bug hunt
+  2026-11-25 mk#2). A card minted with a bare `--policy-id-stub` for a key that is not a cosigner (or with an origin
+  that contradicts the policy) used to verify `OK ... inputs match`, exit 0, while `mk encode` refuses the same
+  pair. Against a `--from-md1` policy: a complete key list that does not hold the card's key is now a mismatch
+  (exit 4, `verify mismatch on cosigner: ...`, `--json` field `cosigner`); a slot holding the key whose origin path
+  or master fingerprint contradicts the card is a mismatch on `origin_path` / `origin_fingerprint` (exit 4); a key in
+  two slots is a mismatch on `cosigner`. A keyless template, or a partial key list that does not hold the key, cannot
+  decide membership: only the stub is compared, as before, and a stderr `note: ... only its stub was compared; that
+  does not show this card's key is one of its cosigners` says so. The OK line is unchanged.
+- **A mis-pasted extended private key is refused without being echoed** (bug hunt 2026-11-25 mk#4). An xprv/tprv
+  or SLIP-0132 private form (yprv, zprv, Yprv, Zprv, uprv, vprv, Uprv, Vprv) given to `mk encode --xpub`, in a
+  `--keys`/`--in` key file (any record shape), or to `mk verify --xpub` used to be quoted in full in the error and in
+  the `--json` envelope (`invalid xpub "xprv9s21…"`). It is now refused (exit 64, as before) with a fixed message
+  that names the mistake and never quotes the value. Other unparsable key text given to `--xpub` is named by its
+  first four characters and its length (`invalid xpub (begins "xpub", 111 characters): ...`) instead of being quoted
+  whole. A `--keys`/`--in` key-file record (a WIF, a seed phrase or any other line of the wrong file) is not quoted
+  back: its errors name the file, the line and the shape of the problem, except that a `[fp/path]<key>` record whose
+  key is not a valid xpub still shows the key's first four characters and its length (FOLLOWUPS
+  `mk-bh1125-r2-m1-keyfile-four-char-head`).
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
   byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark

@@ -119,15 +119,70 @@ impl Slip132Variant {
     }
 }
 
+/// The base58 prefixes of extended PRIVATE keys: BIP-32 `xprv`/`tprv` and the
+/// SLIP-0132 private forms. Never valid where `mk` wants an xpub.
+const PRIVATE_PREFIXES: [&str; 10] = [
+    "xprv", "tprv", "yprv", "zprv", "Yprv", "Zprv", "uprv", "vprv", "Uprv", "Vprv",
+];
+
+/// The version bytes behind [`PRIVATE_PREFIXES`] (BIP-32, SLIP-0132).
+const PRIVATE_VERSIONS: [[u8; 4]; 10] = [
+    [0x04, 0x88, 0xAD, 0xE4], // xprv
+    [0x04, 0x35, 0x83, 0x94], // tprv
+    [0x04, 0x9D, 0x78, 0x78], // yprv
+    [0x04, 0xB2, 0x43, 0x0C], // zprv
+    [0x02, 0x95, 0xB0, 0x05], // Yprv
+    [0x02, 0xAA, 0x7A, 0x99], // Zprv
+    [0x04, 0x4A, 0x4E, 0x28], // uprv
+    [0x04, 0x5F, 0x18, 0xBC], // vprv
+    [0x02, 0x42, 0x85, 0xB5], // Uprv
+    [0x02, 0x57, 0x50, 0x48], // Vprv
+];
+
+/// Bug hunt 2026-11-25 mk#4: does `s` hold extended-private-key text? True
+/// when any token of `s` (split at anything that is not ASCII alphanumeric,
+/// so `[fp/path]xprv…` and `xprv…/0/*` are both seen) BEGINS with a private
+/// prefix. A token-start test, not a substring one: four characters inside a
+/// public key's base58 body can spell `xprv` by chance.
+pub(crate) fn contains_private_key_text(s: &str) -> bool {
+    s.split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|t| PRIVATE_PREFIXES.iter().any(|p| t.starts_with(p)))
+}
+
+/// The refusal for extended-private-key text. It never quotes the value: the
+/// echo was the leak (mk#4), and on the key-file route the key had not been
+/// on argv, so the error would be the first place it reached a terminal or a
+/// captured log.
+pub(crate) fn private_key_refusal() -> CliError {
+    CliError::UsageError(
+        "this is an extended PRIVATE key (xprv/tprv or a SLIP-0132 private form), not an \
+         xpub; an mk1 card holds a public key only. Export the matching xpub from the \
+         wallet instead. The key is not shown here; if you typed it on a command line, \
+         remove it from your shell history"
+            .into(),
+    )
+}
+
+/// An unparsable key, named by its first four characters and its length --
+/// never quoted in full (mk#4: whatever was pasted may be secret).
+fn invalid_xpub(s: &str, e: impl std::fmt::Display) -> CliError {
+    let head: String = s.chars().take(4).collect();
+    CliError::UsageError(format!(
+        "invalid xpub (begins {head:?}, {} characters): {e}",
+        s.chars().count()
+    ))
+}
+
 /// Detect a SLIP-0132 prefix, normalize to canonical xpub/tpub, and parse.
 /// Returns `(canonical Xpub, Some(variant))` for SLIP-0132 input,
 /// `(Xpub, None)` for canonical xpub/tpub. Unrecognized versions fall through
 /// to `Xpub::from_str`'s existing error.
 pub fn detect_and_normalize(s: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
     use Slip132Variant::*;
-    let from_str = |s: &str| -> Result<Xpub> {
-        Xpub::from_str(s).map_err(|e| CliError::UsageError(format!("invalid xpub {s:?}: {e}")))
-    };
+    if contains_private_key_text(s) {
+        return Err(private_key_refusal());
+    }
+    let from_str = |s: &str| -> Result<Xpub> { Xpub::from_str(s).map_err(|e| invalid_xpub(s, e)) };
     let Ok(data) = base58::decode_check(s) else {
         return Ok((from_str(s)?, None));
     };
@@ -135,6 +190,9 @@ pub fn detect_and_normalize(s: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
         return Ok((from_str(s)?, None));
     }
     let ver: [u8; 4] = data[0..4].try_into().unwrap();
+    if PRIVATE_VERSIONS.contains(&ver) {
+        return Err(private_key_refusal());
+    }
     let (swap, variant) = match ver {
         [0x04, 0x9D, 0x7C, 0xB2] => (XPUB_MAINNET, Ypub),
         [0x04, 0xB2, 0x47, 0x46] => (XPUB_MAINNET, Zpub),

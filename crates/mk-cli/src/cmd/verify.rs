@@ -14,8 +14,8 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    chunk_set_id_comparison, correction_counts, derive_stub_from_md1_card, fmt_fingerprint,
-    fmt_stub, group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
+    chunk_set_id_comparison, correction_counts, decode_md1_card, fmt_fingerprint, fmt_stub,
+    group_md1_cards, parse_derivation_path, parse_fingerprint, parse_stub_hex,
     parse_xpub_normalized, read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied,
 };
 use crate::error::{CliError, Result};
@@ -142,8 +142,13 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         .iter()
         .map(|s| crate::format::strip_display_separators(s))
         .collect();
-    for card in group_md1_cards(&from_md1) {
-        expected_stubs.push(derive_stub_from_md1_card(&card)?);
+    // Decoded once: the stub feeds the comparison below, and the key list
+    // feeds the membership and origin checks after it (mk#2).
+    let mut policies: Vec<crate::cmd::Md1Card> = Vec::new();
+    for md1 in group_md1_cards(&from_md1) {
+        let policy = decode_md1_card(&md1)?;
+        expected_stubs.push(policy.stub);
+        policies.push(policy);
     }
     if !expected_stubs.is_empty() {
         // Compare as a MULTISET, not as an ordered list.
@@ -195,8 +200,115 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         }
     }
 
+    check_card_against_policies(&card, &policies)?;
+
     emit_ok(&card, &strings, args.json, csid)?;
     Ok(0)
+}
+
+/// Bug hunt 2026-11-25 mk#2: the card against each `--from-md1` policy's keys,
+/// not only its stub -- the checks `mk encode` runs on the same input pair.
+///
+/// - The card's key in exactly one keyed slot: that slot's origin path and
+///   master fingerprint must be the card's (a missing fingerprint on either
+///   side is not compared), else exit 4.
+/// - The key in no slot of a COMPLETE key list: not a cosigner, exit 4.
+/// - The key in no slot and the list is NOT complete (a keyless template, or
+///   keys for only some slots): membership cannot be decided -- a partial list
+///   is never proof either way -- so only the stub was compared, and a stderr
+///   note says so rather than letting the OK line imply more.
+/// - The key in two slots: BIP 388 keys are pairwise distinct, exit 4.
+fn check_card_against_policies(card: &KeyCard, policies: &[crate::cmd::Md1Card]) -> Result<()> {
+    let ident = crate::cmd::xpub_identity_65(&card.xpub);
+    let card_path: Vec<(bool, u32)> = card
+        .origin_path
+        .into_iter()
+        .map(|c| match c {
+            bitcoin::bip32::ChildNumber::Normal { index } => (false, *index),
+            bitcoin::bip32::ChildNumber::Hardened { index } => (true, *index),
+        })
+        .collect();
+    let mut notes: Vec<String> = Vec::new();
+    for policy in policies {
+        let stub = fmt_stub(&policy.stub);
+        let slots: Vec<&crate::cmd::KeyedSlot> =
+            policy.keyed.iter().filter(|s| s.key == ident).collect();
+        match slots.as_slice() {
+            [] => match &policy.cosigners {
+                Some(cosigners) => {
+                    return Err(CliError::ContentMismatch {
+                        field: "cosigner".into(),
+                        expected: format!(
+                            "one of the {} key(s) of the wallet policy with stub {stub}",
+                            cosigners.len()
+                        ),
+                        actual: format!(
+                            "xpub {} is not a cosigner of that policy (a card stamped with a \
+                             policy it is not in is refused at recovery)",
+                            card.xpub
+                        ),
+                    });
+                }
+                None => notes.push(format!(
+                    "note: the --from-md1 policy with stub {stub} carries no complete key list \
+                     (a keyless template, or keys for only some of its slots), so only its stub \
+                     was compared; that does not show this card's key is one of its cosigners"
+                )),
+            },
+            [slot] => {
+                let n = slot.idx;
+                if card_path != slot.origin {
+                    let std_note = if slot.standard_filled {
+                        "; the policy states no origin for it, so this is the standard origin \
+                         its policy id uses"
+                    } else {
+                        ""
+                    };
+                    return Err(CliError::ContentMismatch {
+                        field: "origin_path".into(),
+                        expected: format!(
+                            "{} (the origin of @{n} of the wallet policy with stub \
+                             {stub}{std_note})",
+                            crate::cmd::encode::fmt_origin_path(&slot.origin)
+                        ),
+                        actual: crate::cmd::encode::fmt_origin_path(&card_path),
+                    });
+                }
+                if let (Some(pfp), Some(cfp)) = (slot.fingerprint, card.origin_fingerprint.as_ref())
+                {
+                    if pfp != cfp.to_bytes() {
+                        return Err(CliError::ContentMismatch {
+                            field: "origin_fingerprint".into(),
+                            expected: format!(
+                                "{} (the master fingerprint of @{n} of the wallet policy with \
+                                 stub {stub})",
+                                hex::encode(pfp)
+                            ),
+                            actual: fmt_fingerprint(cfp),
+                        });
+                    }
+                }
+            }
+            many => {
+                let list = many
+                    .iter()
+                    .map(|s| format!("@{}", s.idx))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(CliError::ContentMismatch {
+                    field: "cosigner".into(),
+                    expected: "a wallet policy whose keys are pairwise distinct (BIP 388)".into(),
+                    actual: format!(
+                        "the wallet policy with stub {stub} holds this card's xpub at {list}"
+                    ),
+                });
+            }
+        }
+    }
+    for note in notes {
+        eprintln!("{note}");
+    }
+    Ok(())
 }
 
 fn emit_ok(
