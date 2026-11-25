@@ -13,6 +13,14 @@ Next release: 0.18.0
 
 ### Changed
 
+- **A non-ASCII character in an md1 string is refused on `--from-md1`, `--from-md1-set` and `mk verify --from-md1`**
+  (bug hunt 2026-11-25 mk#3). md-codec 0.42.0 (the newest on crates.io, which mk-cli resolves) read U+0171 as `q`,
+  so an md1 the sibling `md` refuses bound as the card it aliases, exit 0. mk-cli now refuses it itself (exit 1,
+  `md1 input rejected: codex32 decode error: character 'ű' not in codex32 alphabet`, as md-codec 0.48.5 says).
+- **A wire-version-8 md1 names the limit** (bug hunt 2026-11-25 mk#1). Still refused (exit 1); the error now adds
+  that this mk reads md1 wire version 4 only, and that `--policy-id-stub` skips the cosigner and origin checks.
+  The md-codec pin cannot move until a release that reads wire version 8 is published on crates.io (FOLLOWUPS
+  `mk-cli-md-codec-pin-unpublished`).
 - **`mk verify --from-md1` checks the card's key against the policy's keys, not only its stub** (bug hunt
   2026-11-25 mk#2). A card minted with a bare `--policy-id-stub` for a key that is not a cosigner (or with an origin
   that contradicts the policy) used to verify `OK ... inputs match`, exit 0, while `mk encode` refuses the same

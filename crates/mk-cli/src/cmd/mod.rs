@@ -346,6 +346,18 @@ pub struct KeyedSlot {
 /// -- so a short or doctored set is refused here rather than producing a stub
 /// from whatever chunks were present.
 pub fn decode_md1_card(card: &[&str]) -> Result<Md1Card> {
+    // Bug hunt 2026-11-25 mk#3: the md-codec this crate resolves from crates.io
+    // (0.42.0) truncates a non-ASCII character to a byte, so U+0171 read as `q`
+    // and a string the sibling `md` refuses decoded as the card it aliases.
+    // Refuse it here, with the error md-codec 0.48.5 gives, until the pin can
+    // move to a published release that carries that fix.
+    for chunk in card {
+        if let Some(c) = chunk.chars().find(|c| !c.is_ascii()) {
+            return Err(CliError::MdCodec(md_codec::Error::Codex32DecodeError(
+                format!("character {c:?} not in codex32 alphabet"),
+            )));
+        }
+    }
     let descriptor = match card {
         [single] if md1_chunk_set_id(single).is_none() => md_codec::decode_md1_string(single)?,
         chunks => md_codec::reassemble(chunks)?,

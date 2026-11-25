@@ -87,6 +87,18 @@ impl CliError {
     pub fn message(&self) -> String {
         match self {
             CliError::Codec(e) => format!("{e}"),
+            // Bug hunt 2026-11-25 mk#1: the md-codec this crate resolves from
+            // crates.io reads md1 wire version 4 only; a newer `md` mints wire
+            // version 8 (for example Liana-unspendable taproot policies). Name
+            // the limit, and what the stub-only route gives up.
+            CliError::MdCodec(e @ md_codec::Error::WireVersionMismatch { got }) if *got > 4 => {
+                format!(
+                    "md1 input rejected: {e}. This mk reads md1 wire version 4 only (its md-codec \
+                     predates wire version {got}), so this policy cannot be bound or checked \
+                     here yet. Minting with --policy-id-stub instead skips the cosigner and \
+                     origin checks."
+                )
+            }
             CliError::MdCodec(e) => format!("md1 input rejected: {e}"),
             CliError::FutureFormat(m) => m.clone(),
             CliError::ContentMismatch {
