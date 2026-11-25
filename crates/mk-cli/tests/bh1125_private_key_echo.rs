@@ -212,3 +212,51 @@ fn a_public_key_still_encodes() {
         .unwrap();
     assert_eq!(o.status.code(), Some(0), "{}", desc(&o));
 }
+
+/// Review r1 I1: a key-file record is never quoted back, whatever it holds.
+/// A WIF line, a BIP-39 phrase line, a `[fp/path]WIF/0/*` line and a
+/// `[WIF]xpub` line each get a shape error naming the file and line only,
+/// in text and in `--json`.
+#[test]
+fn key_file_record_is_never_quoted() {
+    let wif = "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ";
+    let phrase = "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    let dir = tempfile::tempdir().unwrap();
+    for (name, line, secret) in [
+        ("wif.txt", wif.to_string(), wif),
+        ("phrase.txt", phrase.to_string(), phrase),
+        ("suffix.txt", format!("[3442193e/84'/0'/0']{wif}/0/*"), wif),
+        ("origin.txt", format!("[{wif}]{V2_84_MAIN}"), wif),
+        ("empty.txt", format!("[3442193e/{wif}]"), wif),
+    ] {
+        let p = dir.path().join(name);
+        std::fs::write(&p, format!("{line}\n")).unwrap();
+        for json in [false, true] {
+            let mut args = vec![
+                "encode",
+                "--in",
+                p.to_str().unwrap(),
+                "--policy-id-stub",
+                "aabbccdd",
+            ];
+            if json {
+                args.push("--json");
+            }
+            let o = mk().args(args).output().unwrap();
+            assert_eq!(o.status.code(), Some(64), "{name}: {}", desc(&o));
+            let all = format!(
+                "{}{}",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            );
+            assert!(all.contains(":1:"), "{name}: names the line: {}", desc(&o));
+            if secret == phrase {
+                for w in ["legal winner", "sausage", "yellow"] {
+                    assert!(!all.contains(w), "{name}: phrase echoed: {}", desc(&o));
+                }
+            } else {
+                assert_not_echoed(&o, secret);
+            }
+        }
+    }
+}
