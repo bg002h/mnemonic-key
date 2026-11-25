@@ -30,6 +30,10 @@ tag list are the record for those.
 - `canonical_payload_bytes` keeps accepting a decoded legacy card.
 - `GENERATOR_FAMILY` is `mk-codec 0.6`; V19 is regenerated as a valid master; both corpus SHAs are re-pinned.
 
+### Fixed
+
+- **`gen_mk_vectors` (maintainer tool, feature `gen-vectors`) no longer overwrites its own output and reports it as written.** An `--output` named `csid_ext_v0.1.json` is refused before anything is written (exit 64); an `--output` that is the same file as the `csid_ext_v0.1.json` beside it (a hard or symbolic link) now ends with an error and exit 1 instead of exit 0. Both `wrote` lines print only after both files are written and the vectors file reads back as written (bh-mk-I16).
+
 ### Compatibility
 
 - Decoders: unaffected. A card minted before 0.6.0 that breaks one of the three
