@@ -125,6 +125,7 @@ change (no `pub` item changes; the binary is not API). No toolkit-manual lockste
 In each lane job that runs nextest (after L145 and after L241), add:
 ```
       - name: nextest + clippy with gen-vectors (gen_mk_vectors output rows)
+        if: steps.docs.outputs.docs_only != 'true'
         run: |
           cargo nextest run --locked -p mk-codec --features gen-vectors --no-fail-fast
           cargo clippy --locked -p mk-codec --features gen-vectors --all-targets -- -D warnings
