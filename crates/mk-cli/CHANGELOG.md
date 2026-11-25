@@ -35,6 +35,9 @@ Next release: 0.18.0
 - `mk encode` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.
 - `mk encode --keys`/`--in` refuses (exit 64) a repeated record, one key under two origins, and one origin with two keys, naming both lines.
 - `mk encode` refuses (exit 64) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.
+- **A failed `mk encode --out` write no longer destroys the existing file** (bughunt-1119 bh-mk-I1). The card is written to a temporary file beside FILE and renamed over it (mnemonic-io-lib 0.1.3; the FIX document says 0.1.2), so a full disk or quota leaves the old file byte-identical, and FILE's directory must now be writable. The error is now `mk: cannot write the output: FILE: <error>`, saying whether FILE is unchanged, at exit 1 (was `error: --out FILE: <error>`, exit 64).
+- **`mk encode` refuses an output that is one of its inputs** (bughunt-1119 bh-mk-I6). `--out` naming the `--in`, `--keys` or `--from-md1-set` file (the same path, a symlink or a hard link), or stdout redirected into one of them, exits 64 naming both, before anything is read or written; it used to replace or extend the input at exit 0.
+- **`mk encode --json --out FILE` writes both** (bughunt-1119 T7). The mk1 strings go to FILE and the JSON to stdout, as in md and ms; before, FILE held the JSON and stdout was empty. With `--json`, a stdout that is one of the inputs or the `--out` file is refused (exit 64).
 
 ## [0.17.0] — 2026-11-22
 

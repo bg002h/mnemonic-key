@@ -51,7 +51,9 @@ pub struct EncodeArgs {
     pub in_file: Option<String>,
 
     /// Write the mk1 artifact to FILE, created 0600, instead of to stdout.
-    /// OVERWRITES an existing file (operator ruling, 2026-08-26). SPEC §6b.
+    /// OVERWRITES an existing file (operator ruling, 2026-08-26); a failed write
+    /// leaves it unchanged. Refused when FILE is one of the inputs (`--in`,
+    /// `--keys`, `--from-md1-set`). With --json, FILE gets the mk1 strings and the JSON goes to stdout. SPEC §6b.
     ///
     /// NOTE: `mk vectors --out` and `mk gen-man --out` already exist on this
     /// binary and mean a DIRECTORY. Both meanings are correct for their verbs
@@ -121,6 +123,12 @@ pub struct EncodeArgs {
 
 /// Run `mk encode`.
 pub fn run(args: EncodeArgs) -> Result<u8> {
+    // FIX_bh1119_mk_out_writes R2/R4: before anything is read or written, no
+    // output (stdout, or the --out file) may be one of the inputs.
+    if let Some(code) = refuse_output_that_is_an_input(&args)? {
+        return Ok(code);
+    }
+
     if args.privacy_preserving && args.origin_fingerprint.is_some() {
         return Err(CliError::UsageError(
             "--privacy-preserving and --origin-fingerprint are mutually exclusive".into(),
@@ -444,13 +452,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // request, as `mt encode` and `mnemonic bundle` do; the default (0) is the
     // canonical, unbroken artifact `me sysw pack` reads. `--out` receives the
     // same bytes stdout would have carried, built once so the two cannot drift.
-    let artifact = if args.json {
-        if key_source.is_some() {
-            json_batch(&minted)?
-        } else {
-            json_single(&minted[0])?
-        }
-    } else {
+    let body = {
         let mut body = String::new();
         for card in &minted {
             for s in &card.strings {
@@ -464,15 +466,45 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         }
         body
     };
+    let json_doc = if args.json {
+        Some(if key_source.is_some() {
+            json_batch(&minted)?
+        } else {
+            json_single(&minted[0])?
+        })
+    } else {
+        None
+    };
 
-    // SPEC §6b: "stdout is used when --out is not given." When it IS given the
-    // artifact goes to the file ONLY.
+    // SPEC §6b: stdout is used when --out is not given; with --out the strings go to the file, and with --json the JSON also goes to stdout (T7).
     match &args.out_file {
         Some(path) => {
-            mnemonic_io_lib::write::write_private(std::path::Path::new(path), artifact.as_bytes())
-                .map_err(|e| CliError::UsageError(format!("--out {path}: {e}")))?
+            let before = file_state(path);
+            if let Err(e) =
+                mnemonic_io_lib::write::write_private(std::path::Path::new(path), body.as_bytes())
+            {
+                // R3: one line on stderr, exit 1, nothing on stdout in either mode.
+                let after = file_state(path);
+                let state = match (&before, &after) {
+                    (FileState::Regular(b), FileState::Regular(a)) if b == a => {
+                        format!(". {path} is unchanged.")
+                    }
+                    (FileState::Absent, FileState::Absent) => ". Nothing was written.".to_string(),
+                    _ => String::new(),
+                };
+                crate::out::stderr_write(format_args!(
+                    "mk: cannot write the output: {path}: {e}{state}\n"
+                ));
+                return Ok(1);
+            }
+            if let Some(doc) = &json_doc {
+                print!("{doc}");
+            }
         }
-        None => print!("{artifact}"),
+        None => match &json_doc {
+            Some(doc) => print!("{doc}"),
+            None => print!("{body}"),
+        },
     }
 
     // F-311: cards of one key file can share a chunk-set id, so the card
@@ -492,6 +524,97 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         &mut std::io::stderr(),
     );
     Ok(0)
+}
+
+/// (dev, ino, len, mtime) on Unix, (len, mtime) elsewhere.
+#[cfg(unix)]
+type FileId = (u64, u64, u64, i64, i64);
+#[cfg(not(unix))]
+type FileId = (u64, Option<std::time::SystemTime>);
+
+/// What `--out` was before a write, for R3's state sentence: a regular file
+/// keeps its identity, an absent path is `Absent`, anything else `Other`.
+#[derive(PartialEq, Debug)]
+enum FileState {
+    Regular(FileId),
+    Absent,
+    Other,
+}
+
+/// `std::fs::metadata` (symlinks followed): (dev, ino, len, mtime) on Unix,
+/// (len, mtime) elsewhere (std has no stable file id on Windows).
+fn file_state(path: &str) -> FileState {
+    match std::fs::metadata(path) {
+        Ok(m) if m.is_file() => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                FileState::Regular((m.dev(), m.ino(), m.len(), m.mtime(), m.mtime_nsec()))
+            }
+            #[cfg(not(unix))]
+            {
+                FileState::Regular((m.len(), m.modified().ok()))
+            }
+        }
+        Ok(_) => FileState::Other,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => FileState::Absent,
+        Err(_) => FileState::Other,
+    }
+}
+
+/// FIX_bh1119_mk_out_writes R2, R4: refuse an output that is one of the inputs.
+/// Returns `Ok(Some(64))` after printing X2 on stderr (stdout is an input, so
+/// no envelope may go there), `Err` for X1 and X3 (the usual error, an envelope
+/// on stdout in `--json` mode), `Ok(None)` when nothing matches.
+fn refuse_output_that_is_an_input(args: &EncodeArgs) -> Result<Option<u8>> {
+    use mnemonic_io_lib::write::{Endpoint, same_file};
+    use std::path::Path;
+
+    // Inputs in this order: --in, --keys, then every --from-md1-set.
+    let mut inputs: Vec<Endpoint<'_>> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    for (flag, v) in [("--in", &args.in_file), ("--keys", &args.keys)] {
+        if let Some(p) = v {
+            if p == "-" {
+                inputs.push(Endpoint::Stdin);
+                names.push(format!("standard input ({flag} -)"));
+            } else {
+                inputs.push(Endpoint::Path(Path::new(p)));
+                names.push(format!("{flag} {p}"));
+            }
+        }
+    }
+    for p in &args.from_md1_set {
+        inputs.push(Endpoint::Path(Path::new(p)));
+        names.push(format!("--from-md1-set {p}"));
+    }
+
+    // R4: stdout is an output when --out is absent, or with --json.
+    if args.out_file.is_none() || args.json {
+        if let Some(i) = same_file(Endpoint::Stdout, &inputs) {
+            crate::out::stderr_write(format_args!(
+                "error: standard output is the same file as {}, so the card would go into the file mk reads its input from. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name.\n",
+                names[i]
+            ));
+            return Ok(Some(64));
+        }
+    }
+    if let Some(out) = &args.out_file {
+        // R2: --out names an input.
+        if let Some(i) = same_file(Endpoint::Path(Path::new(out)), &inputs) {
+            return Err(CliError::UsageError(format!(
+                "--out {out} is the same file as {}, so writing the card would replace the input mk is reading. Write to a new name.",
+                names[i]
+            )));
+        }
+        // X3: --json with stdout redirected into the --out file.
+        if args.json && same_file(Endpoint::Stdout, &[Endpoint::Path(Path::new(out))]).is_some() {
+            return Err(CliError::UsageError(format!(
+                "--out {out} and standard output are the same file (the same path, a symlink or a hard link), so what mk prints on stdout would go into the file it writes. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name."
+            )));
+        }
+    }
+    Ok(None)
 }
 
 /// Render a path as `m` then `/<index>` per component, `'` after a hardened one.
