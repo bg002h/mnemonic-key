@@ -17,3 +17,6 @@
 # Shares its name with crates/mk-cli/CHANGELOG.md, which
 # crates/mk-cli/tests/version_is_honest.rs reads (ci/code-docs-check.sh).
 - ^CHANGELOG\.md$
+# read by crates/mk-cli/tests/bh1119_stale_docs.rs
+- ^bip/bip-mnemonic-key\.mediawiki$
+- ^docs/MK_CODEC_RUST_API\.md$

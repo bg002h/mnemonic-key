@@ -8,6 +8,11 @@
 # FOLLOWUPS file to check them.
 ^scripts/mk-output-sink-fix-gate\.sh$
 
+# Not run by CI: the RED/GREEN rows of the mk F-F stale-docs FIX document, run
+# by hand before the build and its reviews. It reads the BIP draft and the Rust
+# API guide to check their printed recipe and consumer example.
+^scripts/mk-ff-stale-docs-rows\.sh$
+
 # Not run by CI: the RED/GREEN rows of the mk F-G CI-gates FIX document, run
 # by hand. It reads the workflows and docs/verify-reproducibility.md to check them.
 ^scripts/mk-fg-ci-gates-rows\.sh$
