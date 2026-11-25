@@ -65,7 +65,11 @@ impl Env {
     }
 
     fn mode(&self, name: &str) -> u32 {
-        std::fs::metadata(self.p(name)).unwrap().permissions().mode() & 0o777
+        std::fs::metadata(self.p(name))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777
     }
 
     /// No `*.tmp` anywhere within two levels of the work directory.
@@ -481,7 +485,11 @@ fn i1_t7_json_out_grouped_file_unbroken_json() {
     let card5 = e.reference(&["--group-size", "5"]);
     let json = e.reference(&["--json"]);
     std::fs::remove_file(e.p("F")).unwrap();
-    let o = e.enc(&["--json", "--group-size", "5", "--out", "F"], Out::Pipe, false);
+    let o = e.enc(
+        &["--json", "--group-size", "5", "--out", "F"],
+        Out::Pipe,
+        false,
+    );
     assert_eq!(code(&o), Some(0), "{}", err(&o));
     assert_eq!(e.read("F"), card5);
     assert_eq!(o.stdout, json);

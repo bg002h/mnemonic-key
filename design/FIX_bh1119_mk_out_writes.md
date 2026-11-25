@@ -108,7 +108,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   Implementation note (builder's choice): the encode arm may print through `crate::out::stderr_write` and return
   `Ok(1)`, which `main` passes through `out::exit_code` unchanged; or add a `CliError` variant whose rendering is this
   line in both modes. The stdout sink's own line (`mk: cannot write the output: <error>`, `out.rs:80`) is unchanged.
-- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, or `--json` is given (stdout then carries the JSON or an error envelope), the R2 check runs with `out` = `Endpoint::Stdout` and the same `inputs`, BEFORE the R2 `--out` check. Then, when `--json` and `--out` are both given, mk asks `same_file(Endpoint::Stdout, [Endpoint::Path(--out)])`; on a match it refuses with X3, exit 64, as mk's usual `--json` error envelope on stdout (stdout is FILE, not an input, so FILE then holds the envelope; the shell had already emptied it), as ms #11 R3 does. On a match mk refuses with text X2, exit **64**,
+- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, or `--json` is given (stdout then carries the JSON or an error envelope), the R2 check runs with `out` = `Endpoint::Stdout` and the same `inputs`, BEFORE the R2 `--out` check. Then, when `--json` and `--out` are both given, mk asks `same_file(Endpoint::Stdout, [Endpoint::Path(--out)])`; on a match it refuses with X3, exit 64, as mk's usual `--json` error envelope on stdout (stdout is FILE, not an input, so FILE then holds the envelope; the shell had already emptied it), as ms #11 R3 does. On a stdout-versus-input match (the first check) mk refuses with text X2, exit **64**,
   and writes nothing to stdout. X2 is printed on **stderr in both modes**: in `--json` mode it is NOT an envelope on
   stdout, because stdout is the input file and an envelope there would be written into it. This refuses
   `mk encode --in K ... >>K`, `>K` (the shell has already emptied K; X2 replaces the misleading "no key records found"),
@@ -160,7 +160,7 @@ The rows script `design/FIX_bh1119_mk_out_writes/rows.sh red|green` runs every r
 failed`; `green` on the base `rows: 4 passed, 24 failed` (only the four controls); `green` on the author's prototype
 (io-lib 0.1.2 path patch + R2-R4) `rows: 28 passed, 0 failed`; `red` on the prototype `rows: 4 passed, 24 failed`.
 The builder also writes each row as a nextest test in `crates/mk-cli/tests/bh1119_mk_out_writes.rs`, named exactly as
-the "test" column `crates/mk-cli/tests/bh1119_mk_out_writes.rs` starts with `#![cfg(unix)]` (as `tests/channels.rs` gates its `--out` tests: on Windows io-lib's `same_file` detects no hard link and no redirected stdin/stdout, and the mode and read-only-directory rows are Unix semantics); the FSIZE8 rows o1, o2, o4 and o20 are also `#[cfg(target_os = "linux")]` (`prlimit`); o12 returns early, passing, when `libc::geteuid() == 0` (root ignores directory modes; ms #11 o6 does the same), and rows.sh skips o12 under root the same way. On Linux the count stays as section 5 says.. In every row: `ENC` =
+the "test" column. `crates/mk-cli/tests/bh1119_mk_out_writes.rs` starts with `#![cfg(unix)]` (as `tests/channels.rs` gates its `--out` tests: on Windows io-lib's `same_file` detects no hard link and no redirected stdin/stdout, and the mode and read-only-directory rows are Unix semantics); the FSIZE8 rows o1, o2, o4 and o20 are also `#[cfg(target_os = "linux")]` (`prlimit`); o12 returns early, passing, when `libc::geteuid() == 0` (root ignores directory modes; ms #11 o6 does the same), and rows.sh skips o12 under root the same way (rows.sh then reports 27). On Linux the count stays as section 5 says. In every row: `ENC` =
 `mk encode --in keys --policy-id-stub deadbeef`; `keys` holds the one key record; `F` holds `PRIOR-CARD\n`; `R` =
 `so writing the card would replace the input mk is reading. Write to a new name.`; `S` = the X2 tail after
 `<INPUT>, `.
@@ -225,7 +225,7 @@ call with `CARGO_BUILD_JOBS=6`:
   `cargo clippy --locked --workspace --all-targets -- -D warnings`;
 - `cargo nextest run --locked -p mk-cli --build-jobs 6 -j 6 -E 'binary(bh1119_mk_out_writes)'` expecting
   **28 tests run: 28 passed** (a short or empty count is a FAIL);
-- `scripts/mk-out-writes-rows.sh green` expecting `rows: 28 passed, 0 failed`, and the same script `red` against a base
+- `scripts/mk-out-writes-rows.sh green` expecting `rows: 28 passed, 0 failed` (27 under root: o12 is skipped), and the same script `red` against a base
   binary (`MK=<base mk>`) expecting `rows: 28 passed, 0 failed`;
 - the CI `fmt` job's other steps: `bash ci/docs-only.test.sh`, `sha256sum --check --strict ci/shared-ci.sha256`,
   `bash ci/code-docs-check.test.sh`, `bash ci/code-docs-check.sh`, `cd design && sha256sum -c
@@ -256,7 +256,7 @@ call with `CARGO_BUILD_JOBS=6`:
 2. The R2/R4 check runs FIRST, before the existing argv refusals, so no message or envelope is ever written into a
    stdout that is an input; with several matches, the first input in the order `--in`, `--keys`, `--from-md1-set`
    is named.
-3. X2 goes to stderr even in `--json` mode (stdout is the input file); X1 in `--json` mode is the usual envelope.
+3. X2 goes to stderr even in `--json` mode (stdout is the input file); X1 in `--json` mode is the usual envelope. X3 (--json --out F >F) is the usual envelope, on stdout = F.
 4. R3 in `--json` mode prints the T6 line and no envelope (T6 gives exactly one line).
 5. Stdout as an output is refused on `mk encode` only (I6's verb), following the architect's mt point 4; the other
    verbs are filed, as the architect did for md (F2).
@@ -270,4 +270,5 @@ call with `CARGO_BUILD_JOBS=6`:
 - R3 (failure line, three states, exit 1, stdout empty, second look): o1 (unchanged), o2/o3 (nothing written), o4
   (JSON), o12 (read-only dir), o20 (no state; second look).
 - R4 (stdout names an input; `>>`, `>`, stdin; JSON on stderr; pipe never matches): o15, o16, o17, o18; control o19.
+- R6 (T7), the R4 --json stdout check, X3: t1-t7.
 - R5 (help), M1-M3, C1: text review only (no row; `mk encode --help` is checked by eye against H1).
