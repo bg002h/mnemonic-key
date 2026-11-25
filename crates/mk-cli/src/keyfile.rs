@@ -50,6 +50,11 @@ pub struct KeyRecord {
 /// Parse one BIP-380 origin-notation record: `[fingerprint/path]xpub`.
 pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     let s = line.trim();
+    // Bug hunt 2026-11-25 mk#4: every refusal below quotes the record, so a
+    // record holding a private key is refused first, without quoting it.
+    if crate::slip132::contains_private_key_text(s) {
+        return Err(crate::slip132::private_key_refusal());
+    }
     let usage = || {
         CliError::UsageError(format!(
             "expected BIP-380 origin notation `[fingerprint/path]xpub`, got {s:?}"

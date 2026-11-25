@@ -13,6 +13,12 @@ Next release: 0.18.0
 
 ### Changed
 
+- **A mis-pasted extended private key is refused without being echoed** (bug hunt 2026-11-25 mk#4). An xprv/tprv
+  or SLIP-0132 private form (yprv, zprv, Yprv, Zprv, uprv, vprv, Uprv, Vprv) given to `mk encode --xpub`, in a
+  `--keys`/`--in` key file (any record shape), or to `mk verify --xpub` used to be quoted in full in the error and in
+  the `--json` envelope (`invalid xpub "xprv9s21…"`). It is now refused (exit 64, as before) with a fixed message
+  that names the mistake and never quotes the value. Other unparsable key text is named by its first four characters
+  and its length (`invalid xpub (begins "xpub", 111 characters): ...`) instead of being quoted whole.
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
   byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark
