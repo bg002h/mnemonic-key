@@ -363,20 +363,16 @@ A key card with Policy ID stubs `[stub_1, ..., stub_N]` declares: "this xpub is 
    a. Decode and extract its Policy ID stubs.
    b. Reject the card unless `policy_stub` matches one of its stubs.
 3. For each accepted key card, plug its xpub into the corresponding `@N` slot in the policy template (matched by origin path or by user assignment).
-4. Compute the **Wallet Instance ID** for the assembled wallet:
+4. Compute the **Wallet Instance ID** for the assembled wallet: the WalletPolicyId of the assembled descriptor, `md_codec::compute_wallet_policy_id(&assembled)` (md SPEC v0.13 §5.3). With concrete xpubs in its `@N` slots the identity's preimage covers them, so this one value is the per-instance check; there is no separate instance hash (md BIP §"Policy identifier"). The preimage takes each xpub's 65-byte wire form (chain code || compressed public key), not its 78-byte BIP 32 serialization.
 
-   ```text
-   wallet_instance_id = SHA-256(canonical_bytecode || canonical_xpub_serialization)[0..16]
-   ```
-
-   where `canonical_xpub_serialization` is the concatenation of each `@N`-resolved xpub's full 78-byte BIP 32 serialization, in placeholder-index order. Compare against the wallet identity the user expected to recover (e.g., a separately-anchored Wallet Instance ID, or against a digital backup record). Reject on mismatch.
+   The value is presence-significant on fingerprints as well as xpubs. An `@N`'s origin fingerprint in the assembled descriptor is its key card's `origin_fingerprint` or the policy card's fingerprint for that `@N`; if both cards carry one and they differ, reject the assembly. An `@N` that neither card gives one has none (a privacy-preserving key card carries none). Compare against the wallet identity the user expected to recover (e.g., a separately-anchored WalletPolicyId, its 12-word phrase from `WalletPolicyId::to_phrase`, or a digital backup record). Reject on mismatch, with one exception: when some `@N` has no fingerprint, the expected identity may have been computed with one, so first take those fingerprints from another record of the same wallet (its descriptor backup, or the master fingerprint of that cosigner's seed) and recompute. If no record supplies them, step 4 cannot confirm the wallet: say so, and verify the first address derived from the assembled descriptor against an independently-recorded expected address (§6) before any funds move. Fingerprints do not change addresses.
 5. Accept and proceed to address derivation.
 
 Step 2 is the indexing aid (fast filter, template-level). Step 4 is the cryptographic per-instance check. Both are required for safe recovery.
 
 Note the division of labour this implies: **step 2 is allowed to be form-sensitive because it is only an index.** A stub mismatch between the keyed and keyless forms of the same wallet costs the operator a re-stub, not their funds — step 4 recomputes the Wallet Instance ID from the assembled descriptor and is what actually decides whether the recovered wallet is the intended one. A stub that matched would still be rejected at step 4 if the assembly were wrong.
 
-**Implementation note:** the `compute_wallet_instance_id(canonical_bytecode, xpubs)` helper is provided by md-codec v0.8.0+. mk1 implementations integrating with md-codec ≥ 0.8.0 SHOULD use that helper directly rather than reimplementing the SHA-256 construction.
+**Implementation note:** step 4 is md-codec's `compute_wallet_policy_id` applied to the assembled descriptor. mk1 implementations SHOULD call it directly rather than reimplementing the preimage construction.
 
 ### 5.1 Authority precedence (mk1 ↔ md1 path information)
 

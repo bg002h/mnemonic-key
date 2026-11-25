@@ -9,7 +9,8 @@ This chapter covers the public API surface for direct Rust use.
 
 ```toml
 [dependencies]
-mk-codec = { git = "https://github.com/bg002h/mnemonic-key", tag = "mk-codec-v0.2.2" }
+mk-codec = { git = "https://github.com/bg002h/mnemonic-key", tag = "mk-codec-v0.5.1" }
+bitcoin = "0.32"
 ```
 
 ## Public surface
@@ -45,7 +46,7 @@ it via `KeyCard::new(...)`:
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use mk_codec::{KeyCard, encode};
 
-let xpub: Xpub = "xpub6CatWdiZi...".parse().unwrap();
+let xpub: Xpub = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V".parse().unwrap();
 let card = KeyCard::new(
     vec![[0u8; 4]],                                   // policy_id_stubs (non-empty)
     Some(Fingerprint::from([0x73, 0xc5, 0xda, 0x0a])), // origin_fingerprint (None for privacy-preserving mode)
@@ -138,8 +139,9 @@ fixture regeneration; it is a maintainer tool, not a library module
 
 ## Stability
 
-`mk-codec` is at v0.2 (post-cycle close-out). v0.1 of the manual
-targets v0.2.2; semver-major bumps may break the API. Track the
+The manifest above pins the tag `mk-codec-v0.5.1`, the latest tagged
+release; the `KeyCard::validate()` section describes mk-codec 0.6.0.
+Semver-major bumps may break the API. Track the
 crate's CHANGELOG for breaking changes; minor bumps add features
 without breaking existing callers.
 
