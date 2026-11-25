@@ -40,14 +40,15 @@ serde_json = "1"
 bitcoin = "0.32"
 hex = "0.4"
 
-# P3's boundary table: `mk` ADOPTs ONE item from the shared constellation IO
-# crate -- `write::write_private`, which `mk encode --out FILE` uses to create
-# its artifact owner-only. The other ten items are declined (see the plan).
+# P3's boundary table: `mk` ADOPTs items from the shared constellation IO crate --
+# `write::write_private`, which `mk encode --out FILE` uses to create its artifact owner-only, and (since 0.1.3,
+# FIX_bh1119_mk_out_writes) `write::same_file` with `write::Endpoint`, which `mk encode` uses to refuse an
+# output that is one of its inputs. The other ten items of the 0.1.0 surface are declined (see the plan).
 #
 # TAKEN FROM THE REGISTRY, not by `path =`: a path does not resolve in a fresh
 # CI checkout and this constellation exists at more than one filesystem
 # location. And deliberately NOT by `git`+`rev` any more, now that
-# `mnemonic-io-lib 0.1.0` is on crates.io.
+# `mnemonic-io-lib` is on crates.io (0.1.3 since FIX_bh1119_mk_out_writes).
 #
 # WHY THE REGISTRY AND NOT A REV. A git source has no published tarball, so both
 # `Cargo.lock`'s `checksum` and the vendored `.cargo-checksum.json`'s `package`
@@ -65,7 +66,7 @@ hex = "0.4"
 #
 # `write` has NO root re-export in the crate's `lib.rs`, so the call is written
 # `mnemonic_io_lib::write::write_private`; the unqualified path is an E0425.
-mnemonic-io-lib = "0.1.0"
+mnemonic-io-lib = "0.1.3"
 
 [dev-dependencies]
 assert_cmd = "2"
