@@ -39,7 +39,7 @@ pub enum CliError {
     /// the user-supplied expected value.
     ContentMismatch {
         /// Field name whose value disagreed (`xpub`, `origin_fingerprint`,
-        /// `origin_path`, `policy_id_stubs`).
+        /// `origin_path`, `policy_id_stubs`, `cosigner`).
         field: String,
         /// Expected value, formatted for human display.
         expected: String,

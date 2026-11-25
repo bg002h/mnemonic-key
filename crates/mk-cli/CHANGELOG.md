@@ -13,6 +13,15 @@ Next release: 0.18.0
 
 ### Changed
 
+- **`mk verify --from-md1` checks the card's key against the policy's keys, not only its stub** (bug hunt
+  2026-11-25 mk#2). A card minted with a bare `--policy-id-stub` for a key that is not a cosigner (or with an origin
+  that contradicts the policy) used to verify `OK ... inputs match`, exit 0, while `mk encode` refuses the same
+  pair. Against a `--from-md1` policy: a complete key list that does not hold the card's key is now a mismatch
+  (exit 4, `verify mismatch on cosigner: ...`, `--json` field `cosigner`); a slot holding the key whose origin path
+  or master fingerprint contradicts the card is a mismatch on `origin_path` / `origin_fingerprint` (exit 4); a key in
+  two slots is a mismatch on `cosigner`. A keyless template, or a partial key list that does not hold the key, cannot
+  decide membership: only the stub is compared, as before, and a stderr `note: ... only its stub was compared; that
+  does not show this card's key is one of its cosigners` says so. The OK line is unchanged.
 - **A mis-pasted extended private key is refused without being echoed** (bug hunt 2026-11-25 mk#4). An xprv/tprv
   or SLIP-0132 private form (yprv, zprv, Yprv, Zprv, uprv, vprv, Uprv, Vprv) given to `mk encode --xpub`, in a
   `--keys`/`--in` key file (any record shape), or to `mk verify --xpub` used to be quoted in full in the error and in

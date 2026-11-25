@@ -272,33 +272,30 @@ pub fn group_md1_cards(values: &[String]) -> Vec<Vec<&str>> {
     groups.into_iter().map(|(_, v)| v).collect()
 }
 
-/// Derive the 4-byte `policy_id_stub` for ONE card, supplied as either a
-/// single complete md1 string or the full set of its chunks.
-///
-/// The stub is **FORM-AWARE** (matches the toolkit's `bundle_binding_stub`, #28):
-///
-/// - a **keyed wallet-policy** md1 (`is_wallet_policy()`) → top 4 bytes of the
-///   policy's **WalletPolicyId** (`md_codec::compute_wallet_policy_id`, md SPEC
-///   v0.13 §5.3 canonical-expanded, encoder-divergence-free);
-/// - a **keyless template** md1 (`!is_wallet_policy()`, e.g. a single-sig
-///   `--md1-form=template` bundle) → top 4 bytes of the key-stable
-///   **WalletDescriptorTemplateId** (`md_codec::compute_wallet_descriptor_template_id`,
-///   md SPEC §8.1, BIP-388 template-only identity).
-///
-/// In both cases the stub is rooted on a canonical, encoder-divergence-free
-/// identity — NOT the md1 bytecode hash, which is encoding-sensitive and would
-/// not survive a re-encode of the same logical wallet. Discriminating on
-/// `is_wallet_policy()` keeps a stub minted via `mk --from-md1` byte-for-byte
-/// in agreement with the toolkit-emitted bundle card for the SAME md1 form
-/// (audit I1, 2026-06-10; toolkit #28 `bundle --md1-form=template`).
-///
-/// Chunked input goes through `md_codec::reassemble`, which verifies per-chunk
-/// BCH, header consistency, index completeness, and the cross-chunk
-/// content-id -- so a short or doctored set is refused here rather than
-/// producing a stub from whatever chunks were present.
-pub fn derive_stub_from_md1_card(card: &[&str]) -> Result<[u8; 4]> {
-    Ok(decode_md1_card(card)?.stub)
-}
+// How `decode_md1_card` derives the 4-byte `policy_id_stub` for ONE card, supplied as either a
+// single complete md1 string or the full set of its chunks.
+//
+// The stub is **FORM-AWARE** (matches the toolkit's `bundle_binding_stub`, #28):
+//
+// - a **keyed wallet-policy** md1 (`is_wallet_policy()`) → top 4 bytes of the
+//   policy's **WalletPolicyId** (`md_codec::compute_wallet_policy_id`, md SPEC
+//   v0.13 §5.3 canonical-expanded, encoder-divergence-free);
+// - a **keyless template** md1 (`!is_wallet_policy()`, e.g. a single-sig
+//   `--md1-form=template` bundle) → top 4 bytes of the key-stable
+//   **WalletDescriptorTemplateId** (`md_codec::compute_wallet_descriptor_template_id`,
+//   md SPEC §8.1, BIP-388 template-only identity).
+//
+// In both cases the stub is rooted on a canonical, encoder-divergence-free
+// identity — NOT the md1 bytecode hash, which is encoding-sensitive and would
+// not survive a re-encode of the same logical wallet. Discriminating on
+// `is_wallet_policy()` keeps a stub minted via `mk --from-md1` byte-for-byte
+// in agreement with the toolkit-emitted bundle card for the SAME md1 form
+// (audit I1, 2026-06-10; toolkit #28 `bundle --md1-form=template`).
+//
+// Chunked input goes through `md_codec::reassemble`, which verifies per-chunk
+// BCH, header consistency, index completeness, and the cross-chunk
+// content-id -- so a short or doctored set is refused here rather than
+// producing a stub from whatever chunks were present.
 
 /// The 65-byte identity md1 stores for a concrete key: 32-byte chain code
 /// followed by the 33-byte compressed public key (`TlvSection::pubkeys`).

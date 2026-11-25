@@ -618,7 +618,7 @@ fn refuse_output_that_is_an_input(args: &EncodeArgs) -> Result<Option<u8>> {
 }
 
 /// Render a path as `m` then `/<index>` per component, `'` after a hardened one.
-fn fmt_origin_path(components: &[(bool, u32)]) -> String {
+pub(crate) fn fmt_origin_path(components: &[(bool, u32)]) -> String {
     let mut out = String::from("m");
     for (hardened, value) in components {
         out.push_str(&format!("/{value}{}", if *hardened { "'" } else { "" }));

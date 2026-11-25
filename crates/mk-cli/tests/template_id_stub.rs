@@ -163,7 +163,7 @@ fn verify_from_keyless_template_md1_matches_template_id_stub() {
     // Anchor to the INDEPENDENT golden before going on to the agreement check.
     //
     // Steps 2 and 3 below are an agreement test: both sides call the same
-    // `derive_stub_from_md1_card`, so they agree whether or not it is correct,
+    // `decode_md1_card` stub derivation, so they agree whether or not it is correct,
     // and step 3 only proves the derived stub differs from one unrelated
     // literal. Two independent corruptions of the identity logic -- swapping
     // the keyless arm to WalletPolicyId, and shifting the stub window to
