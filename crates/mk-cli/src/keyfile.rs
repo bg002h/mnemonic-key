@@ -89,10 +89,11 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     // a policy, not where it was derived; accepting it silently would engrave
     // an origin the wallet never had.
     if xpub_str.contains('/') {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::UsageError(
             "the record's key carries a derivation suffix; `--keys` records hold an \
              ORIGIN and a bare xpub, not a use-site path"
-        )));
+                .into(),
+        ));
     }
     if xpub_str.is_empty() {
         return Err(CliError::UsageError(
