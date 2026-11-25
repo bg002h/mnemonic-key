@@ -6,7 +6,7 @@
 # What it does: builds `mk` (cargo build --locked -p mk-cli, the 1.85 pin, no
 # --release) unless MK names a binary, writes public-key fixture files (one
 # testnet key record, one keyless md1 template) under WORK, then runs the
-# twenty-one CLI rows of the FIX document section 4 and checks each against MODE:
+# twenty-eight CLI rows of the FIX document section 4 and checks each against MODE:
 #   red   = the base commit 58701fb (each defect shows; controls pass)
 #   green = the fixed behaviour (R1-R4 of the FIX document)
 # Any row that does not match fails the script (exit 1); the last line is
@@ -37,7 +37,7 @@ if [ -z "${MK:-}" ]; then
 fi
 MK=$(realpath "$MK")
 mkdir -p "$WORK/ro"; chmod 755 "$WORK/ro"; cd "$WORK" || exit 2
-rm -f ro.orig keys.orig F.orig set.orig card.ref
+rm -f ro.orig keys.orig F.orig set.orig card.ref card5.ref json.ref
 
 # testnet account key m/84'/1'/0', master fingerprint 73c5da0a (mk-cli fixture V15_84_TEST; public only)
 T=tpubDC9Go1KDateW3gS8VXZ6DD1Xu7PgoTdPcf1MX9Z6qVLiHbaeDJ78swPyuQ8YQY19QjtrzkfkZSXwqCcb7XArtid1iLq8Vy55Ydfm4giZh6X
@@ -52,6 +52,8 @@ fsize8() { # stdout/stderr through pipes; the limit binds mk's own file writes o
   local r=$?; sleep 0.5; return $r
 }
 fresh; "$MK" encode --in keys --policy-id-stub deadbeef > card.ref 2>/dev/null
+"$MK" encode --in keys --policy-id-stub deadbeef --group-size 5 > card5.ref 2>/dev/null
+"$MK" encode --in keys --policy-id-stub deadbeef --json > json.ref 2>/dev/null
 
 PASS=0; FAIL=0
 # check ROW RC WANT_RC STDERR_SPEC then "test-expr|label" facts
@@ -98,9 +100,12 @@ else check o3 $rc 1 "=mk: cannot write the output: nodir/F: No such file or dire
 fresh; fsize8 "$MK" "${ENC[@]}" --json --out F; rc=$?
 if [ "$MODE" = red ]; then check o4 $rc 64 "=" "grep -q '\"kind\":\"UsageError\"' o.txt|envelope on stdout" "! same F F.orig|F destroyed"
 else check o4 $rc 1 "=mk: cannot write the output: F: File too large (os error 27). F is unchanged." "[ ! -s o.txt ]|stdout empty" "same F F.orig|F unchanged"; fi
+if [ "$(id -u)" = 0 ]; then echo "SKIP o12 (root ignores directory modes)"
+else
 fresh; printf 'PRIOR\n' > ro/F; chmod 644 ro/F; cp ro/F ro.orig; chmod 555 ro; "$MK" "${ENC[@]}" --out ro/F >o.txt 2>e.txt; rc=$?; chmod 755 ro
 if [ "$MODE" = red ]; then check o12 $rc 0 "~note: stdout is watch-only" "same ro/F card.ref|written in place"
 else check o12 $rc 1 "=mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged." "same ro/F ro.orig|ro/F unchanged"; fi
+fi
 fresh; printf 'OLD BACKUP\n' > s.txt; bash -c "trap '' XFSZ; exec prlimit --fsize=8 \"\$@\"" _ "$MK" "${ENC[@]}" --out /dev/stdout >>s.txt 2> >(cat > e.txt); rc=$?; sleep 0.5
 if [ "$MODE" = red ]; then check o20 $rc 64 "=error: --out /dev/stdout: File too large (os error 27)"
 else check o20 $rc 1 "~mk: cannot write the output: /dev/stdout: File too large (os error 27)" "o20_state_is_true|the state sentence is true of s.txt"; fi
@@ -151,6 +156,30 @@ fresh; chmod 644 F; "$MK" "${ENC[@]}" --out F >o.txt 2>e.txt; rc=$?
 check o14 $rc 0 "-" "same F card.ref|F overwritten" "[ \$(stat -c %a F) = 600 ]|F tightened to 0600" "notmp|no temp left"
 fresh; "$MK" "${ENC[@]}" 2>e.txt | cat >o.txt; rc=${PIPESTATUS[0]}
 check o19 $rc 0 "-" "same o.txt card.ref|card on the pipe" "same keys keys.orig|keys untouched"
+
+# --- T7: --json --out writes both (R6) and stdout must not be --out (R4, X3)
+X3M="--out F and standard output are the same file (the same path, a symlink or a hard link), so what mk prints on stdout would go into the file it writes. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name."
+fresh; rm -f F; "$MK" "${ENC[@]}" --json --out F >o.txt 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t1 $rc 0 "-" "same F json.ref|F holds the JSON" "[ ! -s o.txt ]|stdout empty"
+else check t1 $rc 0 "-" "same F card.ref|F holds the card" "same o.txt json.ref|JSON on stdout" "[ \$(stat -c %a F) = 600 ]|F is 0600"; fi
+fresh; rm -f F; "$MK" "${ENC[@]}" --json --group-size 5 --out F >o.txt 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t2 $rc 0 "-" "same F json.ref|F holds the JSON"
+else check t2 $rc 0 "-" "same F card5.ref|F grouped" "same o.txt json.ref|JSON unbroken on stdout"; fi
+fresh; rm -f G; "$MK" "${ENC[@]}" --json --out G >>keys 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t3 $rc 0 "-" "same keys keys.orig|keys untouched (JSON went to G)"
+else check t3 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged" "[ ! -e G ]|G absent"; fi
+fresh; "$MK" "${ENC[@]}" --json --out keys >>keys 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t4 $rc 0 "-" "! same keys keys.orig|keys replaced"
+else check t4 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged (no envelope appended)"; fi
+fresh; rm -f G; "$MK" encode --in keys --policy-id-stub zz --json --out G >>keys 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t5 $rc 64 "-" "! same keys keys.orig|envelope appended to keys"
+else check t5 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged"; fi
+fresh; rm -f F; "$MK" "${ENC[@]}" --json --out F >F 2>e.txt; rc=$?
+if [ "$MODE" = red ]; then check t6 $rc 0 "-" "same F json.ref|F holds the JSON"
+else check t6 $rc 64 "=" "grep -qF '\"message\":\"$X3M\"' F|F holds the X3 envelope"; fi
+fresh; rm -f F; "$MK" "${ENC[@]}" --json --out F 2>e.txt | cat >o.txt; rc=${PIPESTATUS[0]}
+if [ "$MODE" = red ]; then check t7 $rc 0 "-" "[ ! -s o.txt ]|nothing on the pipe"
+else check t7 $rc 0 "-" "same F card.ref|F holds the card" "same o.txt json.ref|JSON on the pipe"; fi
 
 echo "rows: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

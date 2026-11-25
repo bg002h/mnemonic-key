@@ -60,7 +60,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
 ## 2. Spec delta (behaviour)
 
 - **R1 (I1, T5): the registry pin.** `crates/mk-cli/Cargo.toml:68` `mnemonic-io-lib = "0.1.0"` becomes
-  `mnemonic-io-lib = "0.1.2"`. `Cargo.lock` follows (`cargo update -p mnemonic-io-lib`): its one `mnemonic-io-lib`
+  `mnemonic-io-lib = "0.1.2"`. `Cargo.lock` follows (`cargo update -p mnemonic-io-lib --precise 0.1.3`): its one `mnemonic-io-lib`
   entry becomes version `0.1.2`, source `registry+https://github.com/rust-lang/crates.io-index`, with crates.io's
   checksum. `vendor/` is regenerated with `cargo vendor --locked vendor/` and committed with the lock
   (`vendor/mnemonic-io-lib` becomes 0.1.2; `ci/repro/vendor-freshness.sh` must pass; no `vendor-git-sources.txt` row,
@@ -108,7 +108,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   Implementation note (builder's choice): the encode arm may print through `crate::out::stderr_write` and return
   `Ok(1)`, which `main` passes through `out::exit_code` unchanged; or add a `CliError` variant whose rendering is this
   line in both modes. The stdout sink's own line (`mk: cannot write the output: <error>`, `out.rs:80`) is unchanged.
-- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, or `--json` is given (stdout then carries the JSON or an error envelope), the R2 check runs with `out` = `Endpoint::Stdout` and the same `inputs`, BEFORE the R2 `--out` check. On a match mk refuses with text X2, exit **64**,
+- **R4 (I6 widened to stdout; architect point 4): stdout must not be an input.** When `--out` is not given, or `--json` is given (stdout then carries the JSON or an error envelope), the R2 check runs with `out` = `Endpoint::Stdout` and the same `inputs`, BEFORE the R2 `--out` check. Then, when `--json` and `--out` are both given, mk asks `same_file(Endpoint::Stdout, [Endpoint::Path(--out)])`; on a match it refuses with X3, exit 64, as mk's usual `--json` error envelope on stdout (stdout is FILE, not an input, so FILE then holds the envelope; the shell had already emptied it), as ms #11 R3 does. On a match mk refuses with text X2, exit **64**,
   and writes nothing to stdout. X2 is printed on **stderr in both modes**: in `--json` mode it is NOT an envelope on
   stdout, because stdout is the input file and an envelope there would be written into it. This refuses
   `mk encode --in K ... >>K`, `>K` (the shell has already emptied K; X2 replaces the misleading "no key records found"),
@@ -137,7 +137,7 @@ returns EFBIG; this stands in for a full disk or quota), with stdout and stderr 
   `/// Write the mk1 artifact to FILE, created 0600, instead of to stdout.`
   `/// OVERWRITES an existing file (operator ruling, 2026-08-26); a failed write`
   `/// leaves it unchanged. Refused when FILE is one of the inputs (`--in`,`
-  `/// `--keys`, `--from-md1-set`). SPEC §6b.`
+  `/// `--keys`, `--from-md1-set`). With --json, FILE gets the mk1 strings and the JSON goes to stdout. SPEC §6b.`
 - **M1, toolkit manual `docs/manual/src/40-cli-reference/44-mk-cli.md:42` (the `mk encode` `--out` row, toolkit master
   e30985a5), PROPOSED, whole row:**
   ``| `--out <FILE>` | write the mk1 artifact to FILE, created `0600`, instead of stdout; the file holds exactly what stdout would without `--json` (grouped under `--group-size`); with `--json` the file still gets the mk1 string(s) and the JSON goes to stdout; overwrites an existing file (operator ruling 2026-08-26). The new contents go to a temporary `FILE.<pid>.<n>.tmp` beside FILE that then replaces it, so a failed write leaves an existing FILE unchanged, FILE's directory must be writable, and a run killed mid-write can leave that owner-only temporary behind. A symlink is followed and its target replaced. FILE may not be one of the inputs (`--in`, `--keys`, `--from-md1-set`, or standard input): that is refused (exit `64`) before anything is read or written |``
@@ -156,9 +156,9 @@ listed in the author's report, not appended here.
 ## 4. TRACE rows (RED on the base 58701fb; GREEN after the build)
 
 The rows script `design/FIX_bh1119_mk_out_writes/rows.sh red|green` runs every row below as printed and checks it
-(the builder moves it to `scripts/mk-out-writes-rows.sh`). Measured: `red` on the base binary `rows: 21 passed, 0
-failed`; `green` on the base `rows: 4 passed, 17 failed` (only the four controls); `green` on the author's prototype
-(io-lib 0.1.2 path patch + R2-R4) `rows: 21 passed, 0 failed`; `red` on the prototype `rows: 4 passed, 17 failed`.
+(the builder moves it to `scripts/mk-out-writes-rows.sh`). Measured: `red` on the base binary `rows: 28 passed, 0
+failed`; `green` on the base `rows: 4 passed, 24 failed` (only the four controls); `green` on the author's prototype
+(io-lib 0.1.2 path patch + R2-R4) `rows: 28 passed, 0 failed`; `red` on the prototype `rows: 4 passed, 24 failed`.
 The builder also writes each row as a nextest test in `crates/mk-cli/tests/bh1119_mk_out_writes.rs`, named exactly as
 the "test" column `crates/mk-cli/tests/bh1119_mk_out_writes.rs` starts with `#![cfg(unix)]` (as `tests/channels.rs` gates its `--out` tests: on Windows io-lib's `same_file` detects no hard link and no redirected stdin/stdout, and the mode and read-only-directory rows are Unix semantics); the FSIZE8 rows o1, o2, o4 and o20 are also `#[cfg(target_os = "linux")]` (`prlimit`); o12 returns early, passing, when `libc::geteuid() == 0` (root ignores directory modes; ms #11 o6 does the same), and rows.sh skips o12 under root the same way. On Linux the count stays as section 5 says.. In every row: `ENC` =
 `mk encode --in keys --policy-id-stub deadbeef`; `keys` holds the one key record; `F` holds `PRIOR-CARD\n`; `R` =
@@ -206,8 +206,8 @@ None (measured): the prototype (R1-R4, no new test) ran the workspace suite at `
 (`cargo nextest run --workspace --build-jobs 6 -j 6`; not `--locked` there only because the `[patch]` rewrote the
 lock). The existing `--out` tests (`tests/channels.rs` `out_creates_the_artifact_owner_only`,
 `out_tightens_an_existing_world_readable_target`, `out_overwrites_and_truncates`, `out_does_not_suppress_the_card`;
-`tests/output_errors.rs`) pass unchanged. New: `crates/mk-cli/tests/bh1119_mk_out_writes.rs` with the 21 tests of
-section 4, so the GREEN suite is **545 tests run: 545 passed** (524 + 21).
+`tests/output_errors.rs`) pass unchanged. New: `crates/mk-cli/tests/bh1119_mk_out_writes.rs` with the 28 tests of
+section 4, so the GREEN suite is **552 tests run: 552 passed** (524 + 28).
 
 ## 6. FOLLOWUPS (listed in the author's report in the format of `coordinator/docs/followups-format.md`; not appended here)
 
@@ -219,14 +219,14 @@ write of a standard-stream name over a regular file.
 
 `scripts/fix-bh1119-mk-out-writes-gate.sh` (the builder commits it; it states what it does not cover) runs, every cargo
 call with `CARGO_BUILD_JOBS=6`:
-- `cargo search mnemonic-io-lib --limit 1` lists `0.1.2` (else STOP, before any build);
-- `cargo nextest run --locked --workspace --build-jobs 6 -j 6` expecting **545 tests run: 545 passed**;
+- `cargo search mnemonic-io-lib --limit 1` lists `0.1.3` (else STOP, before any build);
+- `cargo nextest run --locked --workspace --build-jobs 6 -j 6` expecting **552 tests run: 552 passed**;
 - `cargo test --locked --workspace --doc`; `cargo +1.95.0 fmt --check --all`;
   `cargo clippy --locked --workspace --all-targets -- -D warnings`;
 - `cargo nextest run --locked -p mk-cli --build-jobs 6 -j 6 -E 'binary(bh1119_mk_out_writes)'` expecting
-  **21 tests run: 21 passed** (a short or empty count is a FAIL);
-- `scripts/mk-out-writes-rows.sh green` expecting `rows: 21 passed, 0 failed`, and the same script `red` against a base
-  binary (`MK=<base mk>`) expecting `rows: 21 passed, 0 failed`;
+  **28 tests run: 28 passed** (a short or empty count is a FAIL);
+- `scripts/mk-out-writes-rows.sh green` expecting `rows: 28 passed, 0 failed`, and the same script `red` against a base
+  binary (`MK=<base mk>`) expecting `rows: 28 passed, 0 failed`;
 - the CI `fmt` job's other steps: `bash ci/docs-only.test.sh`, `sha256sum --check --strict ci/shared-ci.sha256`,
   `bash ci/code-docs-check.test.sh`, `bash ci/code-docs-check.sh`, `cd design && sha256sum -c
   display-grouping-vectors.tsv.sha256`;
