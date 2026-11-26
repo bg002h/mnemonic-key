@@ -849,3 +849,9 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
   - also the GUI manual `docs/manual-gui` `70-mk/*` and `32-run-and-output.md:63-69`, and any quoted `--help` text (each verb now ends with an "Exit status:" line).
 - Owner: the toolkit agent's manual pass for the cutover.
 - Status: `open`. Tier: `cross-repo`.
+
+### `mk1-mixed-chunk-set-id-exits-0` — chunks of two different sets that cover every index are reassembled (`cross-repo`)
+
+- Surfaced: 2026-11-26, the exit-code cutover's final review (mnemonic-engrave `design/agent-reports/exit-codes-2026-11-26/final-review-toolkit-gui.md` N5; `final-review-md-mk-ms.md` consistency table). Companion: mnemonic-toolkit `design/FOLLOWUPS.md` `mk1-mixed-chunk-set-id-exits-0`.
+- What: two mk1 chunks whose `chunk_set_id`s differ but whose indices together cover every index of the set exit 0 in `mk` (16 if corrected), and the same in `mnemonic`. md refuses chunks of two cards (2) and mr refuses strings of two chunk sets. Find whether the check is missing in mk-codec's reassembly or only in mk-cli's grouping, then refuse (2) with a vector. Listed as an open question for Brian in the exit-code spec rev 6 §2b.
+- Status: `open`. Tier: `cross-repo`.
