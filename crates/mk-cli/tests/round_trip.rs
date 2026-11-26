@@ -125,7 +125,7 @@ fn vectors_subcommand_no_path_dep() {
     }
 }
 
-/// `mk verify` with a wrong `--xpub` must exit 4 (ContentMismatch).
+/// `mk verify` with a wrong `--xpub` must exit 1 (NO) (ContentMismatch).
 #[test]
 fn verify_content_mismatch_exits_4() {
     // Build a real mk1 string from V1 first.
@@ -147,8 +147,8 @@ fn verify_content_mismatch_exits_4() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        4,
-        "expected exit 4 ContentMismatch, got {code}; stderr={}",
+        1,
+        "expected exit 1 ContentMismatch, got {code}; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
 }

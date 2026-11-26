@@ -175,7 +175,7 @@ fn efbig(file: &str) -> String {
 fn bh_mk_i1_failed_replacement_preserves_old_card() {
     let e = Env::fresh();
     let o = e.enc(&["--out", "F"], Out::Pipe, true);
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     assert_eq!(err(&o), format!("{}. F is unchanged.", efbig("F")));
     assert_eq!(e.text("F"), "PRIOR-CARD\n");
     assert!(e.no_tmp());
@@ -187,7 +187,7 @@ fn i1_failed_write_leaves_an_absent_out_absent() {
     let e = Env::fresh();
     std::fs::remove_file(e.p("F")).unwrap();
     let o = e.enc(&["--out", "F"], Out::Pipe, true);
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     assert_eq!(err(&o), format!("{}. Nothing was written.", efbig("F")));
     assert!(!e.p("F").exists());
     assert!(e.no_tmp());
@@ -197,7 +197,7 @@ fn i1_failed_write_leaves_an_absent_out_absent() {
 fn i1_missing_directory_prints_the_t6_line() {
     let e = Env::fresh();
     let o = e.enc(&["--out", "nodir/F"], Out::Pipe, false);
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     assert_eq!(
         err(&o),
         "mk: cannot write the output: nodir/F: No such file or directory (os error 2). Nothing was written."
@@ -210,7 +210,7 @@ fn i1_missing_directory_prints_the_t6_line() {
 fn i1_json_failed_write_keeps_stdout_empty() {
     let e = Env::fresh();
     let o = e.enc(&["--json", "--out", "F"], Out::Pipe, true);
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     assert_eq!(err(&o), format!("{}. F is unchanged.", efbig("F")));
     assert!(o.stdout.is_empty(), "stdout: {}", out_s(&o));
     assert_eq!(e.text("F"), "PRIOR-CARD\n");
@@ -229,7 +229,7 @@ fn i1_read_only_directory_refused_file_unchanged() {
     std::fs::set_permissions(e.p("ro"), PermissionsExt::from_mode(0o555)).unwrap();
     let o = e.enc(&["--out", "ro/F"], Out::Pipe, false);
     std::fs::set_permissions(e.p("ro"), PermissionsExt::from_mode(0o755)).unwrap();
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     assert_eq!(
         err(&o),
         "mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged."
@@ -243,7 +243,7 @@ fn i1_stdio_alias_onto_a_file_names_no_state() {
     let e = Env::fresh();
     std::fs::write(e.p("s.txt"), "OLD BACKUP\n").unwrap();
     let o = e.enc(&["--out", "/dev/stdout"], Out::Append("s.txt"), true);
-    assert_eq!(code(&o), Some(1), "{}", err(&o));
+    assert_eq!(code(&o), Some(32), "{}", err(&o));
     let line = efbig("/dev/stdout");
     let s = e.text("s.txt");
     let got = err(&o);
@@ -268,7 +268,7 @@ fn x1(out: &str, input: &str) -> String {
 fn i6_out_same_path_as_in_refuses() {
     let e = Env::fresh();
     let o = e.enc(&["--out", "keys"], Out::Pipe, false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("keys", "--in keys"));
     assert_eq!(e.text("keys"), KEYS);
     assert!(o.stdout.is_empty());
@@ -279,7 +279,7 @@ fn i6_out_aliasing_source_refuses() {
     let e = Env::fresh();
     std::fs::hard_link(e.p("keys"), e.p("hl")).unwrap();
     let o = e.enc(&["--out", "hl"], Out::Pipe, false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("hl", "--in keys"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -289,7 +289,7 @@ fn i6_out_symlink_to_in_refuses() {
     let e = Env::fresh();
     symlink("keys", e.p("sl")).unwrap();
     let o = e.enc(&["--out", "sl"], Out::Pipe, false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("sl", "--in keys"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -311,7 +311,7 @@ fn i6_out_same_file_as_keys_refuses() {
         None,
         false,
     );
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("./keys", "--keys keys"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -333,7 +333,7 @@ fn i6_out_same_file_as_md1_set_refuses() {
         None,
         false,
     );
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("set.md1", "--from-md1-set set.md1"));
     assert_eq!(e.text("set.md1"), MD1);
 }
@@ -355,7 +355,7 @@ fn i6_out_same_file_as_stdin_refuses() {
         Some("keys"),
         false,
     );
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x1("keys", "standard input (--in -)"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -364,7 +364,7 @@ fn i6_out_same_file_as_stdin_refuses() {
 fn i6_json_out_refusal_is_an_envelope() {
     let e = Env::fresh();
     let o = e.enc(&["--json", "--out", "keys"], Out::Pipe, false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert!(o.stderr.is_empty(), "stderr: {}", err(&o));
     let want = format!("\"message\":\"--out keys is the same file as --in keys, {R}\"");
     assert!(out_s(&o).contains(&want), "stdout: {}", out_s(&o));
@@ -381,7 +381,7 @@ fn x2(input: &str) -> String {
 fn i6_stdout_appended_to_in_refuses() {
     let e = Env::fresh();
     let o = e.enc(&[], Out::Append("keys"), false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -390,7 +390,7 @@ fn i6_stdout_appended_to_in_refuses() {
 fn i6_json_stdout_refusal_goes_to_stderr() {
     let e = Env::fresh();
     let o = e.enc(&["--json"], Out::Append("keys"), false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
     assert_eq!(e.text("keys"), KEYS, "no envelope written into the input");
 }
@@ -399,7 +399,7 @@ fn i6_json_stdout_refusal_goes_to_stderr() {
 fn i6_stdout_truncating_in_refuses() {
     let e = Env::fresh();
     let o = e.enc(&[], Out::Truncate("keys"), false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
 }
 
@@ -412,7 +412,7 @@ fn i6_stdout_and_stdin_one_file_refuses() {
         Some("keys"),
         false,
     );
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("standard input (--in -)"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -499,7 +499,7 @@ fn i1_t7_json_out_grouped_file_unbroken_json() {
 fn i6_json_out_stdout_appended_to_in_refuses() {
     let e = Env::fresh();
     let o = e.enc(&["--json", "--out", "G"], Out::Append("keys"), false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
     assert_eq!(e.text("keys"), KEYS);
     assert!(!e.p("G").exists());
@@ -509,7 +509,7 @@ fn i6_json_out_stdout_appended_to_in_refuses() {
 fn i6_json_out_names_in_and_stdout_appends_to_it() {
     let e = Env::fresh();
     let o = e.enc(&["--json", "--out", "keys"], Out::Append("keys"), false);
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
     assert_eq!(e.text("keys"), KEYS, "no envelope appended");
 }
@@ -532,7 +532,7 @@ fn i6_json_usage_error_never_appends_to_in() {
         None,
         false,
     );
-    assert_eq!(code(&o), Some(64));
+    assert_eq!(code(&o), Some(8));
     assert_eq!(err(&o), x2("--in keys"));
     assert_eq!(e.text("keys"), KEYS);
 }
@@ -542,7 +542,7 @@ fn i1_t7_json_stdout_is_out_refused() {
     let e = Env::fresh();
     std::fs::remove_file(e.p("F")).unwrap();
     let o = e.enc(&["--json", "--out", "F"], Out::Truncate("F"), false);
-    assert_eq!(code(&o), Some(64), "{}", err(&o));
+    assert_eq!(code(&o), Some(8), "{}", err(&o));
     assert!(o.stderr.is_empty(), "stderr: {}", err(&o));
     let want = format!("\"message\":\"{X3}\"");
     assert!(e.text("F").contains(&want), "F: {}", e.text("F"));

@@ -46,7 +46,7 @@ fn warns(verb: &[&str], card: [&str; 2], e: &str) {
 #[test]
 fn kv_cli_verify_reports_invalid_depth1() {
     let o = mk(&["verify", LEGACY_D1[0], LEGACY_D1[1]]);
-    assert_eq!(o.status.code(), Some(1), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     assert_eq!(s(&o.stdout), "");
     assert_eq!(s(&o.stderr), format!("error: {D1_DISPLAY}\n"));
 }
@@ -54,7 +54,7 @@ fn kv_cli_verify_reports_invalid_depth1() {
 #[test]
 fn kv_cli_verify_json_kind_depth1() {
     let o = mk(&["verify", "--json", LEGACY_D1[0], LEGACY_D1[1]]);
-    assert_eq!(o.status.code(), Some(1), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["error"]["kind"], "OriginParentFingerprintMismatch");
 }
@@ -124,7 +124,7 @@ fn kv_cli_readers_sentinel_no_warning() {
         } else {
             assert_eq!(
                 o.status.code(),
-                Some(64),
+                Some(2),
                 "{verb:?} stderr: {}",
                 s(&o.stderr)
             );
@@ -156,5 +156,5 @@ fn kv_cli_encode_depth1_false_fp_refused_guard() {
         "--policy-id-stub",
         "deadbeef",
     ]);
-    assert_eq!(o.status.code(), Some(64), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
 }

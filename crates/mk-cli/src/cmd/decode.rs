@@ -89,7 +89,7 @@ fn emit_json(card: &KeyCard, chunks: usize, variant: &str) -> Result<()> {
         "code_variant": variant,
     });
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     println!("{s}");
     Ok(())
 }

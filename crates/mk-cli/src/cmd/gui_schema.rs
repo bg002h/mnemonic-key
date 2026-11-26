@@ -39,7 +39,7 @@ pub fn run(_args: GuiSchemaArgs) -> Result<u8> {
     let cmd = crate::Cli::command();
     let schema = build_schema(&cmd);
     let s = serde_json::to_string(&schema)
-        .map_err(|e| CliError::UsageError(format!("gui-schema serialize: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("gui-schema serialize: {e}")))?;
     println!("{s}");
     Ok(0)
 }

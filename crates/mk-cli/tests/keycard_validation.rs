@@ -1,5 +1,5 @@
 //! FIX_mkc_keycard_validation rows C1-C9 (bughunt-1119 mk I8, I9; ruling T46):
-//! mk encode refuses, mk verify reports invalid (exit 1), mk decode warns.
+//! mk encode refuses, mk verify reports invalid (exit 2), mk decode warns.
 use assert_cmd::cargo::CommandCargoExt;
 use std::process::{Command, Output};
 
@@ -45,7 +45,7 @@ fn kv_cli_i8_encode_refuses_invalid_master() {
         "--policy-id-stub",
         "deadbeef",
     ]);
-    assert_eq!(o.status.code(), Some(64), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     assert_eq!(s(&o.stdout), "");
     assert_eq!(s(&o.stderr), I8_ENCODE_ERR);
 }
@@ -63,14 +63,14 @@ fn kv_cli_i8_encode_refuses_invalid_master_with_own_fp() {
         "--policy-id-stub",
         "deadbeef",
     ]);
-    assert_eq!(o.status.code(), Some(64), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     assert_eq!(s(&o.stderr), I8_ENCODE_ERR);
 }
 
 #[test]
 fn kv_cli_verify_reports_invalid_master_i8() {
     let o = mk(&["verify", LEGACY_I8[0], LEGACY_I8[1]]);
-    assert_eq!(o.status.code(), Some(1), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     assert_eq!(s(&o.stdout), "");
     assert_eq!(s(&o.stderr), format!("error: {I8_DISPLAY}\n"));
 }
@@ -78,11 +78,11 @@ fn kv_cli_verify_reports_invalid_master_i8() {
 #[test]
 fn kv_cli_verify_json_reports_invalid_master_i9() {
     let o = mk(&["verify", "--json", LEGACY_I9[0], LEGACY_I9[1]]);
-    assert_eq!(o.status.code(), Some(1), "stdout: {}", s(&o.stdout));
+    assert_eq!(o.status.code(), Some(2), "stdout: {}", s(&o.stdout));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["error"]["kind"], "MasterFingerprintMismatch");
     assert_eq!(v["error"]["message"], I9_DISPLAY);
-    assert_eq!(v["error"]["exit_code"], 1);
+    assert_eq!(v["error"]["exit_code"], 2);
 }
 
 #[test]

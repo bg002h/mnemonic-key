@@ -16,7 +16,8 @@ use crate::cmd::derive_support::{
     is_fixed_key_card, render_address, secp_verify,
 };
 use crate::cmd::{
-    chunk_set_id_comparison, read_mk1_strings, warn_chunk_set_id_mismatch, warn_if_invalid,
+    chunk_set_id_comparison, correction_counts, read_mk1_strings, warn_chunk_set_id_mismatch,
+    warn_corrections_applied, warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -80,11 +81,16 @@ impl ChainSel {
 
 /// Run `mk address`.
 pub fn run(args: AddressArgs) -> Result<u8> {
+    // Exit-code spec R2: `--count`/`--range` are settings judged from the
+    // command line alone, so a bad one is 64 before any input is read.
+    let indices = resolve_indices(args.count, args.range.as_deref())?;
     let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
     let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let card = mk_codec::decode(&refs)?;
     // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
     warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
+    // Exit-code spec R6: a correction this verb used sets REPAIRED (16).
+    warn_corrections_applied(&correction_counts(&strings));
     // bh-mk-C1: a fixed-key card has no child keys any wallet watches; refuse first.
     if is_fixed_key_card(&card.xpub) {
         return Err(fixed_key_refusal(
@@ -108,7 +114,6 @@ pub fn run(args: AddressArgs) -> Result<u8> {
         );
     }
 
-    let indices = resolve_indices(args.count, args.range.as_deref())?;
     let secp = secp_verify();
 
     // (chain, index, address) in chain-major order (receive before change).
@@ -128,7 +133,7 @@ pub fn run(args: AddressArgs) -> Result<u8> {
             ]
             .into();
             let child = card.xpub.derive_pub(&secp, &dp).map_err(|e| {
-                CliError::UsageError(format!("derivation failed at m/{chain}/{index}: {e}"))
+                CliError::Invalid(format!("derivation failed at m/{chain}/{index}: {e}"))
             })?;
             rows.push((
                 chain,
@@ -157,7 +162,8 @@ fn resolve_address_type(
     explicit: Option<AddressType>,
 ) -> Result<AddressType> {
     match infer_address_type(origin_path) {
-        AddressTypeInference::Multisig => Err(CliError::UsageError(format!(
+        // The card is wrong for this verb and no flag waives it: INVALID.
+        AddressTypeInference::Multisig => Err(CliError::Invalid(format!(
             "card origin {origin_path} is a multisig cosigner xpub (BIP-48/BIP-87); single-key \
              addresses would not match the wallet. Derive the wallet's addresses from its md1 \
              policy card and every cosigner's mk1 card: `md address <MD1>... --from-mk1-file \
@@ -171,7 +177,9 @@ fn resolve_address_type(
             }
             match inference {
                 AddressTypeInference::Inferred(t) => Ok(t),
-                _ => Err(CliError::UsageError(format!(
+                // The card's origin does not say: insufficient input for
+                // the verb (spec §3 test 6), 2. `--address-type` supplies it.
+                _ => Err(CliError::Invalid(format!(
                     "--address-type required: cannot infer an address type from card origin \
                      {origin_path} (only canonical single-sig account paths \
                      m/{{44,49,84,86}}'/<coin>'/<account>' auto-infer)"
@@ -192,7 +200,8 @@ fn resolve_network(xpub: &Xpub, explicit: Option<CliNetwork>) -> Result<CliNetwo
         }),
         Some(net) => {
             if net.network_kind() != kind {
-                return Err(CliError::UsageError(format!(
+                // A network mismatch: REFUSED (8, spec decision 1).
+                return Err(CliError::Refused(format!(
                     "--network {} disagrees with the xpub's network ({}); refusing to render \
                      wrong-network addresses",
                     net.label(),
@@ -299,7 +308,7 @@ fn emit_json(
         "addresses": addresses,
     });
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     println!("{s}");
     Ok(())
 }

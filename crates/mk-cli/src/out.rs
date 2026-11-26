@@ -6,8 +6,8 @@
 //! the output instead. A reader that closed the pipe (`mk … | head -3`,
 //! `ErrorKind::BrokenPipe`) only stops it: the exit code is the verb's own.
 //! Any other stdout error (a full disk, `> /dev/full`) is kept, and `main`
-//! prints "mk: cannot write the output: <error>" and exits 1 (crash sweep F1,
-//! grade-mk-crash-sweep-1). A stderr write error is ignored.
+//! prints "mk: cannot write the output: <error>" and adds 32 (IO) to the
+//! verb's code (exit-code spec R8; crash sweep F1, grade-mk-crash-sweep-1). A stderr write error is ignored.
 //! `tests/output_errors.rs` pins both cases and that no other file of the
 //! crate names stdout.
 
@@ -128,15 +128,15 @@ pub(crate) fn stderr_write(args: std::fmt::Arguments<'_>) {
 }
 
 /// The process exit code: `code`, unless a stdout write failed for a reason
-/// other than a closed pipe. Then the error is printed, and a code that says
-/// the output is the result (0, and `repair`'s 5) becomes 1; a failing code
-/// is kept.
+/// other than a closed pipe. Then the error is printed and IO (32) is added
+/// to the other bits (spec R8: it adds, it does not replace); 64 and 101
+/// never combine and are kept.
 pub(crate) fn exit_code(code: u8) -> u8 {
     match WRITE_ERROR.get() {
         None => code,
         Some(e) => {
             stderr_write(format_args!("mk: cannot write the output: {e}\n"));
-            if code == 0 || code == 5 { 1 } else { code }
+            crate::exit::add(code, crate::exit::IO)
         }
     }
 }

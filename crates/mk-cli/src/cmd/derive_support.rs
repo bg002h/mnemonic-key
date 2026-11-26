@@ -41,7 +41,8 @@ pub fn fixed_key_refusal(
         text.push_str(" --network ");
         text.push_str(net);
     }
-    CliError::UsageError(text)
+    // The card is wrong for the verb and no flag waives it: INVALID (2).
+    CliError::Invalid(text)
 }
 
 /// Single-key address script type. clap values: `p2pkh|p2sh-p2wpkh|p2wpkh|p2tr`.

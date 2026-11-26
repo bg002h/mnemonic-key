@@ -429,7 +429,7 @@ fn in_accepts_a_grouped_card() {
     assert_eq!(a, b, "a grouped card must decode as the unbroken one does");
 }
 
-/// An empty `--in` is refused, and the refusal names channels that EXIST
+/// An empty `--in` is refused (exit 2), and the refusal names channels that EXIST
 /// (§6h). Before this entry the message could not mention `--in`, because
 /// there was none.
 #[test]
@@ -441,7 +441,11 @@ fn an_empty_in_is_refused_and_the_remedy_is_executable() {
         .args(["decode", "--in", f.to_str().unwrap()])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(64), "usage error");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "empty input is invalid (exit-code spec decision 3)"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     // Same vacuity guard as above: clap's unknown-flag error names --in too.
     assert!(

@@ -126,7 +126,7 @@ impl Slip132Variant {
 pub fn detect_and_normalize(s: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
     use Slip132Variant::*;
     let from_str = |s: &str| -> Result<Xpub> {
-        Xpub::from_str(s).map_err(|e| CliError::UsageError(format!("invalid xpub {s:?}: {e}")))
+        Xpub::from_str(s).map_err(|e| CliError::Invalid(format!("invalid xpub {s:?}: {e}")))
     };
     let Ok(data) = base58::decode_check(s) else {
         return Ok((from_str(s)?, None));

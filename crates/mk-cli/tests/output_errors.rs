@@ -4,8 +4,8 @@
 //! - A reader that closed the pipe only stops the output: no text, no
 //!   signal, the exit code is the verb's own.
 //! - Any other write error (`/dev/full`, ENOSPC), from a verb or `--help`:
-//!   "mk: cannot write the output: <error>" on stderr, exit 1; a verb that
-//!   was already failing keeps its code.
+//!   "mk: cannot write the output: <error>" on stderr, and 32 (IO) is ADDED
+//!   to the verb's own code (exit-code spec R8); 64 never combines.
 //! - No file of the crate but `src/out.rs` names stdout.
 #![cfg(target_os = "linux")]
 
@@ -126,7 +126,7 @@ fn s(v: &[&str]) -> Vec<String> {
 }
 
 #[test]
-fn full_stdout_exits_1_with_the_line() {
+fn full_stdout_exits_32_with_the_line() {
     let c = card();
     for a in [
         s(&["gui-schema"]),
@@ -144,16 +144,16 @@ fn full_stdout_exits_1_with_the_line() {
         s(&["--version"]),
         s(&["decode", "--help"]),
     ] {
-        full_case(&a, 1);
+        full_case(&a, 32);
     }
 }
 
 #[test]
-fn full_stdout_after_a_repair_exits_1_not_5() {
+fn full_stdout_after_a_repair_adds_32_to_16() {
     let d = damaged();
     let o = mk().args(args(&["repair"], &d)).output().unwrap();
-    assert_eq!(o.status.code(), Some(5), "fixture: repair should exit 5");
-    full_case(&args(&["repair"], &d), 1);
+    assert_eq!(o.status.code(), Some(16), "fixture: repair should exit 16");
+    full_case(&args(&["repair"], &d), 48);
 }
 
 #[test]
@@ -163,9 +163,10 @@ fn full_stdout_keeps_a_failing_code() {
         &args(&["address", "--json", "--count", "1000001"], &card()),
         64,
     );
-    // A content mismatch in --json mode prints its envelope on stdout (exit 4).
+    // A content mismatch in --json mode prints its envelope on stdout (exit
+    // 1); the failed write adds 32.
     const OTHER: &str = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
-    full_case(&args(&["verify", "--json", "--xpub", OTHER], &card()), 4);
+    full_case(&args(&["verify", "--json", "--xpub", OTHER], &card()), 33);
 }
 
 #[test]
@@ -181,7 +182,7 @@ fn closed_reader_exits_with_the_verbs_code() {
     ] {
         closed_case(&a, 0, false);
     }
-    closed_case(&args(&["repair"], &damaged()), 5, false);
+    closed_case(&args(&["repair"], &damaged()), 16, false);
 }
 
 #[test]
@@ -220,7 +221,7 @@ fn only_out_rs_names_stdout() {
 /// std's stdout reports EBADF as a successful write, so a stdout opened
 /// read-only (`mk gui-schema 1</dev/null`) lost the output and exited 0.
 #[test]
-fn read_only_stdout_exits_1_with_the_line() {
+fn read_only_stdout_exits_32_with_the_line() {
     const BADF: &str = "mk: cannot write the output: Bad file descriptor (os error 9)";
     let on_read_only = |a: &[String]| {
         let ro = std::fs::File::open("/dev/null").unwrap();
@@ -232,12 +233,12 @@ fn read_only_stdout_exits_1_with_the_line() {
     };
     let c = card();
     for (a, code) in [
-        (s(&["gui-schema"]), 1),
-        (s(&ENCODE), 1),
-        (args(&["decode"], &c), 1),
-        (s(&["--help"]), 1),
-        (s(&["--version"]), 1),
-        (args(&["repair"], &damaged()), 1),
+        (s(&["gui-schema"]), 32),
+        (s(&ENCODE), 32),
+        (args(&["decode"], &c), 32),
+        (s(&["--help"]), 32),
+        (s(&["--version"]), 32),
+        (args(&["repair"], &damaged()), 48),
         // A failing verb keeps its code (the --json usage envelope, 64).
         (args(&["address", "--json", "--count", "1000001"], &c), 64),
     ] {
@@ -257,7 +258,7 @@ fn read_only_stdout_exits_1_with_the_line() {
 /// Linux accepts access mode 3 (`O_WRONLY | O_RDWR`): the fd can neither read
 /// nor write, and a write gets EBADF, which std reports as a success.
 #[test]
-fn no_access_mode_stdout_exits_1_with_the_line() {
+fn no_access_mode_stdout_exits_32_with_the_line() {
     const BADF: &str = "mk: cannot write the output: Bad file descriptor (os error 9)";
     let fd = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_ACCMODE) };
     assert!(fd >= 0);
@@ -268,7 +269,7 @@ fn no_access_mode_stdout_exits_1_with_the_line() {
         .output()
         .unwrap();
     let err = String::from_utf8_lossy(&o.stderr);
-    assert_eq!(o.status.code(), Some(1), "{err}");
+    assert_eq!(o.status.code(), Some(32), "{err}");
     assert_eq!(err.lines().last(), Some(BADF), "{err}");
 }
 
@@ -298,11 +299,11 @@ fn read_write_stdout_keeps_the_output_and_exits_0() {
 }
 
 /// `mk … >&-`: with fd 1 closed, std's runtime puts `/dev/null` on it before
-/// `main`, so the output was lost with exit 0. A verb that prints exits 1 with
+/// `main`, so the output was lost with exit 0. A verb that prints adds 32 with
 /// the EBADF line, like a read-only stdout; one that prints nothing keeps its
 /// code.
 #[test]
-fn closed_stdout_exits_1_with_the_line() {
+fn closed_stdout_exits_32_with_the_line() {
     const BADF: &str = "mk: cannot write the output: Bad file descriptor (os error 9)";
     let closed = |a: &[String]| {
         Command::new("sh")
@@ -316,12 +317,12 @@ fn closed_stdout_exits_1_with_the_line() {
     };
     let c = card();
     for (a, code) in [
-        (s(&["gui-schema"]), 1),
-        (s(&ENCODE), 1),
-        (args(&["decode"], &c), 1),
-        (s(&["--help"]), 1),
-        (s(&["--version"]), 1),
-        (args(&["repair"], &damaged()), 1),
+        (s(&["gui-schema"]), 32),
+        (s(&ENCODE), 32),
+        (args(&["decode"], &c), 32),
+        (s(&["--help"]), 32),
+        (s(&["--version"]), 32),
+        (args(&["repair"], &damaged()), 48),
         (args(&["address", "--json", "--count", "1000001"], &c), 64),
     ] {
         let o = closed(&a);

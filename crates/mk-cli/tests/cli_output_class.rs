@@ -233,7 +233,7 @@ fn flip_at(chunk: &str, pos: usize) -> String {
 
 #[test]
 fn repair_emits_watch_only_advisory() {
-    // Corrupt one data-region symbol so BCH correction fires (exit 5).
+    // Corrupt one data-region symbol so BCH correction fires (exit 16).
     let chunks = mk1_fixture();
     let corrupted = flip_at(&chunks[0], 5);
     let out = Command::cargo_bin("mk")
@@ -243,8 +243,8 @@ fn repair_emits_watch_only_advisory() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(5),
-        "expected exit 5 (correction applied); stderr={}",
+        Some(16),
+        "expected exit 16 (correction applied); stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stderr = String::from_utf8(out.stderr).unwrap();

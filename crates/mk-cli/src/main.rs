@@ -12,6 +12,9 @@ mod out;
 
 mod cmd;
 mod error;
+// A mirror of the shared constants: not every one is used by `mk`.
+#[allow(dead_code)]
+mod exit;
 mod format;
 mod keyfile;
 mod output_advisory;
@@ -29,7 +32,8 @@ use error::{CliError, Result};
 #[command(
     name = "mk",
     version,
-    about = "mk — engrave-friendly Bitcoin xpub backups (mk1 format)"
+    about = "mk — engrave-friendly Bitcoin xpub backups (mk1 format)",
+    after_help = exit::HELP_LEGEND
 )]
 pub(crate) struct Cli {
     #[command(subcommand)]
@@ -50,7 +54,7 @@ enum Command {
     Vectors(cmd::vectors::VectorsArgs),
     /// Emit machine-readable JSON describing the CLI surface (for mnemonic-gui).
     GuiSchema(cmd::gui_schema::GuiSchemaArgs),
-    /// Repair mk1 strings via BCH error correction (exit 5 = REPAIR_APPLIED).
+    /// Repair mk1 strings via BCH error correction (exit 16 = a correction was applied).
     Repair(cmd::repair::RepairArgs),
     /// Render receive/change addresses controlled by a card's xpub (read-only).
     Address(cmd::address::AddressArgs),
@@ -69,8 +73,10 @@ fn main() -> ExitCode {
             // Clap returns Err for two non-error terminations: --version
             // (ErrorKind::DisplayVersion) and --help (ErrorKind::DisplayHelp).
             // Output is on stdout and the canonical Unix exit is 0. The
-            // catch-all 64 below preserves the carve-out for real parse
-            // errors.
+            // catch-all 64 (USAGE) below is every real parse error: mk takes
+            // no input VALUE through a clap value parser (every card, key,
+            // fingerprint and path arrives as a string and is judged by the
+            // verb), so no clap error here is an input error (spec decision 2).
             // --help and --version go to stdout under the same write-error
             // rule as the verbs (`out`); a parse error goes to stderr.
             if e.use_stderr() || !out::read_only() {
@@ -84,7 +90,7 @@ fn main() -> ExitCode {
                 clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
                     ExitCode::from(out::exit_code(0))
                 }
-                _ => ExitCode::from(64),
+                _ => ExitCode::from(exit::USAGE),
             };
         }
     };
@@ -104,11 +110,19 @@ fn main() -> ExitCode {
         Command::GenMan(a) => cmd::gen_man::run(a),
     };
 
+    // Spec R6/R1: a verb that used a BCH-corrected value adds REPAIRED to
+    // whatever else it reports (17 = a verify mismatch on a corrected card).
+    let repaired = if cmd::correction_used() {
+        exit::REPAIRED
+    } else {
+        0
+    };
     let code = match result {
-        Ok(code) => code,
+        Ok(code) => exit::add(code, repaired),
         Err(e) => {
-            emit_error(&e, json_mode);
-            e.exit_code()
+            let code = exit::add(e.exit_code(), repaired);
+            emit_error(&e, json_mode, code);
+            code
         }
     };
     ExitCode::from(out::exit_code(code))
@@ -129,11 +143,12 @@ fn is_json_mode(cmd: &Command) -> bool {
     }
 }
 
-fn emit_error(e: &CliError, json_mode: bool) {
+fn emit_error(e: &CliError, json_mode: bool, code: u8) {
     if json_mode {
         // JSON-mode errors go to stdout (one stream) -- a CLI convention pinned by
-        // tests; the format SPEC has no section on it (see error.rs).
-        println!("{}", e.json_envelope(e.exit_code()));
+        // tests; the format SPEC has no section on it (see error.rs). The
+        // envelope carries the process's exit status (spec R14).
+        println!("{}", e.json_envelope(code));
     } else {
         let mut stderr = std::io::stderr().lock();
         writeln!(stderr, "{e}").ok();

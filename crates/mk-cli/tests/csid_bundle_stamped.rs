@@ -157,7 +157,7 @@ fn repair_of_a_bundle_card_does_not_warn() {
         "mk1qpg397pp3c8ma0myvvm7myaups8nhpplea7jtz09ajyyw48xgqsz02ysk3l6fyxg6m66tmvhzh70a",
     ];
     let o = run(&["repair"], &damaged);
-    assert_eq!(o.status.code(), Some(5), "{}", err(&o));
+    assert_eq!(o.status.code(), Some(16), "{}", err(&o));
     assert!(out(&o).contains(SINGLE_SIG[1]), "{}", out(&o));
     assert!(!err(&o).contains(WARN), "repair warned: {}", err(&o));
 }

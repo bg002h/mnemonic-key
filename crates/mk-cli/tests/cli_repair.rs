@@ -3,7 +3,7 @@
 //!
 //! Covers all 7 cells locked in the plan:
 //!   1. `repair_already_valid_input_exits_0`
-//!   2. `repair_one_substitution_exits_5`
+//!   2. `repair_one_substitution_exits_16`
 //!   3. `repair_beyond_t4_capacity_exits_2`
 //!   4. `repair_hrp_mismatch_exits_2` — NO Levenshtein suggestion (single-HRP)
 //!   5. `repair_long_code_happy_path` — 108-data-part chunk corruption
@@ -97,10 +97,10 @@ fn repair_already_valid_input_exits_0() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Cell 2: one substitution → exit 5, 1 correction reported.
+// Cell 2: one substitution → exit 16, 1 correction reported.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn repair_one_substitution_exits_5() {
+fn repair_one_substitution_exits_16() {
     let chunks = generate_valid_mk1_chunks();
     // Use the regular-code chunk (index 1) and flip 1 char at data-part pos 5.
     let valid = &chunks[1];
@@ -114,8 +114,8 @@ fn repair_one_substitution_exits_5() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 (REPAIR_APPLIED); stderr={}",
+        16,
+        "expected exit 16 (REPAIRED); stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -229,8 +229,8 @@ fn repair_long_code_happy_path() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for long-code 1-substitution repair; stderr={}",
+        16,
+        "expected exit 16 for long-code 1-substitution repair; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -274,8 +274,8 @@ fn repair_stdin_input_via_dash() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for stdin-with-corrupted-input; stderr={}",
+        16,
+        "expected exit 16 for stdin-with-corrupted-input; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -426,8 +426,8 @@ fn repair_json_envelope_shape() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for JSON-mode repair; stderr={}",
+        16,
+        "expected exit 16 for JSON-mode repair; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
 
@@ -494,7 +494,7 @@ fn repair_json_envelope_shape() {
 // BCH-valid single string whose bytecode does not decode. After a 1-char
 // correction the group is complete (1 member) and MUST be re-decoded and
 // refused (exit 2, SetReassemblyMismatch), not emitted as an UNVERIFIED
-// candidate (exit 5).
+// candidate (exit 20).
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn repair_corrected_single_string_that_fails_decode_exits_2() {

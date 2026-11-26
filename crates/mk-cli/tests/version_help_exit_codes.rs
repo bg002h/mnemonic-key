@@ -66,3 +66,36 @@ fn unknown_flag_exits_64() {
         .failure()
         .code(64);
 }
+
+/// Exit-code spec R11: the root `--help` ends with the constellation legend,
+/// word for word (clap may wrap it; compare with whitespace collapsed).
+#[test]
+fn root_help_ends_with_the_exit_status_legend() {
+    const LEGEND: &str = "Exit status: 0 = done, every check passed. 64 = bad command line, \
+nothing ran. 101 = internal error. 130 = stopped by the operator. Other codes from 128 up = killed \
+by a signal. Otherwise the sum (1 to 63) of: 1 a check said no; 2 an input is invalid; 4 verify the \
+result before trusting it; 8 refused (network mismatch, secret on the command line, unsafe output); \
+16 a correction was applied; 32 a file, device or helper failed.";
+    let out = Command::cargo_bin("mk")
+        .unwrap()
+        .arg("--help")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let text = String::from_utf8(out.stdout).unwrap();
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.ends_with(LEGEND), "root --help ends with: {text}");
+}
+
+/// A non-UTF-8 argument is a bad command line: 64, nothing ran.
+#[cfg(unix)]
+#[test]
+fn non_utf8_argv_is_64() {
+    use std::os::unix::ffi::OsStrExt;
+    Command::cargo_bin("mk")
+        .unwrap()
+        .arg("decode")
+        .arg(std::ffi::OsStr::from_bytes(b"\xff\xfe"))
+        .assert()
+        .code(64);
+}

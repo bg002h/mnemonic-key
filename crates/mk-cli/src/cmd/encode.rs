@@ -123,12 +123,6 @@ pub struct EncodeArgs {
 
 /// Run `mk encode`.
 pub fn run(args: EncodeArgs) -> Result<u8> {
-    // FIX_bh1119_mk_out_writes R2/R4: before anything is read or written, no
-    // output (stdout, or the --out file) may be one of the inputs.
-    if let Some(code) = refuse_output_that_is_an_input(&args)? {
-        return Ok(code);
-    }
-
     if args.privacy_preserving && args.origin_fingerprint.is_some() {
         return Err(CliError::UsageError(
             "--privacy-preserving and --origin-fingerprint are mutually exclusive".into(),
@@ -179,6 +173,37 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         }
     }
 
+    // Exit-code spec R2: every check on the command line alone (64) runs
+    // before any input is read or any output refused.
+    if args.policy_id_stub.is_empty() && args.from_md1.is_empty() && args.from_md1_set.is_empty() {
+        return Err(CliError::UsageError(
+            "at least one of --policy-id-stub or --from-md1 is required".into(),
+        ));
+    }
+    if key_source.is_none() {
+        if args.origin_fingerprint.is_none() && !args.privacy_preserving {
+            return Err(CliError::UsageError(
+                "pass --origin-fingerprint <hex> or --privacy-preserving explicitly".into(),
+            ));
+        }
+        if args.origin_path.is_none() {
+            return Err(CliError::UsageError(
+                "--origin-path is required (or use --keys)".into(),
+            ));
+        }
+        if args.xpub.is_none() {
+            return Err(CliError::UsageError(
+                "--xpub is required (or use --keys)".into(),
+            ));
+        }
+    }
+
+    // FIX_bh1119_mk_out_writes R2/R4: before anything is read or written, no
+    // output (stdout, or the --out file) may be one of the inputs.
+    if let Some(code) = refuse_output_that_is_an_input(&args)? {
+        return Ok(code);
+    }
+
     let mut stubs: Vec<[u8; 4]> = Vec::new();
     for s in &args.policy_id_stub {
         stubs.push(parse_stub_hex(s)?);
@@ -223,7 +248,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
     // to an earlier one, whichever channels supplied the two.
     for (i, s) in stubs.iter().enumerate() {
         if stubs[..i].contains(s) {
-            return Err(CliError::UsageError(format!(
+            return Err(CliError::Invalid(format!(
                 "policy stub {} is bound twice; a card lists each policy once, so a stub \
                  repeated across --policy-id-stub, --from-md1 and --from-md1-set is refused \
                  and no card was minted.",
@@ -286,7 +311,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             && path.into_iter().count() == 0
             && xpub.parent_fingerprint != bitcoin::bip32::Fingerprint::from([0u8; 4])
         {
-            return Err(CliError::UsageError(format!(
+            return Err(CliError::Invalid(format!(
                 "xpub {xpub} is at depth 0 but carries parent fingerprint {}; BIP 32 \
                  requires 00000000 for a master key, so the xpub is not a valid BIP 32 key \
                  and no card was minted.",
@@ -314,7 +339,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         };
         if let Some((why, actual)) = provable {
             if actual != *declared {
-                return Err(CliError::UsageError(format!(
+                return Err(CliError::Invalid(format!(
                     "origin fingerprint {} does not match the xpub: at depth {depth} {why}, \
                      so the fingerprint must be {}. The record pairs a key with an origin \
                      that is not its own.",
@@ -355,7 +380,8 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
                 continue;
             };
             if !cosigners.contains(&ident) {
-                return Err(CliError::UsageError(format!(
+                // A plan it should belong to (spec §3 test 4): NO, 1.
+                return Err(CliError::Mismatch(format!(
                     "xpub {xpub} (origin {path}) is not a cosigner of the wallet policy \
                      with stub {}; that policy declares {} key(s). A card stamped with a \
                      policy it is not in is refused at recovery. (A keyless template md1 \
@@ -412,7 +438,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         // broke (R1, 2026-08-21).
         let strings = encoded.map_err(|e| {
             if let Some((_, flag)) = key_source {
-                CliError::UsageError(format!(
+                CliError::Invalid(format!(
                     "{flag} record {} ([{}/{}]): {}",
                     i + 1,
                     fp.as_ref()
@@ -483,7 +509,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
             if let Err(e) =
                 mnemonic_io_lib::write::write_private(std::path::Path::new(path), body.as_bytes())
             {
-                // R3: one line on stderr, exit 1, nothing on stdout in either mode.
+                // R3: one line on stderr, exit 32 (IO), nothing on stdout in either mode.
                 let after = file_state(path);
                 let state = match (&before, &after) {
                     (FileState::Regular(b), FileState::Regular(a)) if b == a => {
@@ -495,7 +521,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
                 crate::out::stderr_write(format_args!(
                     "mk: cannot write the output: {path}: {e}{state}\n"
                 ));
-                return Ok(1);
+                return Ok(crate::exit::IO);
             }
             if let Some(doc) = &json_doc {
                 print!("{doc}");
@@ -563,7 +589,8 @@ fn file_state(path: &str) -> FileState {
 }
 
 /// FIX_bh1119_mk_out_writes R2, R4: refuse an output that is one of the inputs.
-/// Returns `Ok(Some(64))` after printing X2 on stderr (stdout is an input, so
+/// Returns `Ok(Some(8))` (REFUSED: a different destination waives it) after
+/// printing X2 on stderr (stdout is an input, so
 /// no envelope may go there), `Err` for X1 and X3 (the usual error, an envelope
 /// on stdout in `--json` mode), `Ok(None)` when nothing matches.
 fn refuse_output_that_is_an_input(args: &EncodeArgs) -> Result<Option<u8>> {
@@ -596,20 +623,20 @@ fn refuse_output_that_is_an_input(args: &EncodeArgs) -> Result<Option<u8>> {
                 "error: standard output is the same file as {}, so the card would go into the file mk reads its input from. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name.\n",
                 names[i]
             ));
-            return Ok(Some(64));
+            return Ok(Some(crate::exit::REFUSED));
         }
     }
     if let Some(out) = &args.out_file {
         // R2: --out names an input.
         if let Some(i) = same_file(Endpoint::Path(Path::new(out)), &inputs) {
-            return Err(CliError::UsageError(format!(
+            return Err(CliError::Refused(format!(
                 "--out {out} is the same file as {}, so writing the card would replace the input mk is reading. Write to a new name.",
                 names[i]
             )));
         }
         // X3: --json with stdout redirected into the --out file.
         if args.json && same_file(Endpoint::Stdout, &[Endpoint::Path(Path::new(out))]).is_some() {
-            return Err(CliError::UsageError(format!(
+            return Err(CliError::Refused(format!(
                 "--out {out} and standard output are the same file (the same path, a symlink or a hard link), so what mk prints on stdout would go into the file it writes. A > redirect empties that file before mk starts, so check that it still holds what you expect. Write to a new name."
             )));
         }
@@ -653,7 +680,8 @@ fn check_card_against_slots(
             if card_path != slot.origin {
                 let (policy_path, card_decl) =
                     (fmt_origin_path(&slot.origin), fmt_origin_path(&card_path));
-                return Err(CliError::UsageError(if slot.standard_filled {
+                // The card does not match its own policy (spec §3 test 4): NO.
+                return Err(CliError::Mismatch(if slot.standard_filled {
                     format!(
                         "xpub {xpub} is @{n} of the wallet policy with stub {stub}, which \
                          states no origin path for it, so its policy id uses the standard \
@@ -674,7 +702,7 @@ fn check_card_against_slots(
             }
             if let (Some(pfp), Some(cfp)) = (slot.fingerprint, fp) {
                 if pfp != cfp.to_bytes() {
-                    return Err(CliError::UsageError(format!(
+                    return Err(CliError::Mismatch(format!(
                         "xpub {xpub} is @{n} of the wallet policy with stub {stub}, whose \
                          master fingerprint for it is {}; the card declares {}. A card whose \
                          origin contradicts its own policy is refused; no card was minted.",
@@ -691,7 +719,8 @@ fn check_card_against_slots(
                 .map(|s| format!("@{}", s.idx))
                 .collect::<Vec<_>>()
                 .join(", ");
-            Err(CliError::UsageError(format!(
+            // A BIP-388 distinctness violation is an invalid input (spec §3).
+            Err(CliError::Invalid(format!(
                 "the wallet policy with stub {stub} holds xpub {xpub} at {list}; BIP 388 \
                  requires the keys of a policy to be pairwise distinct, so the policy is \
                  refused and no card was minted."
@@ -722,7 +751,7 @@ fn check_card_against_slots(
 /// line is skipped.
 fn read_md1_set(path: &str) -> Result<Vec<String>> {
     let buf = std::fs::read_to_string(path)
-        .map_err(|e| CliError::UsageError(format!("--from-md1-set {path}: {e}")))?;
+        .map_err(|e| CliError::reading(&format!("--from-md1-set {path}"), &e))?;
     let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
     crate::keyfile::refuse_line_encoding(buf, |line, o| match o {
         crate::keyfile::LineOffence::BareCr => format!(
@@ -749,7 +778,7 @@ fn read_md1_set(path: &str) -> Result<Vec<String>> {
         }
     }
     if out.is_empty() {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "--from-md1-set {path}: no md1 strings found (every line that does not start \
              with `md1` is skipped, so check the path and that the file holds `md encode` \
              output)"
@@ -769,9 +798,9 @@ fn parse_chunk_set_id(s: &str) -> Result<u32> {
         .or_else(|| s.strip_prefix("0X"))
         .unwrap_or(s);
     let v = u32::from_str_radix(body, 16)
-        .map_err(|e| CliError::UsageError(format!("--chunk-set-id: invalid hex {s:?}: {e}")))?;
+        .map_err(|e| CliError::Invalid(format!("--chunk-set-id: invalid hex {s:?}: {e}")))?;
     if v > MAX_CHUNK_SET_ID {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "--chunk-set-id: {s:?} exceeds the 20-bit field (max 0x{MAX_CHUNK_SET_ID:05x})"
         )));
     }
@@ -813,7 +842,7 @@ fn json_batch(minted: &[MintedCard]) -> Result<String> {
         "cards": cards,
     });
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     Ok(format!("{s}\n"))
 }
 
@@ -852,6 +881,6 @@ fn json_single(card: &MintedCard) -> Result<String> {
     let mut envelope = card_json(card);
     envelope["schema_version"] = json!(1);
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     Ok(format!("{s}\n"))
 }

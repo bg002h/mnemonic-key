@@ -579,13 +579,13 @@ fn verify_stub_comparison_is_order_independent_but_not_blind() {
     // Still catches a genuinely different binding, and a short one.
     assert_eq!(
         verify(&["5b48af35", "deadbeef"]),
-        Some(4),
+        Some(1),
         "a wrong stub must fail"
     );
-    assert_eq!(verify(&["5b48af35"]), Some(4), "a missing stub must fail");
+    assert_eq!(verify(&["5b48af35"]), Some(1), "a missing stub must fail");
     assert_eq!(
         verify(&["5b48af35", "5b48af35"]),
-        Some(4),
+        Some(1),
         "multiset, not set: a duplicated stub must not stand in for a distinct one"
     );
 }
@@ -642,7 +642,7 @@ fn origin_fingerprint_is_checked_where_the_xpub_proves_it() {
 
     // depth 1, WRONG fingerprint -> refused, and the message says why.
     let (code, err) = run(&format!("[deadbeef/7']{child}"));
-    assert_eq!(code, Some(64), "a crossed depth-1 record must be refused");
+    assert_eq!(code, Some(2), "a crossed depth-1 record must be refused");
     assert!(
         err.contains("does not match the xpub") && err.contains("depth 1"),
         "the refusal must name the provable relationship: {err}"
@@ -652,7 +652,7 @@ fn origin_fingerprint_is_checked_where_the_xpub_proves_it() {
     let (code, err) = run(&format!("[deadbeef/]{master_xpub}"));
     assert_eq!(
         code,
-        Some(64),
+        Some(2),
         "a crossed depth-0 record must be refused: {err}"
     );
 }

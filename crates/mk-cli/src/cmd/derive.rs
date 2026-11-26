@@ -13,8 +13,8 @@ use serde_json::json;
 
 use crate::cmd::derive_support::{fixed_key_refusal, is_fixed_key_card, secp_verify};
 use crate::cmd::{
-    chunk_set_id_comparison, fmt_fingerprint, read_mk1_strings, warn_chunk_set_id_mismatch,
-    warn_if_invalid,
+    chunk_set_id_comparison, correction_counts, fmt_fingerprint, read_mk1_strings,
+    warn_chunk_set_id_mismatch, warn_corrections_applied, warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -48,17 +48,8 @@ pub struct DeriveArgs {
 
 /// Run `mk derive`.
 pub fn run(args: DeriveArgs) -> Result<u8> {
-    let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
-    let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
-    let card = mk_codec::decode(&refs)?;
-    // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
-    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
-    // bh-mk-C1: a fixed-key card has no child keys any wallet watches; refuse first.
-    if is_fixed_key_card(&card.xpub) {
-        return Err(fixed_key_refusal(&card.xpub, None, None));
-    }
-    warn_if_invalid(&card);
-
+    // Exit-code spec R2: `--path`/`--index` are settings judged from the
+    // command line alone, so a bad one is 64 before any input is read.
     let rel: DerivationPath = match (args.path.as_deref(), args.index) {
         (Some(s), None) => parse_relative_unhardened(s)?,
         (None, Some(i)) => {
@@ -75,11 +66,24 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
         _ => unreachable!("clap ArgGroup target is required + exclusive"),
     };
 
+    let strings = read_mk1_strings(&args.mk1_strings, args.in_file.as_deref())?;
+    let refs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+    let card = mk_codec::decode(&refs)?;
+    // SPEC R2 (contract 2): recompute-and-warn, chunked input only.
+    warn_chunk_set_id_mismatch(chunk_set_id_comparison(&strings, &card), &card);
+    // Exit-code spec R6: a correction this verb used sets REPAIRED (16).
+    warn_corrections_applied(&correction_counts(&strings));
+    // bh-mk-C1: a fixed-key card has no child keys any wallet watches; refuse first.
+    if is_fixed_key_card(&card.xpub) {
+        return Err(fixed_key_refusal(&card.xpub, None, None));
+    }
+    warn_if_invalid(&card);
+
     let secp = secp_verify();
     let child = card
         .xpub
         .derive_pub(&secp, &rel)
-        .map_err(|e| CliError::UsageError(format!("derivation failed at m/{rel}: {e}")))?;
+        .map_err(|e| CliError::Invalid(format!("derivation failed at m/{rel}: {e}")))?;
 
     let network = match card.xpub.network {
         NetworkKind::Main => "mainnet",
@@ -98,7 +102,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
             "network": network,
         });
         let s = serde_json::to_string(&envelope)
-            .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+            .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
         println!("{s}");
     } else {
         println!("parent_xpub:          {}", card.xpub);

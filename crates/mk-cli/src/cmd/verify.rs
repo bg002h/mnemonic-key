@@ -72,8 +72,9 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
     // Diagnostics followup `mk-decode-silent-correction-reporting`: same
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).
-    warn_corrections_applied(&correction_counts(&strings));
-    // An invalid card exits 1 here, ahead of any expected-* comparison.
+    let corrections = correction_counts(&strings);
+    warn_corrections_applied(&corrections);
+    // An invalid card exits 2 here, ahead of any expected-* comparison.
     card.validate()?;
 
     // Parse origin_path once; both the xpub normalization check and the
@@ -152,7 +153,7 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         // the question `verify` answers is "is this card bound to these
         // policies", and that does not depend on the order they were typed.
         // The ordered comparison meant the SAME card checked against the SAME
-        // policies in a different `--from-md1` order returned exit 4: a
+        // policies in a different `--from-md1` order returned a mismatch: a
         // CORRECT card reported as failing (R1, 2026-08-21). A false negative
         // here is expensive in a way a false positive is not -- it invites
         // re-engraving a good plate, or distrusting a sound backup.
@@ -195,7 +196,7 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         }
     }
 
-    emit_ok(&card, &strings, args.json, csid)?;
+    emit_ok(&card, &strings, args.json, csid, !corrections.is_empty())?;
     Ok(0)
 }
 
@@ -204,6 +205,7 @@ fn emit_ok(
     strings: &[String],
     json_mode: bool,
     csid: Option<(u32, u32)>,
+    corrected: bool,
 ) -> Result<()> {
     if json_mode {
         let mut envelope = json!({
@@ -226,11 +228,18 @@ fn emit_ok(
             });
         }
         let s = serde_json::to_string(&envelope)
-            .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+            .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
         println!("{s}");
     } else {
+        // Exit-code spec R5: the verdict agrees with the code, which has 16
+        // set when a correction was used.
         println!(
-            "OK: mk1 string(s) decode cleanly{}",
+            "OK: mk1 string(s) decode {}{}",
+            if corrected {
+                "after BCH correction"
+            } else {
+                "cleanly"
+            },
             expected_match_suffix(card)
         );
         // Contract 4: text mode's OK verdict must carry the mismatch on
