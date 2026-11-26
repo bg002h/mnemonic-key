@@ -13,6 +13,40 @@ Next release: 0.18.0
 
 ### Changed
 
+- **BREAKING: exit codes follow the constellation exit-code spec**
+  (mnemonic-engrave `design/SPEC_constellation_exit_codes.md`, revision 5, all
+  eleven decisions as recommended). 0 is success; 64 a bad command line (nothing
+  ran); 101 an internal error; otherwise the status is a SUM of 1 (a check said
+  no), 2 (an input is invalid), 4 (verify before trusting), 8 (refused), 16 (a
+  correction was applied) and 32 (a file or stdout failed). `mk --help` ends with
+  the legend. What moved:
+  - a `verify` mismatch: 4 -> **1**; `encode` with a key that is not a cosigner
+    of its keyed `--from-md1` policy, or an origin that contradicts that policy's
+    slot: 64 -> **1**;
+  - an invalid card: 1 -> **2** on every verb; an unsupported (newer) version:
+    3 -> **2**; empty or missing input: 64 -> **2**; a malformed xpub, xprv given
+    as `--xpub`, fingerprint, origin path, stub, `--chunk-set-id` or key-file
+    record: 64 -> **2**; a multisig or fixed-key card given to `address`/`derive`,
+    and a card whose address type cannot be inferred: 64 -> **2**;
+  - `encode` output that is one of its inputs, and `address --network` that
+    disagrees with the xpub: 64 -> **8**;
+  - an input file that cannot be read: 64 -> **32**; a failed `encode --out`
+    write: 1 -> **32**; any other I/O error: 1 -> **32**; a stdout that cannot
+    take the output ADDS 32 to the verb's code (it used to turn 0 or 5 into 1);
+  - an internal serialization failure: 64 -> **101**;
+  - `repair`: a correction 5 -> **16** (an incomplete set too: the rest of the
+    set verifies it when reassembled, and the warning now says so); a corrected
+    single-string card **20** (no oracle). `repair` now decodes what it prints:
+    a string that is not an mk1 chunk, or a single-string card that does not
+    decode, is printed with an error line and adds **2** (it used to exit 0); a
+    complete chunk set that does not decode is **2** with nothing printed,
+    corrected or not;
+  - `decode`, `verify`, `inspect`, `address` and `derive` exit **16** (plus any
+    other bit) when they used a BCH-corrected card; the output is unchanged.
+  - The JSON error envelope's `exit_code` is the process's exit status (a bit
+    sum), and new error `kind`s name the class: `InvalidInput`, `Mismatch`,
+    `Refused`, `Internal` (and `IoError` for input files).
+
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
   byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark

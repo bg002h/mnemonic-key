@@ -7,7 +7,8 @@
 # the key files below under $WORK, runs every CLI row the document prints and
 # checks it against the MODE's expectation:
 #   red   = the base commit's behaviour (each defect mints at exit 0; controls pass)
-#   green = the fixed behaviour (each refusal exits 64 with the exact section-2
+#   green = the fixed behaviour (each refusal exits 64 -- since the exit-code spec 1 for an origin
+#           that contradicts its policy, 2 for the rest -- with the exact section-2
 #           text on stderr and nothing on stdout; controls unchanged)
 # Rows: 32 (red and green). Any row that does not match its expectation fails the script (exit 1).
 #
@@ -151,38 +152,40 @@ if [ "$MODE" = red ]; then
   row fe_stub_repeated_from_md1 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
   row fe_stub_repeated_across_channels 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 else
-  row fe_i2_path_contradicts_policy 64 = - "=error: $(tpath "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set a.md1
-  row fe_i2_path_contradicts_policy_json 64 "={\"error\":{\"details\":null,\"exit_code\":64,\"kind\":\"UsageError\",\"message\":\"$(tpath "$X0" 0 38bd7cec "$M0" "$M9")\"},\"schema_version\":1}" - = -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set a.md1 --json
-  row fe_i2_fingerprint_contradicts_policy 64 = - "=error: $(tfp "$X0" 0 38bd7cec 73c5da0a deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint deadbeef --from-md1-set a.md1
-  row fe_i2_second_slot_contradicts_policy 64 = - "=error: $(tpath "$X1" 1 38bd7cec "$M0" "$M1")" -- encode --xpub "$X1" --origin-path "$M1" --origin-fingerprint 73c5da0a --from-md1-set a.md1
-  row fe_i2_sparse_slot_contradicts_policy 64 = - "=error: $(tpath "$X0" 0 3a7f6520 "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1
-  row fe_i2_batch_record_contradicts_policy 64 = - "=error: $(tpath "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --keys batch9.txt --from-md1-set a.md1
-  row fe_i2_policy_repeats_key 64 = - "=error: $(trepkey 58e73a11 "$X0" "@0, @1")" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set rep.md1
-  row fe_i2_elided_origin_path_contradicts_policy 64 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
-  row fe_i2_elided_origin_signet_card 64 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "m/48'/1'/0'/2'")" -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
-  row fe_i2_elided_origin_master_card 64 = - "=error: $(tpathstd "$X0D0" 0 38bd7cec "$M0" m)" -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
-  row fe_keys_identical_record_twice 64 = - "=error: $(trec twice.txt 2 1)" -- encode --keys twice.txt --policy-id-stub deadbeef
-  row fe_keys_identical_record_h_spelling 64 = - "=error: $(trec twice_h.txt 3 1)" -- encode --keys twice_h.txt --policy-id-stub deadbeef
-  row fe_keys_identical_record_non_adjacent 64 = - "=error: $(trec rep13.txt 3 1)" -- encode --keys rep13.txt --policy-id-stub deadbeef
-  row fe_keys_one_key_two_origins 64 = - "=error: $(tkey2 twoorigins.txt 2 1 "[73c5da0a/$P0]")" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
-  row fe_keys_one_origin_two_keys 64 = - "=error: $(torigin2 twokeys.txt 3 "[73c5da0a/$P0]" 1)" -- encode --keys twokeys.txt --policy-id-stub deadbeef
-  row fe_keys_one_origin_two_masters 64 = - "=error: $(torigin2 twomasters.txt 2 "[3442193e/]" 1)" -- encode --keys twomasters.txt --policy-id-stub deadbeef
-  row fe_stub_repeated_policy_id_stub 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
-  row fe_stub_repeated_non_adjacent 64 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
-  row fe_stub_repeated_non_adjacent_tail 64 = - "=error: $(tstub 11111111)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub 11111111
-  row fe_stub_repeated_from_md1 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
-  row fe_stub_repeated_across_channels 64 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
+  row fe_i2_path_contradicts_policy 1 = - "=error: $(tpath "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set a.md1
+  row fe_i2_path_contradicts_policy_json 1 "={\"error\":{\"details\":null,\"exit_code\":1,\"kind\":\"Mismatch\",\"message\":\"$(tpath "$X0" 0 38bd7cec "$M0" "$M9")\"},\"schema_version\":1}" - = -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set a.md1 --json
+  row fe_i2_fingerprint_contradicts_policy 1 = - "=error: $(tfp "$X0" 0 38bd7cec 73c5da0a deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint deadbeef --from-md1-set a.md1
+  row fe_i2_second_slot_contradicts_policy 1 = - "=error: $(tpath "$X1" 1 38bd7cec "$M0" "$M1")" -- encode --xpub "$X1" --origin-path "$M1" --origin-fingerprint 73c5da0a --from-md1-set a.md1
+  row fe_i2_sparse_slot_contradicts_policy 1 = - "=error: $(tpath "$X0" 0 3a7f6520 "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1
+  row fe_i2_batch_record_contradicts_policy 1 = - "=error: $(tpath "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --keys batch9.txt --from-md1-set a.md1
+  row fe_i2_policy_repeats_key 2 = - "=error: $(trepkey 58e73a11 "$X0" "@0, @1")" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set rep.md1
+  row fe_i2_elided_origin_path_contradicts_policy 1 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "$M9")" -- encode --xpub "$X0" --origin-path "$M9" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_signet_card 1 = - "=error: $(tpathstd "$X0" 0 38bd7cec "$M0" "m/48'/1'/0'/2'")" -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
+  row fe_i2_elided_origin_master_card 1 = - "=error: $(tpathstd "$X0D0" 0 38bd7cec "$M0" m)" -- encode --xpub "$X0D0" --origin-path "m" --privacy-preserving --from-md1-set elided.md1
+  row fe_keys_identical_record_twice 2 = - "=error: $(trec twice.txt 2 1)" -- encode --keys twice.txt --policy-id-stub deadbeef
+  row fe_keys_identical_record_h_spelling 2 = - "=error: $(trec twice_h.txt 3 1)" -- encode --keys twice_h.txt --policy-id-stub deadbeef
+  row fe_keys_identical_record_non_adjacent 2 = - "=error: $(trec rep13.txt 3 1)" -- encode --keys rep13.txt --policy-id-stub deadbeef
+  row fe_keys_one_key_two_origins 2 = - "=error: $(tkey2 twoorigins.txt 2 1 "[73c5da0a/$P0]")" -- encode --keys twoorigins.txt --policy-id-stub deadbeef
+  row fe_keys_one_origin_two_keys 2 = - "=error: $(torigin2 twokeys.txt 3 "[73c5da0a/$P0]" 1)" -- encode --keys twokeys.txt --policy-id-stub deadbeef
+  row fe_keys_one_origin_two_masters 2 = - "=error: $(torigin2 twomasters.txt 2 "[3442193e/]" 1)" -- encode --keys twomasters.txt --policy-id-stub deadbeef
+  row fe_stub_repeated_policy_id_stub 2 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent 2 = - "=error: $(tstub deadbeef)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub deadbeef
+  row fe_stub_repeated_non_adjacent_tail 2 = - "=error: $(tstub 11111111)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --policy-id-stub 11111111 --policy-id-stub 11111111
+  row fe_stub_repeated_from_md1 2 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1 "$TPL" --from-md1 "$TPL"
+  row fe_stub_repeated_across_channels 2 = - "=error: $(tstub 559e64b2)" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub 559e64b2 --from-md1 "$TPL"
 fi
-# Controls: identical in both modes.
+# Controls: identical in both modes, except two exit codes the exit-code spec
+# (2026-11-26) moved after this FIX: a non-member 64 -> 1, an unreadable md1 1 -> 2.
+NONMEMBER_RC=1; MD1_RC=2; [ "$MODE" = red ] && { NONMEMBER_RC=64; MD1_RC=1; }
 row fe_control_true_origin_mints 0 mk1 - "1 of them carded here, 1 not carded" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set a.md1
 row fe_control_privacy_preserving_mints 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --privacy-preserving --from-md1-set a.md1
 row fe_control_policy_without_fingerprints_mints 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint deadbeef --from-md1-set nofp.md1
 row fe_control_sparse_unfilled_slot_mints 0 mk1 - - -- encode --xpub "$X1" --origin-path "$M1" --origin-fingerprint 73c5da0a --from-md1-set sparse.md1
-row fe_control_complete_policy_nonmember_refused 64 = - "is not a cosigner of the wallet policy with stub 38bd7cec" -- encode --xpub "$X2" --origin-path "m/48'/0'/2'/2'" --origin-fingerprint 73c5da0a --from-md1-set a.md1
+row fe_control_complete_policy_nonmember_refused "$NONMEMBER_RC" = - "is not a cosigner of the wallet policy with stub 38bd7cec" -- encode --xpub "$X2" --origin-path "m/48'/0'/2'/2'" --origin-fingerprint 73c5da0a --from-md1-set a.md1
 row fe_control_distinct_records_mint 0 mk1 - "card 3 of 3" -- encode --keys distinct.txt --policy-id-stub deadbeef
 row fe_control_both_cosigners_mint 0 mk1 - "card 2 of 2" -- encode --keys cosigners.txt --from-md1-set a.md1
 row fe_control_two_distinct_stubs_mint 0 mk1 - - -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --policy-id-stub deadbeef --from-md1 "$TPL"
-row fe_control_chunk_set_given_twice_unchanged 1 = - "chunk set incomplete: got 8 chunks, expected 4" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set a.md1 --from-md1-set a.md1
+row fe_control_chunk_set_given_twice_unchanged "$MD1_RC" = - "chunk set incomplete: got 8 chunks, expected 4" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set a.md1 --from-md1-set a.md1
 row fe_control_md_default_elided_origin_mints 0 mk1 - "policy 38bd7cec has 2 cosigner(s); 1 of them carded here, 1 not carded" -- encode --xpub "$X0" --origin-path "$M0" --origin-fingerprint 73c5da0a --from-md1-set elided.md1
 row fe_control_signet_card_against_path_md1_mints 0 mk1 - "policy 00912ee3 has 2 cosigner(s); 1 of them carded here, 1 not carded" -- encode --xpub "$X0" --origin-path "m/48'/1'/0'/2'" --origin-fingerprint 73c5da0a --from-md1-set signet.md1
 [ $FAIL = 0 ] && echo "ALL ROWS MATCH $MODE" || { echo "ROWS DIFFER FROM $MODE"; exit 1; }

@@ -7,7 +7,9 @@
 # the MODE's expectation:
 #   red   = the base commit's behaviour (each defect shows; controls pass)
 #   green = the fixed behaviour (refusals exit 64, nothing on stdout but the
-#           --json error envelope; controls unchanged)
+#           --json error envelope; controls unchanged). Since the exit-code spec
+#           (2026-11-26) the fixed-key refusal is 2, and a bad --path is 64 before
+#           the card is read (R2), so it prints the path's own error.
 # Any row that does not match its expectation fails the script (exit 1).
 #
 # Exact-text rows: a MUST/ERRMUST starting with "=" compares the WHOLE stream to
@@ -78,7 +80,8 @@ C1HEAD="this card holds one fixed key (depth 0, all-zero chain code; the toolkit
 # c1main TYPE; c1test TYPE NET (the words after --script-type / --network).
 c1main() { printf '%s' "${C1HEAD}${LEAFM} --to address --path m --script-type $1"; }
 c1test() { printf '%s' "${C1HEAD}${LEAF} --to address --path m --script-type $1 --network $2"; }
-ENV1='{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"'
+# Green: the exit-code spec (2026-11-26) moved the fixed-key refusal from 64 to 2.
+ENV1='{"error":{"details":null,"exit_code":2,"kind":"InvalidInput","message":"'
 ENV2='"},"schema_version":1}'
 if [ "$MODE" = red ]; then
   row fd_c1_address_refuses_fixed_key_card 0 "$CHILD" - "not the canonical account depth 3" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
@@ -97,17 +100,17 @@ if [ "$MODE" = red ]; then
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 0 "\"child_xpub\":\"$X84\"" - - -- derive --in acct.mk1 --path "$p" --json
   done
 else
-  row fd_c1_address_refuses_fixed_key_card 64 = - "=error: $(c1test p2wpkh signet)" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
-  row fd_c1_address_refuses_fixed_key_card_json 64 "=$ENV1$(c1test p2wpkh signet)$ENV2" - = -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
-  row fd_c1_address_refuses_fixed_key_card_mainnet 64 = - "=error: $(c1main p2wpkh)" -- address --in leafm.mk1 --address-type p2wpkh --count 1
-  row fd_c1_derive_refuses_fixed_key_card 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --index 0
-  row fd_c1_derive_refuses_fixed_key_card_path 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path m/0/0
-  row fd_c1_derive_refuses_fixed_key_card_mainnet 64 = - "=error: $(c1main TYPE)" -- derive --in leafm.mk1 --index 0
-  row "fd_c1_refusal_precedes_other_errors[address-type]" 64 = - "=error: $(c1test TYPE NETWORK)" -- address --in leaf.mk1
-  row "fd_c1_refusal_precedes_other_errors[network]" 64 = - "=error: $(c1test p2wpkh NETWORK)" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
-  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path "m/0'"
-  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path /
-  row "fd_c1_refusal_precedes_other_errors[empty]" 64 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path ''
+  row fd_c1_address_refuses_fixed_key_card 2 = - "=error: $(c1test p2wpkh signet)" -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1
+  row fd_c1_address_refuses_fixed_key_card_json 2 "=$ENV1$(c1test p2wpkh signet)$ENV2" - = -- address --in leaf.mk1 --address-type p2wpkh --network signet --count 1 --json
+  row fd_c1_address_refuses_fixed_key_card_mainnet 2 = - "=error: $(c1main p2wpkh)" -- address --in leafm.mk1 --address-type p2wpkh --count 1
+  row fd_c1_derive_refuses_fixed_key_card 2 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --index 0
+  row fd_c1_derive_refuses_fixed_key_card_path 2 = - "=error: $(c1test TYPE NETWORK)" -- derive --in leaf.mk1 --path m/0/0
+  row fd_c1_derive_refuses_fixed_key_card_mainnet 2 = - "=error: $(c1main TYPE)" -- derive --in leafm.mk1 --index 0
+  row "fd_c1_refusal_precedes_other_errors[address-type]" 2 = - "=error: $(c1test TYPE NETWORK)" -- address --in leaf.mk1
+  row "fd_c1_refusal_precedes_other_errors[network]" 2 = - "=error: $(c1test p2wpkh NETWORK)" -- address --in leaf.mk1 --address-type p2wpkh --network mainnet
+  row "fd_c1_refusal_precedes_other_errors[hardened]" 64 = - "cannot derive hardened children" -- derive --in leaf.mk1 --path "m/0'"
+  row "fd_c1_refusal_precedes_other_errors[invalid]" 64 = - "invalid derivation path" -- derive --in leaf.mk1 --path /
+  row "fd_c1_refusal_precedes_other_errors[empty]" 64 = - "derive needs at least one step" -- derive --in leaf.mk1 --path ''
   for p in '' m m/; do
     row "fd_i18_derive_refuses_empty_path[${p:-empty}]" 64 '"kind":"UsageError"' "child_xpub" - -- derive --in acct.mk1 --path "$p" --json
   done
