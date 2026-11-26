@@ -39,7 +39,10 @@ fn warns(verb: &[&str], card: [&str; 2], e: &str) {
     let mut a = verb.to_vec();
     a.extend_from_slice(&card);
     let o = mk(&a);
-    assert_eq!(o.status.code(), Some(0), "stderr: {}", s(&o.stderr));
+    // Exit-code spec test 6 / decision 8: the card is still read and printed
+    // (mk SPEC: such cards stay readable), and the code says it is invalid.
+    assert_eq!(o.status.code(), Some(2), "stderr: {}", s(&o.stderr));
+    assert!(!o.stdout.is_empty(), "the card is still printed");
     assert!(s(&o.stderr).contains(&t5(e)), "stderr: {}", s(&o.stderr));
 }
 
@@ -93,7 +96,7 @@ fn kv_cli_derive_json_warns_depth1_stdout_json() {
         LEGACY_D1[0],
         LEGACY_D1[1],
     ]);
-    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(o.status.code(), Some(2));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["parent_xpub"], D1_TPUB);
     assert!(

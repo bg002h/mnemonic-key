@@ -53,7 +53,7 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     warn_chunk_set_id_mismatch(csid, &card);
     // Exit-code spec R6: a correction this verb used sets REPAIRED (16).
     warn_corrections_applied(&correction_counts(&strings));
-    warn_if_invalid(&card);
+    let invalid = warn_if_invalid(&card);
     let declared_csid = csid.map(|(declared, _)| declared);
 
     let per_chunk_variants: Vec<&str> = strings.iter().map(|s| classify_code_variant(s)).collect();
@@ -70,7 +70,7 @@ pub fn run(args: InspectArgs) -> Result<u8> {
         crate::output_advisory::OutputClass::WatchOnly,
         &mut std::io::stderr(),
     );
-    Ok(0)
+    Ok(invalid)
 }
 
 fn xpub_fingerprint_hex(card: &KeyCard) -> String {

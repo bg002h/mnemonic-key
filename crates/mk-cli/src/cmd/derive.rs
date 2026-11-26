@@ -77,7 +77,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
     if is_fixed_key_card(&card.xpub) {
         return Err(fixed_key_refusal(&card.xpub, None, None));
     }
-    warn_if_invalid(&card);
+    let invalid = warn_if_invalid(&card);
 
     let secp = secp_verify();
     let child = card
@@ -120,7 +120,7 @@ pub fn run(args: DeriveArgs) -> Result<u8> {
         crate::output_advisory::OutputClass::WatchOnly,
         &mut std::io::stderr(),
     );
-    Ok(0)
+    Ok(invalid)
 }
 
 /// Parse a relative derivation path and reject any hardened component (an xpub

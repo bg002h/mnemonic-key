@@ -490,14 +490,15 @@ fn repair_json_envelope_shape() {
 // `group_is_complete_and_consistent` SingleString arm).
 //
 // A valid single-string mk1 cannot carry a real xpub (65 bytes > the 56-byte
-// single-string cap), so the reachable single-string verdict is Reject: a
-// BCH-valid single string whose bytecode does not decode. After a 1-char
-// correction the group is complete (1 member) and MUST be re-decoded and
-// refused (exit 2, SetReassemblyMismatch), not emitted as an UNVERIFIED
-// candidate (exit 20).
+// single-string cap), so a corrected single string never decodes and 20
+// (REPAIRED + UNVERIFIED) is unreachable in mk. A non-chunked string has no
+// oracle: after a 1-char correction it is still printed, with a "do not
+// trust it" error, at 16 + 4 + 2 = 22 (exit-code spec decision 6; the
+// coordinator's ruling, matching md). A CHUNKED set of one follows the
+// complete-set rule instead (exit_codes_spec.rs).
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn repair_corrected_single_string_that_fails_decode_exits_2() {
+fn repair_corrected_single_string_that_fails_decode_exits_22() {
     use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
     use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
 
@@ -518,16 +519,23 @@ fn repair_corrected_single_string_that_fails_decode_exits_2() {
         .args(["repair", &corrupted])
         .output()
         .expect("invoke mk repair");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(
         out.status.code(),
-        Some(2),
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        Some(22),
+        "stdout={stdout} stderr={stderr}"
     );
     assert!(
-        out.stdout.is_empty(),
-        "a Reject suppresses all output; got {:?}",
-        String::from_utf8_lossy(&out.stdout)
+        stdout.contains(&valid),
+        "the corrected string is still printed; got {stdout:?}"
+    );
+    assert!(
+        stderr.contains("not chunked") && stderr.contains("Do not trust it"),
+        "the error names a non-chunked string; got {stderr:?}"
+    );
+    assert!(
+        !stderr.contains("reassemble"),
+        "no set-reassembly wording for a non-chunked string; got {stderr:?}"
     );
 }

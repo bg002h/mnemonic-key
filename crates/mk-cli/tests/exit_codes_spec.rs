@@ -115,7 +115,86 @@ fn json_envelope_carries_the_class() {
     assert_eq!(v["error"]["exit_code"], 32);
     assert_eq!(v["error"]["kind"], "IoError");
     let o = mk(&["decode", "--json"]);
+    assert_eq!(o.status.code(), Some(64));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["error"]["exit_code"], 2);
-    assert_eq!(v["error"]["kind"], "InvalidInput");
+    assert_eq!(v["error"]["exit_code"], 64);
+    assert_eq!(v["error"]["kind"], "UsageError");
+}
+
+/// Decision 3: a required argument that is missing stays 64. No positional,
+/// no `--in` and no `-` is the command line alone (test 1), refused before
+/// anything is read (R2), on every verb that reads mk1 strings.
+#[test]
+fn no_input_channel_at_all_is_64() {
+    for verb in [
+        vec!["decode"],
+        vec!["inspect"],
+        vec!["verify"],
+        vec!["repair"],
+        vec!["address"],
+        vec!["derive", "--path", "0/0"],
+    ] {
+        let o = mk(&verb);
+        assert_eq!(
+            o.status.code(),
+            Some(64),
+            "{verb:?}: stderr={}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
+}
+
+/// A named channel that yields nothing is an empty input: 2 (decision 3).
+#[test]
+fn a_named_channel_that_is_empty_is_2() {
+    let o = Command::cargo_bin("mk")
+        .unwrap()
+        .args(["decode", "-"])
+        .write_stdin("")
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(2));
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("empty.txt");
+    std::fs::write(&f, "\n\n").unwrap();
+    let o = mk(&["decode", "--in", f.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(2));
+}
+
+/// I2 ruling: a string that is structurally a chunk (a chunked header, a
+/// set of one) follows the complete-set rule: corrected and failing its
+/// decode is 2 with nothing printed.
+#[test]
+fn repair_of_a_corrected_chunked_set_of_one_that_fails_is_2_and_prints_nothing() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let header = StringLayerHeader::Chunked {
+        version: VERSION_V0_1,
+        chunk_set_id: 0x12345,
+        total_chunks: 1,
+        chunk_index: 0,
+    };
+    let mut data = header.to_5bit_symbols();
+    data.extend(bytes_to_5bit(&[0xFF; 10]));
+    let valid = encode_5bit_to_string(&data).unwrap();
+    assert!(mk_codec::decode(&[valid.as_str()]).is_err());
+    let bad = flip(&valid, 5);
+    let o = mk(&["repair", &bad]);
+    assert_eq!(
+        o.status.code(),
+        Some(2),
+        "stderr={}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(o.stdout.is_empty());
+}
+
+fn flip(s: &str, pos: usize) -> String {
+    const ALPHABET: &str = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    let sep = s.rfind('1').unwrap();
+    let mut c: Vec<char> = s.chars().collect();
+    let i = sep + 1 + pos;
+    let cur = c[i];
+    c[i] = ALPHABET.chars().find(|&a| a != cur).unwrap();
+    c.into_iter().collect()
 }

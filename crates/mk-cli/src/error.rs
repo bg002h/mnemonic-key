@@ -82,7 +82,7 @@ pub enum CliError {
     /// toolkit's `RepairError::SetReassemblyMismatch`.
     SetReassemblyMismatch {
         /// Human-readable identifier of the failing group (e.g.
-        /// `"chunk_set_id 0x12345"` or `"single-string chunk 2"`), so a
+        /// `"chunk_set_id 0x12345"` or `"input 2, a single string, not chunked"`), so a
         /// batch invocation containing multiple groups tells the user WHICH
         /// one failed and lets them re-run the good group alone.
         group: String,
@@ -382,36 +382,63 @@ mod exit_code_table {
         ]
     }
 
+    /// The table itself (spec R13): each variant's class, stated beside the
+    /// variant in an exhaustive match. A new variant does not compile until
+    /// it is given a class here.
+    // BEGIN expected_class
+    fn expected_class(e: &CliError) -> (&'static str, u8) {
+        match e {
+            CliError::Codec(_) => ("Codec", INVALID),
+            CliError::MdCodec(_) => ("MdCodec", INVALID),
+            CliError::FutureFormat(_) => ("FutureFormat", INVALID),
+            CliError::ContentMismatch { .. } => ("ContentMismatch", NO),
+            CliError::UsageError(_) => ("UsageError", USAGE),
+            CliError::Invalid(_) => ("Invalid", INVALID),
+            CliError::Mismatch(_) => ("Mismatch", NO),
+            CliError::Refused(_) => ("Refused", REFUSED),
+            CliError::IoError(_) => ("IoError", IO),
+            CliError::Io(_) => ("Io", IO),
+            CliError::Internal(_) => ("Internal", INTERNAL),
+            CliError::SetReassemblyMismatch { .. } => ("SetReassemblyMismatch", INVALID),
+        }
+    }
+    // END expected_class
+
     #[test]
     fn every_arm_maps_to_its_documented_code() {
         for (e, want, why) in cases() {
             assert_eq!(e.exit_code(), want, "{why} ({:?})", e.kind());
+            assert_eq!(expected_class(&e).1, want, "{why}: the table disagrees");
         }
     }
 
-    /// Exhaustiveness guard: listing a variant here forces this file to be
-    /// touched when one is added, and `cases()` must then hold a row for it.
+    /// Exhaustiveness guard: every arm of `expected_class` (read from this
+    /// file's own text, so the count is not a literal) has a sample in
+    /// `cases()` whose `exit_code()` is compared with the arm's class.
     #[test]
     fn every_variant_is_listed() {
-        let mut seen = std::collections::BTreeSet::new();
-        for (e, _, _) in cases() {
-            let name = match e {
-                CliError::Codec(_) => "Codec",
-                CliError::MdCodec(_) => "MdCodec",
-                CliError::FutureFormat(_) => "FutureFormat",
-                CliError::ContentMismatch { .. } => "ContentMismatch",
-                CliError::UsageError(_) => "UsageError",
-                CliError::Invalid(_) => "Invalid",
-                CliError::Mismatch(_) => "Mismatch",
-                CliError::Refused(_) => "Refused",
-                CliError::IoError(_) => "IoError",
-                CliError::Io(_) => "Io",
-                CliError::Internal(_) => "Internal",
-                CliError::SetReassemblyMismatch { .. } => "SetReassemblyMismatch",
-            };
-            seen.insert(name);
-        }
-        assert_eq!(seen.len(), 12, "a variant has no row: {seen:?}");
+        let src = include_str!("error.rs");
+        let begin = src.find("// BEGIN expected_class").unwrap();
+        let end = src.find("// END expected_class").unwrap();
+        let arms: std::collections::BTreeSet<&str> = src[begin..end]
+            .lines()
+            .filter(|l| l.contains("=> (\""))
+            .filter_map(|l| l.split('"').nth(1))
+            .collect();
+        assert!(arms.len() >= 12, "the arm parser found too few: {arms:?}");
+        let seen: std::collections::BTreeSet<&str> = cases()
+            .iter()
+            .map(|(e, _, _)| {
+                let (name, class) = expected_class(e);
+                assert_eq!(e.exit_code(), class, "{name}");
+                name
+            })
+            .collect();
+        let missing: Vec<_> = arms.difference(&seen).collect();
+        assert!(
+            missing.is_empty(),
+            "variants with no row in cases(): {missing:?}"
+        );
     }
 
     #[test]

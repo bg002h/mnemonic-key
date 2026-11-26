@@ -24,7 +24,9 @@ Next release: 0.18.0
     of its keyed `--from-md1` policy, or an origin that contradicts that policy's
     slot: 64 -> **1**;
   - an invalid card: 1 -> **2** on every verb; an unsupported (newer) version:
-    3 -> **2**; empty or missing input: 64 -> **2**; a malformed xpub, xprv given
+    3 -> **2**; an input channel that yields nothing (an empty `--in` file or
+    stdin): 64 -> **2**, while naming no input at all stays **64** (a missing
+    argument, refused before anything is read); a malformed xpub, xprv given
     as `--xpub`, fingerprint, origin path, stub, `--chunk-set-id` or key-file
     record: 64 -> **2**; a multisig or fixed-key card given to `address`/`derive`,
     and a card whose address type cannot be inferred: 64 -> **2**;
@@ -35,17 +37,27 @@ Next release: 0.18.0
     take the output ADDS 32 to the verb's code (it used to turn 0 or 5 into 1);
   - an internal serialization failure: 64 -> **101**;
   - `repair`: a correction 5 -> **16** (an incomplete set too: the rest of the
-    set verifies it when reassembled, and the warning now says so); a corrected
-    single-string card **20** (no oracle). `repair` now decodes what it prints:
-    a string that is not an mk1 chunk, or a single-string card that does not
-    decode, is printed with an error line and adds **2** (it used to exit 0); a
-    complete chunk set that does not decode is **2** with nothing printed,
-    corrected or not;
+    set verifies it when reassembled, and the warning now says so). `repair`
+    now decodes what it prints: a string that is not an mk1 chunk is printed
+    with an error line and adds **2** (it used to exit 0); a complete chunk set,
+    a chunked set of one included, that does not decode is **2** with nothing
+    printed, corrected or not; a single (not chunked) string that does not
+    decode is **2** with nothing printed when clean, and when corrected is
+    printed with a "do not trust it" error at **22** (16 + 4 + 2: nothing
+    checks a single string's correction a second time). A corrected single
+    string that decodes would be 20, but no single-string mk1 decodes (it
+    cannot hold a 65-byte xpub), so 20 does not occur in `mk`;
+  - `decode`, `inspect`, `address` and `derive` on a card that `mk verify`
+    calls invalid (it fails the mk-codec 0.6.0 key-origin rules): 0 -> **2**.
+    The card is still printed, with its warning;
   - `decode`, `verify`, `inspect`, `address` and `derive` exit **16** (plus any
     other bit) when they used a BCH-corrected card; the output is unchanged.
   - The JSON error envelope's `exit_code` is the process's exit status (a bit
     sum), and new error `kind`s name the class: `InvalidInput`, `Mismatch`,
     `Refused`, `Internal` (and `IoError` for input files).
+  - `verify --json` gains an additive `"corrected": true|false` field: true
+    when the card was read after a BCH correction (the exit status then has
+    16 set).
 
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading

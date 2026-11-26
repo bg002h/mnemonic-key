@@ -223,3 +223,20 @@ fn a_mismatch_on_a_corrected_card_is_17() {
     assert_eq!(v["error"]["exit_code"], 17);
     assert_eq!(v["error"]["kind"], "ContentMismatch");
 }
+
+/// R5 for JSON readers (review M4): `verify --json` says whether the card
+/// was read after a correction, additively, so a consumer that ignores the
+/// exit status still learns it.
+#[test]
+fn verify_json_reports_corrected() {
+    let (damaged, clean) = damaged_and_clean_chunks();
+    let d = run("verify", &["--json"], &damaged);
+    assert_eq!(d.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&d.stdout).unwrap();
+    assert_eq!(v["ok"], true);
+    assert_eq!(v["corrected"], true);
+    let c = run("verify", &["--json"], &clean);
+    assert_eq!(c.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&c.stdout).unwrap();
+    assert_eq!(v["corrected"], false);
+}

@@ -15,17 +15,21 @@
 //!   - 16 (REPAIRED) — at least one correction was applied, and the
 //!     corrected set reassembled (verified), or the set is incomplete and the
 //!     rest of it verifies the correction when reassembled;
-//!   - 4 (UNVERIFIED) — a corrected single-string card: nothing can verify it
-//!     (so 20 with the 16);
+//!   - 4 (UNVERIFIED) and 2 (INVALID) — a corrected single (not chunked)
+//!     string that then does not decode: it is still printed, with a "do not
+//!     trust it" error, at 16 + 4 + 2 = 22 (decision 6). 20 (a corrected
+//!     single string that decodes) is unreachable in mk: a single string
+//!     cannot hold a 65-byte xpub;
 //!   - 2 (INVALID) — a corrected or clean string that is not a chunk of the
 //!     format (its header does not parse); it is still printed, with an error
 //!     line on stderr.
 //!
 //! 0 means every input was already valid and decodes. Atomic failures exit
 //! 2 with nothing on stdout: an uncorrectable string or any other codec error
-//! out of the correcting decode (the bypass in [`run`]), and a complete chunk
-//! set (a single-string card counts as one) that does not reassemble (`CliError::SetReassemblyMismatch` when a
-//! correction was applied — THE FUNDS FIX: a per-chunk BCH correction
+//! out of the correcting decode (the bypass in [`run`]), a clean single
+//! string that does not decode, and a complete chunk set (a chunked set of
+//! one included) that does not reassemble (`CliError::SetReassemblyMismatch`
+//! when a correction was applied — THE FUNDS FIX: a per-chunk BCH correction
 //! aliased to a DIFFERENT valid codeword — or `Invalid` when none was).
 //!
 //! Text output mirrors `mnemonic repair`'s text-form report shape (see
@@ -197,8 +201,8 @@ pub fn run(args: RepairArgs) -> Result<u8> {
 /// What `mk repair` reports once every string passed the BCH layer.
 struct RepairOutcome {
     /// The exit bits: REPAIRED for any correction used, UNVERIFIED for a
-    /// corrected single-string card (no oracle), INVALID for any string that
-    /// does not decode as a card or chunk.
+    /// corrected single (not chunked) string (no oracle), INVALID for any
+    /// string printed that does not decode as a card or chunk.
     bits: crate::exit::Bits,
     /// Stderr lines printed after the report, in group order.
     advisories: Vec<String>,
@@ -222,7 +226,7 @@ enum GroupKey {
 fn describe_group_key(key: GroupKey) -> String {
     match key {
         GroupKey::Chunked(csid) => format!("chunk_set_id 0x{csid:05x}"),
-        GroupKey::SingleString(idx) => format!("single-string chunk {idx}"),
+        GroupKey::SingleString(idx) => format!("input {idx}, a single string, not chunked"),
     }
 }
 
@@ -287,10 +291,13 @@ fn group_is_complete_and_consistent(headers: &[&StringLayerHeader]) -> bool {
 ///   to a DIFFERENT valid codeword); a clean set that fails is `Invalid`.
 /// - An **incomplete** chunk set with a correction is REPAIRED: the rest of
 ///   the set verifies it when it is reassembled (decision 7, D26).
-/// - A **single-string** card is a complete set of one and is treated the
-///   same way (a valid single-string mk1 cannot carry a real xpub, so in
-///   practice it never decodes). If one ever does after a correction, it has
-///   no cross-chunk check: REPAIRED + UNVERIFIED (20).
+/// - A **single-string** (not chunked) card has no cross-chunk check. A
+///   clean one that fails its decode is `Invalid`, nothing printed. A
+///   corrected one that fails is still printed, at REPAIRED + UNVERIFIED +
+///   INVALID (22). One that decodes after a correction would be REPAIRED +
+///   UNVERIFIED (20), but that is unreachable in mk: a single string cannot
+///   hold a 65-byte xpub, so no single-string mk1 decodes. A chunked set of
+///   one follows the complete-set rule above.
 fn classify_mk1_set(
     reports: &[RepairDetail],
     header_results: &[std::result::Result<StringLayerHeader, String>],
@@ -383,11 +390,28 @@ fn classify_mk1_set(
                 blessed.push((*key, card));
             }
             Ok(_) => {}
+            // Decision 6 (and the coordinator's ruling, matching md): a
+            // string that is not chunked has no oracle, so a corrected one
+            // that fails its decode is still printed, at 16 + 4 + 2 = 22.
+            // A chunked set of one takes the complete-set rule below.
+            Err(e) if corrected && matches!(key, GroupKey::SingleString(_)) => {
+                bits |= REPAIRED | UNVERIFIED | INVALID;
+                advisories.push(format!(
+                    "error: the corrected string ({group}) passed its checksum but is not a \
+                     card mk can decode: {e}. The string is not chunked, so nothing checks \
+                     the correction a second time. Do not trust it."
+                ));
+            }
             Err(e) if corrected => {
                 return Err(CliError::SetReassemblyMismatch {
                     group,
                     detail: e.to_string(),
                 });
+            }
+            Err(e) if matches!(key, GroupKey::SingleString(_)) => {
+                return Err(CliError::Invalid(format!(
+                    "{group}: the string does not decode as an mk1 card: {e}"
+                )));
             }
             Err(e) => {
                 return Err(CliError::Invalid(format!(

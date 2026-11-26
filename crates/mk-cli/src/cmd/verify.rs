@@ -211,6 +211,9 @@ fn emit_ok(
         let mut envelope = json!({
             "schema_version": 1,
             "ok": true,
+            // Additive (R5 for JSON readers): the card was read after a BCH
+            // correction, so the exit status has 16 set.
+            "corrected": corrected,
             "chunks": strings.len(),
             "policy_id_stubs": card.policy_id_stubs.iter().map(fmt_stub).collect::<Vec<_>>(),
         });

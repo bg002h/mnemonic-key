@@ -88,7 +88,7 @@ fn kv_cli_verify_json_reports_invalid_master_i9() {
 #[test]
 fn kv_cli_decode_warns_on_invalid_master() {
     let o = mk(&["decode", LEGACY_I8[0], LEGACY_I8[1]]);
-    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(o.status.code(), Some(2));
     assert!(s(&o.stdout).starts_with(&format!("xpub:                {BAD_TPUB}\n")));
     let want = format!(
         "warning: this card is invalid ({I8_DISPLAY}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it\n"
@@ -116,7 +116,7 @@ fn kv_cli_decode_sentinel_no_warning() {
 #[test]
 fn kv_cli_decode_json_warns_on_invalid_master() {
     let o = mk(&["decode", "--json", LEGACY_I9[0], LEGACY_I9[1]]);
-    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(o.status.code(), Some(2));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["origin_fingerprint"], "deadbeef");
     assert_eq!(v["schema_version"], 1);
@@ -129,7 +129,7 @@ fn kv_cli_decode_json_warns_on_invalid_master() {
 #[test]
 fn kv_cli_inspect_keeps_chunk_set_id_on_legacy_card() {
     let o = mk(&["inspect", LEGACY_I8[0], LEGACY_I8[1]]);
-    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(o.status.code(), Some(2));
     assert!(
         s(&o.stdout).contains("\nchunk_set_id:        ca522 (stamped)\n"),
         "stdout: {}",

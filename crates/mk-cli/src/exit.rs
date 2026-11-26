@@ -34,6 +34,7 @@ pub const USAGE: u8 = 64;
 /// Never combines: a bug, or a failure no class covers (Rust's panic code).
 pub const INTERNAL: u8 = 101;
 /// The operator stopped it (at a prompt, or Ctrl-C = 128 + SIGINT).
+#[allow(dead_code)] // mirrored from the shared set; `mk` has no prompt
 pub const STOPPED: u8 = 130;
 
 /// The root `--help` legend (spec R11), word for word.
@@ -54,11 +55,13 @@ impl Bits {
     }
 
     /// The set holding one bit (or a sum of bits).
+    #[allow(dead_code)] // part of the mirrored bit-set API
     pub const fn of(bits: u8) -> Self {
         Bits(bits & 63)
     }
 
     /// Whether every bit of `bits` is set.
+    #[allow(dead_code)] // part of the mirrored bit-set API
     pub const fn contains(self, bits: u8) -> bool {
         self.0 & bits == bits
     }
@@ -128,9 +131,11 @@ mod tests {
         assert_eq!(add(REPAIRED, IO), 48);
     }
 
+    /// Spec R11's legend, word for word, written out independently of the
+    /// constant (copied from the spec's quoted block, one line).
     #[test]
     fn the_legend_is_the_specs() {
-        assert!(HELP_LEGEND.starts_with("Exit status: 0 = done, every check passed."));
-        assert!(HELP_LEGEND.ends_with("32 a file, device or helper failed."));
+        const SPEC_R11: &str = "Exit status: 0 = done, every check passed. 64 = bad command line, nothing ran. 101 = internal error. 130 = stopped by the operator. Other codes from 128 up = killed by a signal. Otherwise the sum (1 to 63) of: 1 a check said no; 2 an input is invalid; 4 verify the result before trusting it; 8 refused (network mismatch, secret on the command line, unsafe output); 16 a correction was applied; 32 a file, device or helper failed.";
+        assert_eq!(HELP_LEGEND, SPEC_R11);
     }
 }

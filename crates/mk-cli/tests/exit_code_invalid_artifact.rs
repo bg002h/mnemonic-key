@@ -158,14 +158,14 @@ fn repair_success_codes() {
     );
 }
 
-/// A usage error is 64 (exit-code spec decision 2); no artifact at all is
-/// an empty input, 2 (decision 3), not usage.
+/// A usage error is 64 (exit-code spec decision 2); naming no input channel
+/// at all is a missing required argument, still 64 (decision 3).
 #[test]
-fn usage_is_64_and_no_input_is_2() {
+fn usage_is_64_and_no_input_is_64() {
     assert_eq!(
         code_of(&["decode"]),
-        2,
-        "no artifact at all is an empty input, INVALID"
+        64,
+        "no input channel named at all is a missing argument, USAGE"
     );
     assert_eq!(
         code_of(&["encode", "--xpub", V1_XPUB]),

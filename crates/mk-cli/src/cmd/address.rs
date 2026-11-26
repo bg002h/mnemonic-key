@@ -99,7 +99,7 @@ pub fn run(args: AddressArgs) -> Result<u8> {
             args.network,
         ));
     }
-    warn_if_invalid(&card);
+    let invalid = warn_if_invalid(&card);
 
     let addr_type = resolve_address_type(&card.origin_path, args.address_type)?;
     let network = resolve_network(&card.xpub, args.network)?;
@@ -152,7 +152,7 @@ pub fn run(args: AddressArgs) -> Result<u8> {
         crate::output_advisory::OutputClass::WatchOnly,
         &mut std::io::stderr(),
     );
-    Ok(0)
+    Ok(invalid)
 }
 
 /// §3.1 address-type resolution: multisig-refuse FIRST, then explicit, then

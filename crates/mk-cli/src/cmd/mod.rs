@@ -112,13 +112,20 @@ fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
     Some(mk_codec::derive_chunk_set_id(&bytecode))
 }
 
-/// Warn on stderr when a decoded card fails `KeyCard::validate` (T5). The card
-/// is still read as written; stdout and the exit code are unchanged.
-pub fn warn_if_invalid(card: &mk_codec::KeyCard) {
+/// Warn on stderr when a decoded card fails `KeyCard::validate` (T5), and
+/// return the exit bits: INVALID for such a card, else 0. The card is still
+/// read and printed as written (mk SPEC: cards minted before mk-codec 0.6.0
+/// stay readable), and the code says it is invalid (exit-code spec test 6,
+/// decision 8's print-and-report pattern).
+#[must_use = "the verb's exit code must carry INVALID for an invalid card"]
+pub fn warn_if_invalid(card: &mk_codec::KeyCard) -> u8 {
     if let Err(e) = card.validate() {
         eprintln!(
             "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
         );
+        crate::exit::INVALID
+    } else {
+        crate::exit::OK
     }
 }
 
@@ -447,6 +454,13 @@ pub fn fmt_fingerprint(fp: &Fingerprint) -> String {
 /// (SPEC §3.2) means a grouped card and an unbroken card must both re-ingest,
 /// which is exactly what a human transcribing from the engraving card produces.
 pub fn read_mk1_strings(args: &[String], in_file: Option<&str>) -> Result<Vec<String>> {
+    const EXPECTED: &str =
+        "expected at least one mk1 string (positional, via --in FILE, or via stdin with '-')";
+    // Exit-code spec decision 3: no channel named at all is a missing
+    // required argument, 64, refused before anything is read (R2).
+    if args.is_empty() && in_file.is_none() {
+        return Err(CliError::UsageError(EXPECTED.into()));
+    }
     let mut out = Vec::with_capacity(args.len());
     if let Some(path) = in_file {
         let buf = std::fs::read_to_string(path)
@@ -468,14 +482,11 @@ pub fn read_mk1_strings(args: &[String], in_file: Option<&str>) -> Result<Vec<St
     }
     if out.is_empty() {
         // SPEC §6h: the remedy must be executable, so it names only channels
-        // that exist. `--in FILE` is one of them as of P3. No input at all,
-        // or an empty one, is INVALID (2), not usage (exit-code spec
-        // decision 3): in a pipeline an empty stdin means the step before
-        // failed.
-        return Err(CliError::Invalid(
-            "expected at least one mk1 string (positional, via --in FILE, or via stdin with '-')"
-                .into(),
-        ));
+        // that exist. `--in FILE` is one of them as of P3. A named channel
+        // that yields nothing is an empty input, INVALID (2), not usage
+        // (exit-code spec decision 3): in a pipeline an empty stdin means
+        // the step before failed.
+        return Err(CliError::Invalid(EXPECTED.into()));
     }
     Ok(out)
 }

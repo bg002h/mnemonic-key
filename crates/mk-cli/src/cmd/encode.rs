@@ -238,9 +238,13 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
         stubs.push(decoded.stub);
         policies.push(decoded);
     }
+    // The R2 check above already refused a command line with no stub source;
+    // `read_md1_set` refuses an empty file and a non-empty md1 list always
+    // forms a group. Reaching this after input was read would be a bug, not a
+    // usage error (a 64 here would also break R2).
     if stubs.is_empty() {
-        return Err(CliError::UsageError(
-            "at least one of --policy-id-stub or --from-md1 is required".into(),
+        return Err(CliError::Internal(
+            "no policy stub after the stub sources were read".into(),
         ));
     }
 

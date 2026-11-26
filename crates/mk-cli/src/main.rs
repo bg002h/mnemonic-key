@@ -12,8 +12,6 @@ mod out;
 
 mod cmd;
 mod error;
-// A mirror of the shared constants: not every one is used by `mk`.
-#[allow(dead_code)]
 mod exit;
 mod format;
 mod keyfile;
