@@ -86,7 +86,7 @@ pub fn run(args: VerifyArgs) -> Result<u8> {
         .transpose()?;
 
     if let Some(expected) = &args.xpub {
-        let want = parse_xpub_normalized(expected, want_path.as_ref())?;
+        let want = parse_xpub_normalized(expected, want_path.as_ref(), "--xpub")?;
         if want != card.xpub {
             return Err(CliError::ContentMismatch {
                 field: "xpub".into(),

@@ -46,7 +46,18 @@ Next release: 0.18.0
     printed with a "do not trust it" error at **22** (16 + 4 + 2: nothing
     checks a single string's correction a second time). A corrected single
     string that decodes would be 20, but no single-string mk1 decodes (it
-    cannot hold a 65-byte xpub), so 20 does not occur in `mk`;
+    cannot hold a 65-byte xpub), so 20 does not occur in `mk`. A string whose
+    chunk header does not parse follows the same rule: **2** with nothing
+    printed when clean, printed at **22** when corrected. Strings that are not
+    one card's chunk set (a chunk given twice, more chunks than the set
+    declares, an index out of range, chunks that disagree on the set's size)
+    are **2** with nothing printed and the reason on stderr; they used to be
+    reported as an incomplete set at 0 or 16. Only a short set of distinct
+    chunks keeps the 16 and its "verifiable when the rest of the set is
+    reassembled" warning. A card `mk verify` calls invalid is still printed,
+    at **2** (**18** when corrected). `repair --json` gains two additive
+    fields after `kind`: `"not_a_card": {"kind", "message"}` at 22 (ms's
+    field), and `"incomplete": true` for a short set;
   - `decode`, `inspect`, `address` and `derive` on a card that `mk verify`
     calls invalid (it fails the mk-codec 0.6.0 key-origin rules): 0 -> **2**.
     The card is still printed, with its warning;
@@ -58,19 +69,33 @@ Next release: 0.18.0
   - `verify --json` gains an additive `"corrected": true|false` field: true
     when the card was read after a BCH correction (the exit status then has
     16 set).
+  - Every verb's `--help` ends with an "Exit status:" line naming the codes
+    that verb can return.
+  - An `--xpub` (or key-record xpub) that does not parse is no longer
+    echoed: the error names the flag and the version bytes, and says when
+    they are a private key's (xprv/tprv). It used to print the whole value,
+    on stdout under `--json`.
+  - An md-codec error from `--from-md1` is classified per variant, as `md`
+    classifies it: 2, except the two only a bug reaches (`ChunkSetEmpty`,
+    `Codex32EncodeError`), which are 101. An mk-codec error variant this
+    build does not know is 101, not 2.
+  - **Windows:** a closed stdout (`>&-`) is detected only on Unix (the probe
+    runs from `.init_array`/`__mod_init_func`). On Windows a closed stdout
+    still exits 0 with the output lost; a stdout write error that does reach
+    `mk` still adds 32.
 
 - **`mk encode --keys/--in` and `--from-md1-set` refuse a bare carriage return, another Unicode line break or a
   byte-order mark after the first character, naming the line** (bughunt-1119 bh-mk-I3, bh-mk-I4). A leading
   byte-order mark and CRLF line ends are read as before; `--from-md1-set` now also accepts a leading byte-order mark
   (it used to drop the first md1 string silently). Any other CR, any of U+000B, U+000C, U+0085, U+2028, U+2029, and any
-  U+FEFF after the first character is refused at exit 64 instead of silently dropping a key record or an md1 string.
-- `mk encode` refuses a depth-0 xpub whose parent fingerprint is not 00000000 (exit 64).
-- `mk verify` reports a card whose depth-0 key is not a valid BIP 32 master, or whose depth-1 origin fingerprint is not the xpub's parent fingerprint, as invalid (exit 1, kinds `MasterParentFingerprintNonzero` / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
-- `mk decode`, `inspect`, `address` and `derive` still read such a card and warn on stderr.
+  U+FEFF after the first character is refused at exit 64 (2 since the exit-code change above) instead of silently dropping a key record or an md1 string.
+- `mk encode` refuses a depth-0 xpub whose parent fingerprint is not 00000000 (exit 64 (2 since the exit-code change above)).
+- `mk verify` reports a card whose depth-0 key is not a valid BIP 32 master, or whose depth-1 origin fingerprint is not the xpub's parent fingerprint, as invalid (exit 1 (2 since the exit-code change above), kinds `MasterParentFingerprintNonzero` / `MasterFingerprintMismatch` / `OriginParentFingerprintMismatch`).
+- `mk decode`, `inspect`, `address` and `derive` still read such a card and warn on stderr (and exit 2 since the exit-code change above; `repair` too).
 - Requires mk-codec 0.6.0.
 - **`mk address` and `mk derive` refuse a fixed-key card** (bughunt-1119 bh-mk-C1). A card whose xpub has depth 0
   and an all-zero chain code (how the toolkit writes a single WIF key) has no child keys any wallet watches, so both
-  commands now exit 64 right after the chunk-set-id warning, before anything else is checked, instead of printing
+  commands now exit 64 (2 since the exit-code change above) right after the chunk-set-id warning, before anything else is checked, instead of printing
   addresses or a child xpub no wallet watches. The error prints a ready-to-paste `mnemonic convert --from xpub=...
   --to address --path m --script-type TYPE` command that shows the key's own address (with `--network NETWORK` for a
   test-kind xpub; `TYPE` and `NETWORK` are pre-filled from `--address-type` and `--network` when given), and says that
@@ -78,12 +103,12 @@ Next release: 0.18.0
   card (real chain code) is unchanged.
 - **`mk derive` refuses an empty `--path`** (bughunt-1119 bh-mk-I18). `--path ''`, `m` and `m/` used to print the
   parent xpub labelled `child_xpub`; they now exit 64 (`derive needs at least one step`).
-- `mk encode` refuses (exit 64) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.
-- `mk encode --keys`/`--in` refuses (exit 64) a repeated record, one key under two origins, and one origin with two keys, naming both lines.
-- `mk encode` refuses (exit 64) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.
-- **A failed `mk encode --out` write no longer destroys the existing file** (bughunt-1119 bh-mk-I1). The card is written to a temporary file beside FILE and renamed over it (mnemonic-io-lib 0.1.3; the FIX document says 0.1.2), so a full disk or quota leaves the old file byte-identical, and FILE's directory must now be writable. The error is now `mk: cannot write the output: FILE: <error>`, saying whether FILE is unchanged, at exit 1 (was `error: --out FILE: <error>`, exit 64).
-- **`mk encode` refuses an output that is one of its inputs** (bughunt-1119 bh-mk-I6). `--out` naming the `--in`, `--keys` or `--from-md1-set` file (the same path, a symlink or a hard link), or stdout redirected into one of them, exits 64 naming both, before anything is read or written; it used to replace or extend the input at exit 0.
-- **`mk encode --json --out FILE` writes both** (bughunt-1119 T7). The mk1 strings go to FILE and the JSON to stdout, as in md and ms; before, FILE held the JSON and stdout was empty. With `--json`, a stdout that is one of the inputs or the `--out` file is refused (exit 64).
+- `mk encode` refuses (exit 64 (1 since the exit-code change above)) a card whose origin path or master fingerprint contradicts the slot its keyed --from-md1 policy gives that key (complete or sparse key list; a slot that states no origin gives the template's standard origin, which the policy id commits to), and a policy that holds the key in two slots.
+- `mk encode --keys`/`--in` refuses (exit 64 (2 since the exit-code change above)) a repeated record, one key under two origins, and one origin with two keys, naming both lines.
+- `mk encode` refuses (exit 64 (2 since the exit-code change above)) a policy stub bound twice across --policy-id-stub, --from-md1 and --from-md1-set.
+- **A failed `mk encode --out` write no longer destroys the existing file** (bughunt-1119 bh-mk-I1). The card is written to a temporary file beside FILE and renamed over it (mnemonic-io-lib 0.1.3; the FIX document says 0.1.2), so a full disk or quota leaves the old file byte-identical, and FILE's directory must now be writable. The error is now `mk: cannot write the output: FILE: <error>`, saying whether FILE is unchanged, at exit 1 (32 since the exit-code change above) (was `error: --out FILE: <error>`, exit 64).
+- **`mk encode` refuses an output that is one of its inputs** (bughunt-1119 bh-mk-I6). `--out` naming the `--in`, `--keys` or `--from-md1-set` file (the same path, a symlink or a hard link), or stdout redirected into one of them, exits 64 (8 since the exit-code change above) naming both, before anything is read or written; it used to replace or extend the input at exit 0.
+- **`mk encode --json --out FILE` writes both** (bughunt-1119 T7). The mk1 strings go to FILE and the JSON to stdout, as in md and ms; before, FILE held the JSON and stdout was empty. With `--json`, a stdout that is one of the inputs or the `--out` file is refused (exit 64 (8 since the exit-code change above)).
 
 ## [0.17.0] — 2026-11-22
 

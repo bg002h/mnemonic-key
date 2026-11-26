@@ -145,7 +145,8 @@ impl CliError {
     pub fn exit_code(&self) -> u8 {
         use crate::exit::*;
         match self {
-            CliError::Codec(_) | CliError::MdCodec(_) => INVALID,
+            CliError::Codec(e) => mk_codec_class(e),
+            CliError::MdCodec(e) => md_codec_class(e),
             CliError::FutureFormat(_) => INVALID,
             CliError::ContentMismatch { .. } | CliError::Mismatch(_) => NO,
             CliError::UsageError(_) => USAGE,
@@ -161,12 +162,12 @@ impl CliError {
     /// a record number), keeping its class.
     pub fn prefixed(self, prefix: &str) -> CliError {
         let m = format!("{prefix}{}", self.message());
-        match self {
-            CliError::UsageError(_) => CliError::UsageError(m),
-            CliError::Mismatch(_) | CliError::ContentMismatch { .. } => CliError::Mismatch(m),
-            CliError::Refused(_) => CliError::Refused(m),
-            CliError::IoError(_) | CliError::Io(_) => CliError::Io(m),
-            CliError::Internal(_) => CliError::Internal(m),
+        match self.exit_code() {
+            crate::exit::USAGE => CliError::UsageError(m),
+            crate::exit::NO => CliError::Mismatch(m),
+            crate::exit::REFUSED => CliError::Refused(m),
+            crate::exit::IO => CliError::Io(m),
+            crate::exit::INTERNAL => CliError::Internal(m),
             _ => CliError::Invalid(m),
         }
     }
@@ -223,8 +224,107 @@ impl CliError {
     }
 }
 
+/// The §3 class of an mk-codec error (spec R13). Every variant this build
+/// knows is a card or value that is wrong (2). `mk_codec::Error` is
+/// `#[non_exhaustive]`, so a variant added later cannot be named here: it is
+/// an unclassified failure, 101, until it is placed (never a silent 2).
+fn mk_codec_class(e: &mk_codec::Error) -> u8 {
+    use mk_codec::Error as E;
+    match e {
+        E::InvalidHrp(_)
+        | E::MixedCase
+        | E::InvalidStringLength(_)
+        | E::InvalidChar { .. }
+        | E::BchUncorrectable(_)
+        | E::UnsupportedCardType(_)
+        | E::MalformedPayloadPadding
+        | E::ChunkSetIdMismatch
+        | E::ChunkedHeaderMalformed(_)
+        | E::MixedHeaderTypes
+        | E::CrossChunkHashMismatch
+        | E::UnsupportedVersion(_)
+        | E::ReservedBitsSet
+        | E::InvalidPolicyIdStubCount
+        | E::InvalidPathIndicator(_)
+        | E::PathTooDeep(_)
+        | E::InvalidPathComponent(_)
+        | E::InvalidXpubVersion(_)
+        | E::InvalidXpubPublicKey(_)
+        | E::UnexpectedEnd
+        | E::TrailingBytes
+        | E::CardPayloadTooLarge { .. }
+        | E::XpubOriginPathMismatch { .. }
+        | E::MasterParentFingerprintNonzero { .. }
+        | E::MasterFingerprintMismatch { .. }
+        | E::OriginParentFingerprintMismatch { .. } => crate::exit::INVALID,
+        _ => crate::exit::INTERNAL,
+    }
+}
+
+/// The §3 class of an md-codec error (spec R13), as md itself classes it.
+/// Every variant is named, with no wildcard, so a new `md_codec::Error`
+/// fails to compile until it is placed. Two are reachable only through a
+/// bug (101): mk checks its md1 input is non-empty before reassembly
+/// (`ChunkSetEmpty`), and the codec never builds `Codex32EncodeError` on
+/// decode. Every other one is an md1 that is wrong (2).
+fn md_codec_class(e: &md_codec::Error) -> u8 {
+    use md_codec::Error as E;
+    match e {
+        E::ChunkSetEmpty | E::Codex32EncodeError(_) => crate::exit::INTERNAL,
+        E::BitStreamTruncated { .. }
+        | E::WireVersionMismatch { .. }
+        | E::MalformedHeader { .. }
+        | E::PathDepthExceeded { .. }
+        | E::KeyCountOutOfRange { .. }
+        | E::DivergentPathCountMismatch { .. }
+        | E::AltCountOutOfRange { .. }
+        | E::TagOutOfRange { .. }
+        | E::ThresholdOutOfRange { .. }
+        | E::ChildCountOutOfRange { .. }
+        | E::KGreaterThanN { .. }
+        | E::TlvOrderingViolation { .. }
+        | E::PlaceholderIndexOutOfRange { .. }
+        | E::OverrideOrderViolation { .. }
+        | E::EmptyTlvEntry { .. }
+        | E::TlvLengthExceedsRemaining { .. }
+        | E::PlaceholderNotReferenced { .. }
+        | E::PlaceholderFirstOccurrenceOutOfOrder { .. }
+        | E::MultipathAltCountMismatch { .. }
+        | E::BaselineUseSiteOverride { .. }
+        | E::RedundantUseSiteOverride { .. }
+        | E::ForbiddenTapTreeLeaf { .. }
+        | E::OperatorContextViolation { .. }
+        | E::ChunkCountOutOfRange { .. }
+        | E::ChunkIndexOutOfRange { .. }
+        | E::ChunkSetIdOutOfRange { .. }
+        | E::ChunkHeaderChunkedFlagMissing
+        | E::ChunkCountExceedsMax { .. }
+        | E::Codex32DecodeError(_)
+        | E::ChunkSetInconsistent
+        | E::ChunkSetIncomplete { .. }
+        | E::ChunkIndexGap { .. }
+        | E::ChunkSetIdMismatch { .. }
+        | E::VarintOverflow { .. }
+        | E::MissingExplicitOrigin { .. }
+        | E::EmptyOriginOverride { .. }
+        | E::InvalidPresenceByte { .. }
+        | E::InvalidXpubBytes { .. }
+        | E::MissingPubkey { .. }
+        | E::ChainIndexOutOfRange { .. }
+        | E::HardenedPublicDerivation
+        | E::AddressDerivationFailed { .. }
+        | E::NUMSSentinelConflict
+        | E::DecodeRecursionDepthExceeded { .. }
+        | E::TooManyErrors { .. }
+        | E::PayloadTooLongForSingleString { .. }
+        | E::ChunkSymbolCountOutOfRange { .. }
+        | E::StringSymbolCountOutOfRange { .. }
+        | E::MalformedPayloadPadding { .. } => crate::exit::INVALID,
+    }
+}
+
 /// Map an `mk_codec::Error` variant to its stable string name for the JSON `kind` field.
-fn mk_codec_error_kind(e: &mk_codec::Error) -> &'static str {
+pub(crate) fn mk_codec_error_kind(e: &mk_codec::Error) -> &'static str {
     match e {
         mk_codec::Error::InvalidHrp(_) => "InvalidHrp",
         mk_codec::Error::MixedCase => "MixedCase",
@@ -335,6 +435,21 @@ mod exit_code_table {
                 "an md1 the --from-md1 binding cannot read is an invalid input",
             ),
             (
+                CliError::MdCodec(md_codec::Error::ChunkSetEmpty),
+                INTERNAL,
+                "md's own class: mk checks its input is non-empty first",
+            ),
+            (
+                CliError::MdCodec(md_codec::Error::Codex32EncodeError("x".into())),
+                INTERNAL,
+                "md's own class: the codec never builds it on decode",
+            ),
+            (
+                CliError::MdCodec(md_codec::Error::ChunkSetInconsistent),
+                INVALID,
+                "an md1 set that does not hang together is an invalid input",
+            ),
+            (
                 CliError::FutureFormat("v9".into()),
                 INVALID,
                 "future format",
@@ -389,6 +504,9 @@ mod exit_code_table {
     fn expected_class(e: &CliError) -> (&'static str, u8) {
         match e {
             CliError::Codec(_) => ("Codec", INVALID),
+            CliError::MdCodec(
+                md_codec::Error::ChunkSetEmpty | md_codec::Error::Codex32EncodeError(_),
+            ) => ("MdCodec", INTERNAL),
             CliError::MdCodec(_) => ("MdCodec", INVALID),
             CliError::FutureFormat(_) => ("FutureFormat", INVALID),
             CliError::ContentMismatch { .. } => ("ContentMismatch", NO),

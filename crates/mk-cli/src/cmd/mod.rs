@@ -119,14 +119,21 @@ fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
 /// decision 8's print-and-report pattern).
 #[must_use = "the verb's exit code must carry INVALID for an invalid card"]
 pub fn warn_if_invalid(card: &mk_codec::KeyCard) -> u8 {
-    if let Err(e) = card.validate() {
-        eprintln!(
-            "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
-        );
+    if let Some(w) = invalid_card_warning(card) {
+        eprintln!("{w}");
         crate::exit::INVALID
     } else {
         crate::exit::OK
     }
+}
+
+/// The T5 warning for a card that fails `KeyCard::validate`, or `None`.
+pub fn invalid_card_warning(card: &mk_codec::KeyCard) -> Option<String> {
+    card.validate().err().map(|e| {
+        format!(
+            "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
+        )
+    })
 }
 
 /// Compare the declared vs. content-derived `chunk_set_id` for a decoded
@@ -527,8 +534,14 @@ pub fn classify_code_variant(s: &str) -> &'static str {
 /// Parse an xpub, accepting SLIP-0132 prefixes (normalized to canonical xpub/tpub).
 /// Emits a stderr note on normalization; refuses (`Invalid`) if a non-canonical
 /// prefix's implied script type contradicts `origin_path` (when supplied).
-pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> Result<Xpub> {
-    let (xpub, variant) = crate::slip132::detect_and_normalize(s)?;
+/// `what` names the source for an error (`--xpub`, a key record); the value
+/// itself is never echoed.
+pub fn parse_xpub_normalized(
+    s: &str,
+    origin_path: Option<&DerivationPath>,
+    what: &str,
+) -> Result<Xpub> {
+    let (xpub, variant) = crate::slip132::detect_and_normalize(s, what)?;
     if let Some(v) = variant {
         eprintln!(
             "note: the xpub was a SLIP-0132 {}; normalized to canonical {} — script type is conveyed by the origin path, not the key prefix",

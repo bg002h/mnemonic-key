@@ -86,7 +86,7 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
 
     let fingerprint = parse_fingerprint(fp_str)?;
     let path = parse_derivation_path(&format!("m/{path_rest}"))?;
-    let xpub = parse_xpub_normalized(xpub_str, Some(&path))?;
+    let xpub = parse_xpub_normalized(xpub_str, Some(&path), "the key record")?;
     Ok(KeyRecord {
         fingerprint,
         path,

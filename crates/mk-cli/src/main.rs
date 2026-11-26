@@ -41,24 +41,54 @@ pub(crate) struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Encode an xpub + origin metadata into one or more mk1 strings.
+    #[command(
+        after_help = "Exit status: 0 = encoded. 1 = a key contradicts its --from-md1 policy (not a cosigner, or an origin that disagrees with its slot). 2 = an input is invalid. 8 = refused (the output is one of the inputs). 32 = an input file or the output failed. 64 = bad command line."
+    )]
     Encode(cmd::encode::EncodeArgs),
     /// Decode mk1 strings back to xpub + origin metadata.
+    #[command(
+        after_help = "Exit status: 0 = decoded. 2 = an input is invalid, or the card fails the key-origin checks mk verify makes (it is still printed). 16 is added when a BCH correction was applied (so 18 = corrected, then invalid). 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Decode(cmd::decode::DecodeArgs),
     /// Inspect mk1 strings: structural commentary in addition to decode.
+    #[command(
+        after_help = "Exit status: 0 = reported. 2 = an input is invalid, or the card fails the key-origin checks mk verify makes (the report is still printed). 16 is added when a BCH correction was applied (so 18 = corrected, then invalid). 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Inspect(cmd::inspect::InspectArgs),
     /// Verify mk1 strings (BCH check + optional content match).
+    #[command(
+        after_help = "Exit status: 0 = every check passed. 1 = a check said no. 2 = an input is invalid. 16 is added when a BCH correction was applied (16 = passed after a correction, 17 = a check said no, 18 = invalid). 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Verify(cmd::verify::VerifyArgs),
     /// Print the SHA-pinned v0.1 test-vector corpus as JSON.
+    #[command(
+        after_help = "Exit status: 0 = printed. 32 = the output could not be written. 64 = bad command line."
+    )]
     Vectors(cmd::vectors::VectorsArgs),
     /// Emit machine-readable JSON describing the CLI surface (for mnemonic-gui).
+    #[command(
+        after_help = "Exit status: 0 = printed. 32 = the output could not be written. 64 = bad command line."
+    )]
     GuiSchema(cmd::gui_schema::GuiSchemaArgs),
     /// Repair mk1 strings via BCH error correction (exit 16 = a correction was applied).
+    #[command(
+        after_help = "Exit status: 0 = nothing to correct. 16 = a correction was applied (verified by reassembly, or verifiable once the rest of a short chunk set is given). 22 = a corrected string that is not a card (16 + 4 verify before trusting + 2 invalid; it is still printed). 2 = an input is invalid: uncorrectable, not one card's chunk set, or a card that does not decode (nothing printed); a printed card that fails the key-origin checks is 2, or 18 after a correction. 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Repair(cmd::repair::RepairArgs),
     /// Render receive/change addresses controlled by a card's xpub (read-only).
+    #[command(
+        after_help = "Exit status: 0 = printed. 2 = an input is invalid (a multisig, fixed-key or invalid card, or an address type that cannot be inferred). 8 = refused (--network disagrees with the xpub). 16 is added when a BCH correction was applied (so 18 or 24 after a later failure). 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Address(cmd::address::AddressArgs),
     /// Derive a child xpub at a relative unhardened path from a card (read-only).
+    #[command(
+        after_help = "Exit status: 0 = printed. 2 = an input is invalid (a fixed-key or invalid card, or a path the key cannot derive). 16 is added when a BCH correction was applied (so 18 after a later failure). 32 is added when an input file or stdout failed. 64 = bad command line."
+    )]
     Derive(cmd::derive::DeriveArgs),
     /// Generate roff man pages for the CLI into a directory (`--out <DIR>`).
+    #[command(
+        after_help = "Exit status: 0 = written. 32 = the directory could not be written. 64 = bad command line."
+    )]
     GenMan(cmd::gen_man::GenManArgs),
 }
 

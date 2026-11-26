@@ -290,7 +290,7 @@ pub fn run(args: EncodeArgs) -> Result<u8> {
                 .xpub
                 .as_deref()
                 .ok_or_else(|| CliError::UsageError("--xpub is required (or use --keys)".into()))?;
-            let xpub = parse_xpub_normalized(xpub_str, Some(&path))?;
+            let xpub = parse_xpub_normalized(xpub_str, Some(&path), "--xpub")?;
             vec![(fingerprint, path, xpub)]
         }
     };

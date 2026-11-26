@@ -49,17 +49,118 @@ fn repair_of_a_clean_set_decode_rejects_is_2_and_prints_nothing() {
     assert_eq!(mk(&d).status.code(), Some(2), "decode agrees");
 }
 
-/// Decision 6: a string that is no mk1 chunk at all (N6, a reserved card
-/// type in its header) is still printed, with an error line, and exits 2.
+/// Final review M-2 ruling: a string whose chunk header does not parse
+/// (N6, a reserved card type; N9) is no chunk of the format. Clean, it is 2
+/// with nothing printed; corrected, it has no oracle and is printed at 22.
 #[test]
-fn repair_prints_a_string_that_is_no_chunk_and_sets_2() {
+fn repair_of_a_string_that_is_no_chunk_is_2_clean_and_22_corrected() {
+    for name in ["N6_", "N9_"] {
+        let n = vector(name);
+        let o = mk(&["repair", &n[0]]);
+        assert_eq!(o.status.code(), Some(2), "{name}");
+        assert!(
+            o.stdout.is_empty(),
+            "{name}: {}",
+            String::from_utf8_lossy(&o.stdout)
+        );
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(err.contains("is not an mk1 chunk"), "{name}: {err}");
+    }
     let n6 = vector("N6_");
-    let o = mk(&["repair", &n6[0]]);
+    let bad = flip(&n6[0], 20);
+    let o = mk(&["repair", &bad]);
+    assert_eq!(
+        o.status.code(),
+        Some(22),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(String::from_utf8_lossy(&o.stdout).contains(&n6[0]));
+    let o = mk(&["repair", "--json", &bad]);
+    assert_eq!(o.status.code(), Some(22));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert!(
+        v["not_a_card"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not an mk1 chunk")
+    );
+}
+
+/// Final review M-4 (R11): every verb's help states the bits it can set.
+#[test]
+fn every_verb_help_has_an_exit_status_line() {
+    for verb in [
+        "encode",
+        "decode",
+        "verify",
+        "inspect",
+        "repair",
+        "address",
+        "derive",
+        "vectors",
+        "gui-schema",
+        "gen-man",
+    ] {
+        let o = mk(&[verb, "--help"]);
+        assert_eq!(o.status.code(), Some(0), "{verb}");
+        let out = String::from_utf8_lossy(&o.stdout);
+        assert!(out.contains("Exit status:"), "{verb}: {out}");
+    }
+    let out = String::from_utf8_lossy(&mk(&["repair", "--help"]).stdout).to_string();
+    for code in ["16", "22", "2 ", "32", "64"] {
+        assert!(out.contains(code), "repair help names {code}: {out}");
+    }
+}
+
+/// Final review M-7: a key that is not an xpub is not echoed back (an xprv
+/// given as --xpub must not reach stderr or a JSON envelope on stdout).
+#[test]
+fn an_xprv_given_as_xpub_is_not_echoed() {
+    const XPRV: &str = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
+    for json in [false, true] {
+        let mut a = vec![
+            "encode",
+            "--xpub",
+            XPRV,
+            "--origin-path",
+            "m/84'/0'/0'",
+            "--policy-id-stub",
+            "11223344",
+            "--privacy-preserving",
+        ];
+        if json {
+            a.push("--json");
+        }
+        let o = mk(&a);
+        assert_eq!(o.status.code(), Some(2));
+        let all = format!(
+            "{}{}",
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        );
+        assert!(!all.contains(&XPRV[4..20]), "the key is echoed: {all}");
+        assert!(all.contains("--xpub") && all.contains("0488ade4"), "{all}");
+    }
+    let d: serde_json::Value = serde_json::from_str(mk_codec::test_vectors::V0_1_JSON).unwrap();
+    let v1: Vec<String> = d["vectors"][0]["expected"]["strings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_string())
+        .collect();
+    let o = mk(&["verify", "--xpub", XPRV, &v1[0], &v1[1]]);
     assert_eq!(o.status.code(), Some(2));
-    let out = String::from_utf8_lossy(&o.stdout);
-    assert!(out.contains(&n6[0]), "{out}");
-    let err = String::from_utf8_lossy(&o.stderr);
-    assert!(err.contains("is not an mk1 chunk"), "{err}");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(!all.contains(&XPRV[4..20]), "the key is echoed: {all}");
+    assert!(
+        all.contains("0488ade4"),
+        "verify reached the --xpub check: {all}"
+    );
 }
 
 /// An input file that cannot be read is the system's failure: 32 (was 64).

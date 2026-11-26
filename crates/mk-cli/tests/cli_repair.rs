@@ -539,3 +539,155 @@ fn repair_corrected_single_string_that_fails_decode_exits_22() {
         "no set-reassembly wording for a non-chunked string; got {stderr:?}"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Final review I-1: a group that is not a complete set and not a short set
+// of distinct chunks (a duplicate, over-full, out-of-range or disagreeing
+// totals) is MALFORMED: 2, nothing printed, the reason on stderr. Only a
+// short set takes decision 7's "verifiable later" (16).
+// ──────────────────────────────────────────────────────────────────────────
+
+fn run_repair(args: &[&str]) -> std::process::Output {
+    let mut a = vec!["repair"];
+    a.extend_from_slice(args);
+    Command::cargo_bin("mk")
+        .expect("mk binary")
+        .args(&a)
+        .output()
+        .expect("invoke mk repair")
+}
+
+fn assert_malformed(args: &[&str], reason: &str) {
+    let out = run_repair(args);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{args:?}: stderr={stderr}");
+    assert!(
+        out.stdout.is_empty(),
+        "{args:?}: nothing printed; got {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        stderr.contains(reason),
+        "{args:?}: want {reason:?} in {stderr}"
+    );
+    assert!(
+        !stderr.contains("verifiable when the rest of the set"),
+        "{args:?}: no decision-7 advisory; got {stderr}"
+    );
+}
+
+#[test]
+fn repair_duplicate_chunk_a_a_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    assert_malformed(&[&c[0], &c[0]], "chunk index 0 appears twice");
+}
+
+#[test]
+fn repair_over_full_a_b_b_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    assert_malformed(&[&c[0], &c[1], &c[1]], "3 chunks, but the set declares 2");
+}
+
+#[test]
+fn repair_corrected_over_full_a_prime_b_b_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    assert_malformed(&[&a, &c[1], &c[1]], "3 chunks, but the set declares 2");
+}
+
+#[test]
+fn repair_corrected_duplicate_a_prime_a_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    assert_malformed(&[&a, &c[0]], "chunk index 0 appears twice");
+}
+
+#[test]
+fn repair_disagreeing_totals_is_malformed_2() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let chunk = |total: u8, index: u8| {
+        let mut d = StringLayerHeader::Chunked {
+            version: VERSION_V0_1,
+            chunk_set_id: 0x0abcd,
+            total_chunks: total,
+            chunk_index: index,
+        }
+        .to_5bit_symbols();
+        d.extend(bytes_to_5bit(&[0x11; 10]));
+        encode_5bit_to_string(&d).unwrap()
+    };
+    let (a, b) = (chunk(2, 0), chunk(3, 1));
+    assert_malformed(&[&a, &b], "disagree on the number of chunks");
+}
+
+/// The short set keeps decision 7: one corrected chunk of two is 16, with
+/// the advisory, and `--json` marks it `"incomplete": true`.
+#[test]
+fn repair_short_set_is_16_and_json_marks_incomplete() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    let out = run_repair(&[&a]);
+    assert_eq!(out.status.code(), Some(16));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("verifiable when the rest of the set"));
+    let out = run_repair(&["--json", &a]);
+    assert_eq!(out.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["incomplete"], true);
+    assert!(v.get("not_a_card").is_none());
+    // A complete set carries neither field.
+    let out = run_repair(&["--json", &a, &c[1]]);
+    assert_eq!(out.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v.get("incomplete").is_none() && v.get("not_a_card").is_none());
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Final review M-1: repair validates the card it decodes, as every other
+// verb does. A card that fails `KeyCard::validate()` is still printed, at 2
+// (clean) or 18 (corrected).
+// ──────────────────────────────────────────────────────────────────────────
+const LEGACY_I8: [&str; 2] = [
+    "mk1qpeffzpqqqqaatd7allqqpp4sl8szqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqnehen8u5yagl2mw0p43h3j",
+    "mk1qpeffzppl8wthtz45p3ftn58pvrs9xlumvkuu2xet8egzkcklqte3jjj9mtsugd0x98xyvntv",
+];
+
+#[test]
+fn repair_of_an_invalid_card_is_2_or_18_and_printed() {
+    let out = run_repair(&LEGACY_I8);
+    assert_eq!(out.status.code(), Some(2));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(LEGACY_I8[0]) && stdout.contains(LEGACY_I8[1]));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("this card is invalid"));
+    let a = flip_at(LEGACY_I8[1], 10);
+    let out = run_repair(&[LEGACY_I8[0], &a]);
+    assert_eq!(out.status.code(), Some(18));
+    assert!(String::from_utf8_lossy(&out.stdout).contains(LEGACY_I8[1]));
+}
+
+/// Final review M-3: `--json` at 22 names why the string is not a card.
+#[test]
+fn repair_json_not_a_card_at_22() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let mut d = StringLayerHeader::SingleString {
+        version: VERSION_V0_1,
+    }
+    .to_5bit_symbols();
+    d.extend(bytes_to_5bit(&[0xFF; 10]));
+    let valid = encode_5bit_to_string(&d).unwrap();
+    let out = run_repair(&["--json", &flip_at(&valid, 5)]);
+    assert_eq!(out.status.code(), Some(22));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v["not_a_card"]["kind"].is_string(), "{v}");
+    assert!(v["not_a_card"]["message"].is_string(), "{v}");
+    assert_eq!(v["corrected_chunks"][0], valid.as_str());
+    // Field order is part of the schema: `not_a_card` right after `kind`,
+    // where ms has it after `verdict` (mk has no `verdict`).
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let at = |k: &str| raw.find(&format!("\"{k}\"")).unwrap();
+    assert!(
+        at("kind") < at("not_a_card") && at("not_a_card") < at("corrected_chunks"),
+        "{raw}"
+    );
+}
