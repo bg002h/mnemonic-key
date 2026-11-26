@@ -296,3 +296,55 @@ fn read_write_stdout_keeps_the_output_and_exits_0() {
     assert!(!err.contains("cannot write"), "{err}");
     assert!(std::fs::metadata(&p).unwrap().len() > 0, "output lost");
 }
+
+/// `mk … >&-`: with fd 1 closed, std's runtime puts `/dev/null` on it before
+/// `main`, so the output was lost with exit 0. A verb that prints exits 1 with
+/// the EBADF line, like a read-only stdout; one that prints nothing keeps its
+/// code.
+#[test]
+fn closed_stdout_exits_1_with_the_line() {
+    const BADF: &str = "mk: cannot write the output: Bad file descriptor (os error 9)";
+    let closed = |a: &[String]| {
+        Command::new("sh")
+            .arg("-c")
+            .arg("exec \"$0\" \"$@\" >&-")
+            .arg(env!("CARGO_BIN_EXE_mk"))
+            .args(a)
+            .stderr(Stdio::piped())
+            .output()
+            .unwrap()
+    };
+    let c = card();
+    for (a, code) in [
+        (s(&["gui-schema"]), 1),
+        (s(&ENCODE), 1),
+        (args(&["decode"], &c), 1),
+        (s(&["--help"]), 1),
+        (s(&["--version"]), 1),
+        (args(&["repair"], &damaged()), 1),
+        (args(&["address", "--json", "--count", "1000001"], &c), 64),
+    ] {
+        let o = closed(&a);
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert_eq!(o.status.code(), Some(code), "{a:?}: {err}");
+        assert_eq!(err.lines().last(), Some(BADF), "{a:?}: {err}");
+    }
+
+    // `--out` writes nothing to stdout: exit 0, and the file holds exactly the
+    // card (no stdout text landed in it through a reused fd 1).
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("card");
+    let mut a = s(&ENCODE);
+    a.extend(s(&["--out", p.to_str().unwrap()]));
+    let o = closed(&a);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(0), "{err}");
+    assert!(!err.contains("cannot write"), "{err}");
+    let want = mk().args(ENCODE).output().unwrap().stdout;
+    assert_eq!(std::fs::read(&p).unwrap(), want);
+    let d = tempfile::tempdir().unwrap();
+    let o = closed(&s(&["vectors", "--out", d.path().to_str().unwrap()]));
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(0), "{err}");
+    assert!(!err.contains("cannot write"), "{err}");
+}
