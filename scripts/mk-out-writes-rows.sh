@@ -90,62 +90,62 @@ o20_state_is_true() {
 # --- I1: a failed --out write (R1, R3)
 fresh; fsize8 "$MK" "${ENC[@]}" --out F; rc=$?
 if [ "$MODE" = red ]; then check o1 $rc 64 "=error: --out F: File too large (os error 27)" "! same F F.orig|F destroyed"
-else check o1 $rc 1 "=mk: cannot write the output: F: File too large (os error 27). F is unchanged." "same F F.orig|F unchanged" "notmp|no temp left"; fi
+else check o1 $rc 32 "=mk: cannot write the output: F: File too large (os error 27). F is unchanged." "same F F.orig|F unchanged" "notmp|no temp left"; fi
 fresh; rm -f F; fsize8 "$MK" "${ENC[@]}" --out F; rc=$?
 if [ "$MODE" = red ]; then check o2 $rc 64 "=error: --out F: File too large (os error 27)" "[ -e F ]|partial F left"
-else check o2 $rc 1 "=mk: cannot write the output: F: File too large (os error 27). Nothing was written." "[ ! -e F ]|F absent" "notmp|no temp left"; fi
+else check o2 $rc 32 "=mk: cannot write the output: F: File too large (os error 27). Nothing was written." "[ ! -e F ]|F absent" "notmp|no temp left"; fi
 fresh; "$MK" "${ENC[@]}" --out nodir/F >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o3 $rc 64 "=error: --out nodir/F: No such file or directory (os error 2)"
-else check o3 $rc 1 "=mk: cannot write the output: nodir/F: No such file or directory (os error 2). Nothing was written." "[ ! -s o.txt ]|stdout empty"; fi
+else check o3 $rc 32 "=mk: cannot write the output: nodir/F: No such file or directory (os error 2). Nothing was written." "[ ! -s o.txt ]|stdout empty"; fi
 fresh; fsize8 "$MK" "${ENC[@]}" --json --out F; rc=$?
 if [ "$MODE" = red ]; then check o4 $rc 64 "=" "grep -q '\"kind\":\"UsageError\"' o.txt|envelope on stdout" "! same F F.orig|F destroyed"
-else check o4 $rc 1 "=mk: cannot write the output: F: File too large (os error 27). F is unchanged." "[ ! -s o.txt ]|stdout empty" "same F F.orig|F unchanged"; fi
+else check o4 $rc 32 "=mk: cannot write the output: F: File too large (os error 27). F is unchanged." "[ ! -s o.txt ]|stdout empty" "same F F.orig|F unchanged"; fi
 if [ "$(id -u)" = 0 ]; then echo "SKIP o12 (root ignores directory modes)"
 else
 fresh; printf 'PRIOR\n' > ro/F; chmod 644 ro/F; cp ro/F ro.orig; chmod 555 ro; "$MK" "${ENC[@]}" --out ro/F >o.txt 2>e.txt; rc=$?; chmod 755 ro
 if [ "$MODE" = red ]; then check o12 $rc 0 "~note: stdout is watch-only" "same ro/F card.ref|written in place"
-else check o12 $rc 1 "=mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged." "same ro/F ro.orig|ro/F unchanged"; fi
+else check o12 $rc 32 "=mk: cannot write the output: ro/F: Permission denied (os error 13). ro/F is unchanged." "same ro/F ro.orig|ro/F unchanged"; fi
 fi
 fresh; printf 'OLD BACKUP\n' > s.txt; bash -c "trap '' XFSZ; exec prlimit --fsize=8 \"\$@\"" _ "$MK" "${ENC[@]}" --out /dev/stdout >>s.txt 2> >(cat > e.txt); rc=$?; sleep 0.5
 if [ "$MODE" = red ]; then check o20 $rc 64 "=error: --out /dev/stdout: File too large (os error 27)"
-else check o20 $rc 1 "~mk: cannot write the output: /dev/stdout: File too large (os error 27)" "o20_state_is_true|the state sentence is true of s.txt"; fi
+else check o20 $rc 32 "~mk: cannot write the output: /dev/stdout: File too large (os error 27)" "o20_state_is_true|the state sentence is true of s.txt"; fi
 
 # --- I6: --out names an input (R2)
 fresh; "$MK" "${ENC[@]}" --out keys >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o5 $rc 0 "-" "same keys card.ref|keys replaced by the card"
-else check o5 $rc 64 "=error: --out keys is the same file as --in keys, $R" "same keys keys.orig|keys unchanged" "[ ! -s o.txt ]|stdout empty"; fi
+else check o5 $rc 8 "=error: --out keys is the same file as --in keys, $R" "same keys keys.orig|keys unchanged" "[ ! -s o.txt ]|stdout empty"; fi
 fresh; ln keys hl; "$MK" "${ENC[@]}" --out hl >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o6 $rc 0 "-" "same keys card.ref|keys replaced"
-else check o6 $rc 64 "=error: --out hl is the same file as --in keys, $R" "same keys keys.orig|keys unchanged"; fi
+else check o6 $rc 8 "=error: --out hl is the same file as --in keys, $R" "same keys keys.orig|keys unchanged"; fi
 fresh; ln -s keys sl; "$MK" "${ENC[@]}" --out sl >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o7 $rc 0 "-" "same keys card.ref|keys replaced"
-else check o7 $rc 64 "=error: --out sl is the same file as --in keys, $R" "same keys keys.orig|keys unchanged"; fi
+else check o7 $rc 8 "=error: --out sl is the same file as --in keys, $R" "same keys keys.orig|keys unchanged"; fi
 fresh; "$MK" encode --keys keys --policy-id-stub deadbeef --out ./keys >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o8 $rc 0 "-" "same keys card.ref|keys replaced"
-else check o8 $rc 64 "=error: --out ./keys is the same file as --keys keys, $R" "same keys keys.orig|keys unchanged"; fi
+else check o8 $rc 8 "=error: --out ./keys is the same file as --keys keys, $R" "same keys keys.orig|keys unchanged"; fi
 fresh; "$MK" encode --in keys --from-md1-set set.md1 --out set.md1 >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o9 $rc 0 "-" "! same set.md1 set.orig|set.md1 replaced"
-else check o9 $rc 64 "=error: --out set.md1 is the same file as --from-md1-set set.md1, $R" "same set.md1 set.orig|set.md1 unchanged"; fi
+else check o9 $rc 8 "=error: --out set.md1 is the same file as --from-md1-set set.md1, $R" "same set.md1 set.orig|set.md1 unchanged"; fi
 fresh; "$MK" encode --in - --policy-id-stub deadbeef --out keys <keys >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o10 $rc 0 "-" "same keys card.ref|keys replaced"
-else check o10 $rc 64 "=error: --out keys is the same file as standard input (--in -), $R" "same keys keys.orig|keys unchanged"; fi
+else check o10 $rc 8 "=error: --out keys is the same file as standard input (--in -), $R" "same keys keys.orig|keys unchanged"; fi
 fresh; "$MK" "${ENC[@]}" --json --out keys >o.txt 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o21 $rc 0 "-" "! same keys keys.orig|keys replaced by JSON"
-else check o21 $rc 64 "=" "grep -qF '\"message\":\"--out keys is the same file as --in keys, $R\"' o.txt|envelope on stdout" "same keys keys.orig|keys unchanged"; fi
+else check o21 $rc 8 "=" "grep -qF '\"message\":\"--out keys is the same file as --in keys, $R\"' o.txt|envelope on stdout" "same keys keys.orig|keys unchanged"; fi
 
 # --- I6 widened to stdout (R4): encode without --out
 fresh; "$MK" "${ENC[@]}" >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o15 $rc 0 "-" "[ \$(wc -l <keys) = 3 ]|card appended to keys"
-else check o15 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged"; fi
+else check o15 $rc 8 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged"; fi
 fresh; "$MK" "${ENC[@]}" --json >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o16 $rc 0 "-" "! same keys keys.orig|JSON appended to keys"
-else check o16 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged (no envelope written into it)"; fi
+else check o16 $rc 8 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged (no envelope written into it)"; fi
 fresh; "$MK" "${ENC[@]}" >keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o17 $rc 64 "=error: --in keys: no key records found (blank lines and \`#\` comments are ignored)"
-else check o17 $rc 64 "=error: standard output is the same file as --in keys, $S"; fi
+else check o17 $rc 8 "=error: standard output is the same file as --in keys, $S"; fi
 fresh; "$MK" encode --in - --policy-id-stub deadbeef <keys >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check o18 $rc 0 "-" "[ \$(wc -l <keys) = 3 ]|card appended to keys"
-else check o18 $rc 64 "=error: standard output is the same file as standard input (--in -), $S" "same keys keys.orig|keys unchanged"; fi
+else check o18 $rc 8 "=error: standard output is the same file as standard input (--in -), $S" "same keys keys.orig|keys unchanged"; fi
 
 # --- controls (both modes)
 fresh; "$MK" "${ENC[@]}" --out G >o.txt 2>e.txt; rc=$?
@@ -167,16 +167,16 @@ if [ "$MODE" = red ]; then check t2 $rc 0 "-" "same F json.ref|F holds the JSON"
 else check t2 $rc 0 "-" "same F card5.ref|F grouped" "same o.txt json.ref|JSON unbroken on stdout"; fi
 fresh; rm -f G; "$MK" "${ENC[@]}" --json --out G >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check t3 $rc 0 "-" "same keys keys.orig|keys untouched (JSON went to G)"
-else check t3 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged" "[ ! -e G ]|G absent"; fi
+else check t3 $rc 8 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged" "[ ! -e G ]|G absent"; fi
 fresh; "$MK" "${ENC[@]}" --json --out keys >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check t4 $rc 0 "-" "! same keys keys.orig|keys replaced"
-else check t4 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged (no envelope appended)"; fi
+else check t4 $rc 8 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged (no envelope appended)"; fi
 fresh; rm -f G; "$MK" encode --in keys --policy-id-stub zz --json --out G >>keys 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check t5 $rc 64 "-" "! same keys keys.orig|envelope appended to keys"
-else check t5 $rc 64 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged"; fi
+else check t5 $rc 8 "=error: standard output is the same file as --in keys, $S" "same keys keys.orig|keys unchanged"; fi
 fresh; rm -f F; "$MK" "${ENC[@]}" --json --out F >F 2>e.txt; rc=$?
 if [ "$MODE" = red ]; then check t6 $rc 0 "-" "same F json.ref|F holds the JSON"
-else check t6 $rc 64 "=" "grep -qF '\"message\":\"$X3M\"' F|F holds the X3 envelope"; fi
+else check t6 $rc 8 "=" "grep -qF '\"message\":\"$X3M\"' F|F holds the X3 envelope"; fi
 fresh; rm -f F; "$MK" "${ENC[@]}" --json --out F 2>e.txt | cat >o.txt; rc=${PIPESTATUS[0]}
 if [ "$MODE" = red ]; then check t7 $rc 0 "-" "[ ! -s o.txt ]|nothing on the pipe"
 else check t7 $rc 0 "-" "same F card.ref|F holds the card" "same o.txt json.ref|JSON on the pipe"; fi

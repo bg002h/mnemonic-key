@@ -47,7 +47,7 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
     // placement/pattern as the R2 warning above -- non-fatal, additive,
     // independently deletable (mutation gate: delete this one line).
     warn_corrections_applied(&correction_counts(&strings));
-    warn_if_invalid(&card);
+    let invalid = warn_if_invalid(&card);
     let variant = strings
         .first()
         .map(|s| classify_code_variant(s))
@@ -62,7 +62,7 @@ pub fn run(args: DecodeArgs) -> Result<u8> {
         crate::output_advisory::OutputClass::WatchOnly,
         &mut std::io::stderr(),
     );
-    Ok(0)
+    Ok(invalid)
 }
 
 fn emit_text(card: &KeyCard, chunks: usize, variant: &str) {
@@ -89,7 +89,7 @@ fn emit_json(card: &KeyCard, chunks: usize, variant: &str) -> Result<()> {
         "code_variant": variant,
     });
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     println!("{s}");
     Ok(())
 }

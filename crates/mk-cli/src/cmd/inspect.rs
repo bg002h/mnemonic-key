@@ -19,8 +19,8 @@ use mk_codec::KeyCard;
 use serde_json::json;
 
 use crate::cmd::{
-    chunk_set_id_comparison, classify_code_variant, fmt_fingerprint, fmt_stub, read_mk1_strings,
-    warn_chunk_set_id_mismatch, warn_if_invalid,
+    chunk_set_id_comparison, classify_code_variant, correction_counts, fmt_fingerprint, fmt_stub,
+    read_mk1_strings, warn_chunk_set_id_mismatch, warn_corrections_applied, warn_if_invalid,
 };
 use crate::error::{CliError, Result};
 
@@ -51,7 +51,9 @@ pub fn run(args: InspectArgs) -> Result<u8> {
     // (matched or not), so the warning's value has a cross-check surface.
     let csid = chunk_set_id_comparison(&strings, &card);
     warn_chunk_set_id_mismatch(csid, &card);
-    warn_if_invalid(&card);
+    // Exit-code spec R6: a correction this verb used sets REPAIRED (16).
+    warn_corrections_applied(&correction_counts(&strings));
+    let invalid = warn_if_invalid(&card);
     let declared_csid = csid.map(|(declared, _)| declared);
 
     let per_chunk_variants: Vec<&str> = strings.iter().map(|s| classify_code_variant(s)).collect();
@@ -68,7 +70,7 @@ pub fn run(args: InspectArgs) -> Result<u8> {
         crate::output_advisory::OutputClass::WatchOnly,
         &mut std::io::stderr(),
     );
-    Ok(0)
+    Ok(invalid)
 }
 
 fn xpub_fingerprint_hex(card: &KeyCard) -> String {
@@ -125,7 +127,7 @@ fn emit_json(card: &KeyCard, strings: &[String], variants: &[&str]) -> Result<()
         "chunk_variants": variants,
     });
     let s = serde_json::to_string(&envelope)
-        .map_err(|e| CliError::UsageError(format!("json serialization: {e}")))?;
+        .map_err(|e| CliError::Internal(format!("json serialization: {e}")))?;
     println!("{s}");
     Ok(())
 }

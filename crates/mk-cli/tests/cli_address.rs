@@ -122,7 +122,7 @@ fn address_type_override_on_84_yields_legacy() {
 fn multisig_48_refused_even_with_address_type() {
     let c = card(V1_48_MULTISIG, "m/48'/0'/0'/2'");
     let o = run(&c, &["--address-type", "p2wpkh"]);
-    assert_eq!(code(&o), 64, "{}", stderr(&o));
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
     assert!(stderr(&o).contains("multisig"), "{}", stderr(&o));
 }
 
@@ -130,14 +130,14 @@ fn multisig_48_refused_even_with_address_type() {
 fn multisig_87_refused() {
     let c = card(V8_87_MULTISIG, "m/87'/0'/0'");
     let o = run(&c, &[]);
-    assert_eq!(code(&o), 64, "{}", stderr(&o));
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
 }
 
 #[test]
 fn nonstandard_requires_address_type_then_succeeds() {
     let c = card(V5_NONSTD, "m/9999'/1234'/56'/7'");
     let no_flag = run(&c, &["--count", "1"]);
-    assert_eq!(code(&no_flag), 64, "{}", stderr(&no_flag));
+    assert_eq!(code(&no_flag), 2, "{}", stderr(&no_flag));
     assert!(
         stderr(&no_flag).contains("address-type"),
         "{}",
@@ -151,9 +151,9 @@ fn nonstandard_requires_address_type_then_succeeds() {
 fn leaf_card_requires_then_advises_depth() {
     let leaf = leaf_84_xpub();
     let c = card(&leaf, "m/84'/0'/0'/0/5");
-    // no --address-type → infer Unknown (len 5 ≠ 3) → exit 64
+    // no --address-type → infer Unknown (len 5 ≠ 3) → exit 2 (insufficient input)
     let no_flag = run(&c, &["--count", "1"]);
-    assert_eq!(code(&no_flag), 64, "{}", stderr(&no_flag));
+    assert_eq!(code(&no_flag), 2, "{}", stderr(&no_flag));
     // with --address-type → succeeds, but emits the depth advisory on stderr
     let with_flag = run(&c, &["--address-type", "p2wpkh", "--count", "1"]);
     assert_eq!(code(&with_flag), 0, "{}", stderr(&with_flag));
@@ -204,9 +204,9 @@ fn network_inferred_testnet_override_regtest_and_mismatch() {
     // --network regtest → bcrt1 (test-kind, allowed)
     let regtest = run(&c, &["--network", "regtest", "--count", "1"]);
     assert!(stdout(&regtest).contains("bcrt1q"), "{}", stdout(&regtest));
-    // --network mainnet on a test xpub → mismatch → exit 64
+    // --network mainnet on a test xpub → mismatch → exit 8 (REFUSED, network mismatch)
     let mismatch = run(&c, &["--network", "mainnet", "--count", "1"]);
-    assert_eq!(code(&mismatch), 64, "{}", stderr(&mismatch));
+    assert_eq!(code(&mismatch), 8, "{}", stderr(&mismatch));
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn out_of_range_count_and_range_are_usage_error_not_panic() {
 fn multisig_advisory_prints_the_md_address_route() {
     let c = card(V1_48_MULTISIG, "m/48'/0'/0'/2'");
     let o = run(&c, &[]);
-    assert_eq!(code(&o), 64, "{}", stderr(&o));
+    assert_eq!(code(&o), 2, "{}", stderr(&o));
     let err = stderr(&o);
     let last = err
         .split('`')

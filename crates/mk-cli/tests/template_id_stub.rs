@@ -231,7 +231,7 @@ fn verify_from_keyless_template_md1_matches_template_id_stub() {
         .expect("invoke mk verify (mismatch)");
     assert_eq!(
         vout2.status.code(),
-        Some(4),
+        Some(1),
         "policy-id-stamped card must MISMATCH the template-id derivation; stderr={}",
         String::from_utf8_lossy(&vout2.stderr)
     );

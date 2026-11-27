@@ -9,7 +9,7 @@
 #   red   = the base commit's behaviour (each defect shows; controls pass)
 #   green = the fixed behaviour (Brian's ruling B1: a leading BOM and CRLF are
 #           normalised, every other CR and every other U+FEFF is refused at exit
-#           64 naming the line; controls unchanged)
+#           64 naming the line -- 2 since the exit-code spec; controls unchanged)
 # Any row that does not match its expectation fails the script (exit 1).
 #
 # Stream specs: "-" no check; "=TEXT" the whole stream is TEXT plus a newline
@@ -119,7 +119,8 @@ kbom() { printf '%s' "$1 $2:$3: this line holds a byte-order mark (U+FEFF), whic
 klb() { printf '%s' "$1 $2:$3: this line holds a $4, a line break this reader does not split lines on, so the text after it would be read as part of line $3 and a key record after it could be lost. Replace it with an ordinary line end (LF or CRLF)."; }
 slb() { printf '%s' "--from-md1-set $1:$2: this line holds a $3, a line break this reader does not split lines on, so the text after it would be read as part of line $2 and an md1 string after it could be skipped. Replace it with an ordinary line end (LF or CRLF)."; }
 sbom() { printf '%s' "--from-md1-set $1:$2: this line holds a byte-order mark (U+FEFF), which is accepted only as the first character of the file. Joining two files can leave the second file's mark inside the result: if the mark starts the line, delete it; if other text comes before it on the line, replace it with a line break."; }
-ENV1='{"error":{"details":null,"exit_code":64,"kind":"UsageError","message":"'
+# Green: the exit-code spec (2026-11-26) moved these refusals from 64 to 2.
+ENV1='{"error":{"details":null,"exit_code":2,"kind":"InvalidInput","message":"'
 ENV2='"},"schema_version":1}'
 KEYS=(--policy-id-stub deadbeef --json)
 
@@ -138,25 +139,27 @@ if [ "$MODE" = red ]; then
   row fa_i3_keys_line_separator_after_comment_refused 0 "$ONE" - -- encode --keys k_ls_comment.txt "${KEYS[@]}"
   row fa_i4_md1_set_nel_after_comment_refused 0 "!@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_nel_comment.txt
 else
-  row fa_i3_keys_file_bare_cr_after_comment_refused 64 = "=error: $(kcr --keys k_cr_comment.txt 1)" -- encode --keys k_cr_comment.txt --policy-id-stub deadbeef
-  row fa_i3_keys_file_bare_cr_after_comment_refused_json 64 "=$ENV1$(kcr --keys k_cr_comment.txt 1)$ENV2" = -- encode --keys k_cr_comment.txt "${KEYS[@]}"
-  STDIN=k_cr_comment.txt row fa_i3_keys_stdin_bare_cr_after_comment_refused 64 = "=error: $(kcr --keys '<stdin>' 1)" -- encode --keys - --policy-id-stub deadbeef
-  row fa_i3_in_file_bare_cr_after_comment_refused 64 = "=error: $(kcr --in k_cr_comment.txt 1)" -- encode --in k_cr_comment.txt --policy-id-stub deadbeef
-  row fa_i3_keys_trailing_bare_cr_refused 64 = "=error: $(kcr --keys k_trailing_cr.txt 2)" -- encode --keys k_trailing_cr.txt --policy-id-stub deadbeef
-  row fa_i3_keys_bom_after_first_char_refused 64 = "=error: $(kbom --keys k_bom_mid.txt 2)" -- encode --keys k_bom_mid.txt --policy-id-stub deadbeef
+  row fa_i3_keys_file_bare_cr_after_comment_refused 2 = "=error: $(kcr --keys k_cr_comment.txt 1)" -- encode --keys k_cr_comment.txt --policy-id-stub deadbeef
+  row fa_i3_keys_file_bare_cr_after_comment_refused_json 2 "=$ENV1$(kcr --keys k_cr_comment.txt 1)$ENV2" = -- encode --keys k_cr_comment.txt "${KEYS[@]}"
+  STDIN=k_cr_comment.txt row fa_i3_keys_stdin_bare_cr_after_comment_refused 2 = "=error: $(kcr --keys '<stdin>' 1)" -- encode --keys - --policy-id-stub deadbeef
+  row fa_i3_in_file_bare_cr_after_comment_refused 2 = "=error: $(kcr --in k_cr_comment.txt 1)" -- encode --in k_cr_comment.txt --policy-id-stub deadbeef
+  row fa_i3_keys_trailing_bare_cr_refused 2 = "=error: $(kcr --keys k_trailing_cr.txt 2)" -- encode --keys k_trailing_cr.txt --policy-id-stub deadbeef
+  row fa_i3_keys_bom_after_first_char_refused 2 = "=error: $(kbom --keys k_bom_mid.txt 2)" -- encode --keys k_bom_mid.txt --policy-id-stub deadbeef
   row fa_i4_md1_set_leading_bom_normalised 0 "@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_bom.txt
   row fa_i4_md1_set_leading_bom_chunked_normalised 0 "@want_chunk.out" - -- "${ENC_V1[@]}" --from-md1-set c_bom.txt
-  row fa_i4_md1_set_bare_cr_after_comment_refused 64 = "=error: $(scr s_cr_comment.txt 1)" -- "${ENC_SET[@]}" --from-md1-set s_cr_comment.txt
-  row fa_i4_md1_set_bom_after_first_char_refused 64 = "=error: $(sbom s_bom_mid.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_bom_mid.txt
-  row fa_i4_md1_set_cr_only_refused 64 = "=error: $(scr s_cr_only.txt 1)" -- "${ENC_SET[@]}" --from-md1-set s_cr_only.txt
-  row fa_i4_md1_set_trailing_bare_cr_refused 64 = "=error: $(scr s_trailing_cr.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_trailing_cr.txt
-  row fa_i3_keys_line_separator_after_comment_refused 64 = "=error: $(klb --keys k_ls_comment.txt 1 'line separator (U+2028)')" -- encode --keys k_ls_comment.txt --policy-id-stub deadbeef
-  row fa_i4_md1_set_nel_after_comment_refused 64 = "=error: $(slb s_nel_comment.txt 1 'next-line character (U+0085)')" -- "${ENC_SET[@]}" --from-md1-set s_nel_comment.txt
+  row fa_i4_md1_set_bare_cr_after_comment_refused 2 = "=error: $(scr s_cr_comment.txt 1)" -- "${ENC_SET[@]}" --from-md1-set s_cr_comment.txt
+  row fa_i4_md1_set_bom_after_first_char_refused 2 = "=error: $(sbom s_bom_mid.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_bom_mid.txt
+  row fa_i4_md1_set_cr_only_refused 2 = "=error: $(scr s_cr_only.txt 1)" -- "${ENC_SET[@]}" --from-md1-set s_cr_only.txt
+  row fa_i4_md1_set_trailing_bare_cr_refused 2 = "=error: $(scr s_trailing_cr.txt 2)" -- "${ENC_SET[@]}" --from-md1-set s_trailing_cr.txt
+  row fa_i3_keys_line_separator_after_comment_refused 2 = "=error: $(klb --keys k_ls_comment.txt 1 'line separator (U+2028)')" -- encode --keys k_ls_comment.txt --policy-id-stub deadbeef
+  row fa_i4_md1_set_nel_after_comment_refused 2 = "=error: $(slb s_nel_comment.txt 1 'next-line character (U+0085)')" -- "${ENC_SET[@]}" --from-md1-set s_nel_comment.txt
 fi
-# Controls: identical in both modes.
+# Controls: identical in both modes, except the exit code of a refusal, which
+# the exit-code spec (2026-11-26) moved from 64 to 2 after this FIX.
+CR_ONLY_RC=2; [ "$MODE" = red ] && CR_ONLY_RC=64
 row fa_control_keys_lf_mints_two 0 "$TWO" - -- encode --keys k_lf.txt "${KEYS[@]}"
 row fa_control_keys_crlf_mints_two 0 "$TWO" - -- encode --keys k_crlf.txt "${KEYS[@]}"
 row fa_control_keys_leading_bom_mints_two 0 "$TWO" - -- encode --keys k_bom.txt "${KEYS[@]}"
-row fa_control_keys_cr_only_text_unchanged 64 = "=error: --keys k_cr_only.txt: the file uses CR-only line endings (classic Mac), so every record after the first would be read as part of line 1. Convert it to LF or CRLF." -- encode --keys k_cr_only.txt --policy-id-stub deadbeef
+row fa_control_keys_cr_only_text_unchanged "$CR_ONLY_RC" = "=error: --keys k_cr_only.txt: the file uses CR-only line endings (classic Mac), so every record after the first would be read as part of line 1. Convert it to LF or CRLF." -- encode --keys k_cr_only.txt --policy-id-stub deadbeef
 row fa_control_md1_set_crlf_equals_lf 0 "@want_set.out" - -- "${ENC_SET[@]}" --from-md1-set s_crlf.txt
 [ $FAIL = 0 ] && echo "ALL ROWS MATCH $MODE" || { echo "ROWS DIFFER FROM $MODE"; exit 1; }

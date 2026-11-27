@@ -55,20 +55,20 @@ fn verify_origin_fingerprint_right_wrong_omitted() {
     // Right fingerprint: exit 0.
     let ok = mk(&["verify", "--origin-fingerprint", "73c5da0a", S1, S2]);
     assert_eq!(ok.status.code(), Some(0), "{:?}", ok);
-    // Wrong fingerprint: exit 4 naming the field.
+    // Wrong fingerprint: exit 1 (NO) naming the field.
     let bad = mk(&["verify", "--origin-fingerprint", "73c5da0b", S1, S2]);
-    assert_eq!(bad.status.code(), Some(4), "{:?}", bad);
+    assert_eq!(bad.status.code(), Some(1), "{:?}", bad);
     assert!(
         String::from_utf8_lossy(&bad.stderr).contains("origin_fingerprint"),
         "{:?}",
         bad
     );
-    // Card minted without a fingerprint: any expected fingerprint is exit 4.
+    // Card minted without a fingerprint: any expected fingerprint is exit 1.
     let cards = privacy_card();
     let mut args = vec!["verify", "--origin-fingerprint", "73c5da0a"];
     args.extend(cards.iter().map(String::as_str));
     let none = mk(&args);
-    assert_eq!(none.status.code(), Some(4), "{:?}", none);
+    assert_eq!(none.status.code(), Some(1), "{:?}", none);
     assert!(
         String::from_utf8_lossy(&none.stderr).contains("omitted"),
         "{:?}",
@@ -81,7 +81,7 @@ fn verify_origin_path_right_wrong() {
     let ok = mk(&["verify", "--origin-path", "m/48'/0'/0'/2'", S1, S2]);
     assert_eq!(ok.status.code(), Some(0), "{:?}", ok);
     let bad = mk(&["verify", "--origin-path", "m/84'/0'/0'", S1, S2]);
-    assert_eq!(bad.status.code(), Some(4), "{:?}", bad);
+    assert_eq!(bad.status.code(), Some(1), "{:?}", bad);
     assert!(
         String::from_utf8_lossy(&bad.stderr).contains("origin_path"),
         "{:?}",

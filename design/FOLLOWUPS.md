@@ -832,3 +832,27 @@ This repo commits a `vendor/` tree consumed by the `--offline --locked` reproduc
 - [mk-outw-x2-json-wording] status=open grade=N kind=docs owner=none filed=2026-11-24 src=coordinator/agent-reports/whole-diff-mk39.md#n1 repo=mk :: X2 says "the card would go into the file mk reads its input from" also for `--json --out G >>keys`, where stdout carries the JSON (containing the card), not the card; accurate enough, left as the FIX has it.
 - [mk-outw-gate-pins-count] status=open grade=N kind=tooling owner=none filed=2026-11-24 src=coordinator/agent-reports/land-mk39-alpha-1124.md#nit repo=mk :: the mk gate script pins 552 tests (560 run); assert 0 failed instead.
 - [mk-speed-claim-unestablished] status=open grade=M kind=perf owner=none filed=2026-11-24 src=coordinator/agent-reports/whole-diff-item6-six-prs.md#m2 repo=mk :: the line-tables speed claim for mk is not established, since the builder's A/B is noisy and mk's cold build got slower (17 s to 27 s); the PR body should not state a gain.
+
+### `mk-exit-codes-manual-lockstep` — the toolkit manual's mk chapter still states the pre-cutover exit codes (`cross-repo`)
+
+- Surfaced: 2026-11-26, the constellation exit-code cutover (mnemonic-engrave `design/SPEC_constellation_exit_codes.md` rev 5, §7b); final review `final-review-md-mk-ms.md` M-6. Companion: md's `md-exit-codes-manual-lockstep`.
+- What: mk-cli's codes changed (CHANGELOG [Unreleased] BREAKING entry); the manual is updated only in mnemonic-toolkit. Lines (toolkit `docs/manual/src/40-cli-reference/44-mk-cli.md`, at the toolkit rev the survey read):
+  - `:35, :43, :56, :121`: the exit-64 notes. A bad stub, fingerprint, path or key record is now 2; an output that is one of the inputs is 8; a key not in its keyed policy, or an origin that contradicts its slot, is 1.
+  - `:259-266`: the repair table (0/5/2/1) becomes 0 / 16 / 22 / 2. 16 = a correction (verified, or a short set verifiable later); 22 = a corrected string that is not a card, still printed; 2 = invalid, with nothing printed for an uncorrectable string, a clean non-chunk or non-decoding single string, strings that are not one card's chunk set, or a complete set that does not decode; a printed card that fails the key-origin checks is 2 (18 corrected). Do not list 20 (unreachable in mk). `--json` gains `not_a_card` and `incomplete`.
+  - `:268-284`: the 5-against-4 asymmetry is gone (both are 16).
+  - `:311-322`: the repair verification prose, to the above.
+  - `:451-453`: verify 0/1/4 becomes 0 / 1 / 2, plus 16 after a correction (17, 18); `verify --json` gains `"corrected"`.
+  - `:617-627`: the mk exit-code table, replaced by spec §3 and the `--help` legend.
+  - `:629`: the stdout-failure rule: a stdout failure now adds 32 (Unix; Windows gap in the CHANGELOG).
+  - decode/inspect/address/derive on a card that fails the key-origin checks: printed with a warning, exit 2 (was 0).
+  - no input named at all: 64; a named input that is empty: 2.
+  - also the GUI manual `docs/manual-gui` `70-mk/*` and `32-run-and-output.md:63-69`, and any quoted `--help` text (each verb now ends with an "Exit status:" line).
+- Owner: the toolkit agent's manual pass for the cutover.
+- Status: `open`. Tier: `cross-repo`.
+
+### `mk1-mixed-chunk-set-id-exits-0` — chunks of two different sets that cover every index are reassembled (`cross-repo`, resolved)
+
+- Surfaced: 2026-11-26, the exit-code cutover's final review (mnemonic-engrave `design/agent-reports/exit-codes-2026-11-26/final-review-toolkit-gui.md` N5; `final-review-md-mk-ms.md` consistency table). Companion: mnemonic-toolkit `design/FOLLOWUPS.md` `mk1-mixed-chunk-set-id-exits-0`.
+- What: two mk1 chunks whose `chunk_set_id`s differ but whose indices together cover every index of the set exit 0 in `mk` (16 if corrected), and the same in `mnemonic`. md refuses chunks of two cards (2) and mr refuses strings of two chunk sets. Find whether the check is missing in mk-codec's reassembly or only in mk-cli's grouping, then refuse (2) with a vector. Listed as an open question for Brian in the exit-code spec rev 6 §2b.
+- Ruling (Brian, 2026-11-26): refuse as INVALID (2), nothing printed, as a suspected miscorrection or two cards mixed. The check was missing only in mk-cli's `repair` grouping: mk-codec's reassembly (and so `decode`, `inspect`, `verify`, `address`, `derive`) already refuses any input with two set ids (`ChunkSetIdMismatch`, 2). `repair` takes a batch of cards, so it refuses the ruled shape only: two or more SHORT groups that declare one total and whose indices together cover every index of it. Short groups that do not cover stay separate incomplete sets (decision 7); a complete group is a card by itself and never counts.
+- Status: `resolved cdcaeb4`. Tier: `cross-repo`.

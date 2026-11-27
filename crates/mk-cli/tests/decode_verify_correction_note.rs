@@ -4,9 +4,9 @@
 //! looking pristine even though it consumed some of its `t = 4` per-chunk
 //! correction budget. This file proves both verbs now emit a stderr note
 //! naming the per-chunk correction count when correction fired, and stay
-//! SILENT when it didn't -- non-fatal in both cases (exit code and stdout
-//! unchanged, mirrors the R2 `chunk_set_id` warning's own placement --
-//! `csid_verification.rs`).
+//! SILENT when it didn't. Since the exit-code spec (decision 5, R6) a verb
+//! that used a corrected card also exits 16 (REPAIRED, added to any other
+//! bit): the output is unchanged, and a script learns the plate is damaged.
 //!
 //! Fixture: the V1 KeyCard (same canonical fixture as `cli_repair.rs`),
 //! minted via `mk_codec::encode` directly for self-contained
@@ -96,8 +96,8 @@ fn decode_damaged_input_warns_with_per_chunk_counts_same_card() {
     let d = run("decode", &[], &damaged);
     assert_eq!(
         d.status.code(),
-        Some(0),
-        "a genuine in-budget correction must still succeed; stderr={}",
+        Some(16),
+        "a genuine in-budget correction succeeds with REPAIRED set; stderr={}",
         String::from_utf8_lossy(&d.stderr)
     );
     let d_stderr = String::from_utf8_lossy(&d.stderr).to_string();
@@ -135,17 +135,13 @@ fn decode_damaged_input_warns_with_per_chunk_counts_same_card() {
 }
 
 #[test]
-fn verify_damaged_input_warns_with_per_chunk_counts_exit_unchanged() {
+fn verify_damaged_input_warns_with_per_chunk_counts_exit_16() {
     let (damaged, clean) = damaged_and_clean_chunks();
 
     let d = run("verify", &[], &damaged);
     let c = run("verify", &[], &clean);
-    assert_eq!(
-        d.status.code(),
-        c.status.code(),
-        "the note must not change verify's exit code"
-    );
-    assert_eq!(d.status.code(), Some(0));
+    assert_eq!(d.status.code(), Some(16), "a used correction sets REPAIRED");
+    assert_eq!(c.status.code(), Some(0));
 
     let d_stderr = String::from_utf8_lossy(&d.stderr).to_string();
     assert!(
@@ -167,8 +163,80 @@ fn verify_damaged_input_warns_with_per_chunk_counts_exit_unchanged() {
 
     let d_stdout = String::from_utf8(d.stdout).unwrap();
     let c_stdout = String::from_utf8(c.stdout).unwrap();
+    // R5: the verdict must agree with the code, so it no longer says
+    // "cleanly" for a corrected card; the rest of the line is the same.
     assert_eq!(
-        d_stdout, c_stdout,
-        "the note is stderr-only; verify's stdout verdict must be identical"
+        c_stdout,
+        "OK: mk1 string(s) decode cleanly (and any --xpub / --origin-* / --policy-id-stub / --from-md1 inputs match)\n"
     );
+    assert_eq!(
+        d_stdout,
+        "OK: mk1 string(s) decode after BCH correction (and any --xpub / --origin-* / --policy-id-stub / --from-md1 inputs match)\n"
+    );
+}
+
+/// Exit-code spec decision 5: every reading verb that used a corrected card
+/// exits with 16 set, the other bits unchanged.
+#[test]
+fn every_reading_verb_sets_repaired_on_a_corrected_card() {
+    let (damaged, clean) = damaged_and_clean_chunks();
+    for (verb, extra) in [
+        ("decode", &[][..]),
+        ("verify", &[][..]),
+        ("inspect", &[][..]),
+        ("derive", &["--index", "0"][..]),
+    ] {
+        let d = run(verb, extra, &damaged);
+        let c = run(verb, extra, &clean);
+        assert_eq!(c.status.code(), Some(0), "{verb} clean");
+        assert_eq!(
+            d.status.code(),
+            Some(16),
+            "{verb}: {}",
+            String::from_utf8_lossy(&d.stderr)
+        );
+        // verify's verdict line says "after BCH correction" (R5, above).
+        if verb != "verify" {
+            assert_eq!(d.stdout, c.stdout, "{verb}: the output is unchanged");
+        }
+    }
+    // A failure after a used correction sums: V1 is a multisig card, so
+    // address refuses it (2), and the correction was used (16).
+    let d = run("address", &[], &damaged);
+    assert_eq!(d.status.code(), Some(18));
+}
+
+/// R1: a verify mismatch on a corrected card is 1 + 16, and the JSON
+/// envelope carries the same number (R14).
+#[test]
+fn a_mismatch_on_a_corrected_card_is_17() {
+    let (damaged, _) = damaged_and_clean_chunks();
+    let d = run("verify", &["--origin-fingerprint", "00000000"], &damaged);
+    assert_eq!(d.status.code(), Some(17));
+    let j = run(
+        "verify",
+        &["--json", "--origin-fingerprint", "00000000"],
+        &damaged,
+    );
+    assert_eq!(j.status.code(), Some(17));
+    let v: serde_json::Value = serde_json::from_slice(&j.stdout).unwrap();
+    assert_eq!(v["error"]["exit_code"], 17);
+    assert_eq!(v["error"]["kind"], "ContentMismatch");
+}
+
+/// R5 for JSON readers (review M4): `verify --json` says whether the card
+/// was read after a correction, additively, so a consumer that ignores the
+/// exit status still learns it.
+#[test]
+fn verify_json_reports_corrected() {
+    let (damaged, clean) = damaged_and_clean_chunks();
+    let d = run("verify", &["--json"], &damaged);
+    assert_eq!(d.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&d.stdout).unwrap();
+    assert_eq!(v["ok"], true);
+    assert_eq!(v["corrected"], true);
+    let c = run("verify", &["--json"], &clean);
+    assert_eq!(c.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&c.stdout).unwrap();
+    assert_eq!(v["corrected"], false);
 }

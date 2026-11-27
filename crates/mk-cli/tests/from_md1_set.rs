@@ -265,8 +265,8 @@ fn from_md1_set_with_no_md1_lines_is_refused_naming_the_file() {
     let out = run(&set_args(&[&empty]));
     assert_eq!(
         out.status.code(),
-        Some(64),
-        "a file with no md1 strings is a usage error"
+        Some(2),
+        "a file with no md1 strings is an invalid input (2)"
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -296,7 +296,7 @@ fn from_md1_set_bad_path_names_the_flag() {
 }
 
 /// A COMPLETE keyed policy (two keys, `n == 2`) must refuse an xpub that is not
-/// one of its cosigners: exit 64 naming "is not a cosigner". (BIP-32 test
+/// one of its cosigners: exit 1 (NO) naming "is not a cosigner". (BIP-32 test
 /// vector 1 master key, a real xpub that is not in the fixture.)
 #[test]
 fn encode_from_complete_keyed_md1_refuses_non_member_xpub() {
@@ -315,6 +315,6 @@ fn encode_from_complete_keyed_md1_refuses_non_member_xpub() {
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(64), "got {stderr:?}");
+    assert_eq!(out.status.code(), Some(1), "got {stderr:?}");
     assert!(stderr.contains("is not a cosigner"), "got {stderr:?}");
 }

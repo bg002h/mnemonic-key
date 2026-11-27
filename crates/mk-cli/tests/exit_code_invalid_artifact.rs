@@ -1,21 +1,12 @@
-//! The invalid-artifact exit code: 2 → 1, and `repair` keeps its 2 (SPEC §6f).
+//! The invalid-artifact exit code is 2 on every verb, `repair` included
+//! (constellation exit-code spec §3: INVALID).
 //!
-//! **This is the only exit code the uniformity cycle changes, and it is
-//! funds-adjacent, so both directions are asserted here rather than one.**
-//!
-//! §6f's table gives `md`, `ms` and `mnemonic` an invalid-artifact of **1** and a
-//! repair-uncorrectable of **2**. `mk` produced **2** for both, out of a single
-//! `CliError::Codec(_) | CliError::MdCodec(_)` arm — so the ruling as written
-//! ("mk's invalid-artifact 2 becomes 1") would also have moved `repair`'s code
-//! and broken a parity the other three CLIs hold (F-291).
-//!
-//! **`md` splits by VERB, not by error kind**, and that is what is copied:
-//! `md repair` returns `Ok(2)` from a bare `Err(e) =>` arm covering *any* codec
-//! error out of the correcting decode, while `md decode` is 1. A bypass narrowed
-//! to the BCH-uncorrectable variant would send an HRP-swapped card on `repair`
-//! to 1 — which is why the HRP case is asserted below and not only the
-//! uncorrectable one. The two candidate implementations are indistinguishable
-//! without it.
+//! History: the uniformity cycle (SPEC §6f) moved `mk`'s invalid artifact
+//! from 2 to 1 and kept `repair`'s 2 through a bypass, splitting by VERB as
+//! `md` did. The exit-code spec makes an invalid input 2 everywhere, so the
+//! split is gone: the same string is 2 on `decode` and on `repair`. The HRP
+//! case is still asserted beside the uncorrectable one, so a later narrowing
+//! of `repair`'s atomic-failure arm to the BCH variant alone would be caught.
 //!
 //! **What must NOT move:** `CliError::SetReassemblyMismatch` stays **2**. It is
 //! the miscorrection rejection — the funds fix — and it is pinned by four tests
@@ -79,12 +70,12 @@ fn code_of(args: &[&str]) -> i32 {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// The move: invalid artifact 2 → 1.
+// An invalid artifact is 2 (INVALID).
 // ──────────────────────────────────────────────────────────────────────────
 
-/// Every non-`repair` verb reports an invalid artifact as **1**.
+/// Every reading verb reports an invalid artifact as **2**.
 #[test]
-fn an_invalid_artifact_exits_1_on_the_reading_verbs() {
+fn an_invalid_artifact_exits_2_on_the_reading_verbs() {
     let bad = uncorrectable();
     let hrp = hrp_swapped();
     for (verb, artifact, label) in [
@@ -98,16 +89,16 @@ fn an_invalid_artifact_exits_1_on_the_reading_verbs() {
     ] {
         assert_eq!(
             code_of(&[verb, artifact]),
-            1,
-            "mk {verb} <{label}> must exit 1 (SPEC §6f invalid artifact)"
+            2,
+            "mk {verb} <{label}> must exit 2 (exit-code spec: INVALID)"
         );
     }
 }
 
 /// `mk encode --from-md1 <not an md1>` goes through `CliError::MdCodec`, the
-/// other half of the arm that moved, and must land on 1 too.
+/// other half of the arm, and must land on 2 too.
 #[test]
-fn an_invalid_md1_binding_exits_1() {
+fn an_invalid_md1_binding_exits_2() {
     assert_eq!(
         code_of(&[
             "encode",
@@ -115,27 +106,24 @@ fn an_invalid_md1_binding_exits_1() {
             V1_XPUB,
             "--origin-path",
             V1_PATH,
+            "--privacy-preserving",
             "--from-md1",
             "md1notavalidcard",
         ]),
-        1,
+        2,
         "an md1 the binding cannot read is an invalid artifact, not a usage error"
     );
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// What must NOT move: repair's 2, on BOTH shapes.
+// repair's 2, on BOTH shapes, is the same 2 the other verbs give.
 // ──────────────────────────────────────────────────────────────────────────
 
-/// **THE ASSERTION THAT SEPARATES THE TWO CANDIDATE IMPLEMENTATIONS.**
-///
-/// The same string, on two verbs: `repair` is 2 and everything else is 1. That
-/// is `md`'s split, and it is a split by VERB. A bypass scoped to the
-/// BCH-uncorrectable variant passes the `uncorrectable` row and fails the
-/// `HRP-swapped` one, because an HRP mismatch is an invalid artifact that
-/// happens to arrive at `repair`.
+/// The same string, on two verbs: both are 2. An HRP mismatch is an invalid
+/// artifact that happens to arrive at `repair`; it must not be read as
+/// anything else there.
 #[test]
-fn repair_is_2_where_the_other_verbs_are_1_on_the_same_input() {
+fn repair_and_decode_agree_on_the_same_invalid_input() {
     for (artifact, label) in [
         (uncorrectable(), "uncorrectable"),
         (hrp_swapped(), "HRP-swapped"),
@@ -143,20 +131,20 @@ fn repair_is_2_where_the_other_verbs_are_1_on_the_same_input() {
         assert_eq!(
             code_of(&["repair", &artifact]),
             2,
-            "mk repair <{label}> must STAY 2 (cross-CLI parity with md/ms/mnemonic)"
+            "mk repair <{label}> must be 2 (cross-CLI parity with md/ms/mnemonic)"
         );
         assert_eq!(
             code_of(&["decode", &artifact]),
-            1,
-            "mk decode <{label}> must be 1 — same string, different verb"
+            2,
+            "mk decode <{label}> must be 2 — same string, different verb"
         );
     }
 }
 
 /// The control that says the bypass did not swallow the SUCCESS paths: a valid
-/// card still repairs at 0, and a single correctable substitution still exits 5.
+/// card still repairs at 0, and a single correctable substitution exits 16.
 #[test]
-fn repair_success_codes_are_untouched() {
+fn repair_success_codes() {
     let chunks = valid_chunks();
     assert_eq!(
         code_of(&["repair", &chunks[1]]),
@@ -165,22 +153,19 @@ fn repair_success_codes_are_untouched() {
     );
     assert_eq!(
         code_of(&["repair", &flip_at(&chunks[1], 5)]),
-        5,
-        "one correctable substitution still exits 5 (REPAIR_APPLIED)"
+        16,
+        "one correctable substitution exits 16 (REPAIRED)"
     );
 }
 
-/// The clap split is untouched: a usage error is still 64, not 1 or 2.
-///
-/// §6f records the 2-versus-64 disagreement across the constellation and
-/// declines to resolve it; this phase must not resolve it by accident while
-/// moving a neighbouring code.
+/// A usage error is 64 (exit-code spec decision 2); naming no input channel
+/// at all is a missing required argument, still 64 (decision 3).
 #[test]
-fn the_usage_error_code_is_untouched() {
+fn usage_is_64_and_no_input_is_64() {
     assert_eq!(
         code_of(&["decode"]),
         64,
-        "no artifact at all is a usage error"
+        "no input channel named at all is a missing argument, USAGE"
     );
     assert_eq!(
         code_of(&["encode", "--xpub", V1_XPUB]),
@@ -189,8 +174,8 @@ fn the_usage_error_code_is_untouched() {
     );
 }
 
-/// **SPEC §6b: `--json` is UNCHANGED and out of scope this cycle** — and the
-/// bypass is exactly where it could have been changed by accident.
+/// **SPEC §6b: `--json` is UNCHANGED** — and `repair`'s atomic-failure
+/// branch is exactly where it could have been changed by accident.
 ///
 /// A bare `eprintln!` + `return Ok(2)` deletes this envelope silently, and no
 /// exit-code assertion notices. Measured before the change, this stdout line was
@@ -205,8 +190,8 @@ fn the_usage_error_code_is_untouched() {
 /// here.
 ///
 /// `exit_code` inside the envelope must be **2**, the code the process actually
-/// returns, not the 1 the `CliError` now maps to — otherwise a `--json` consumer
-/// reads one number and its shell reads another.
+/// returns (spec R14) — otherwise a `--json` consumer reads one number and its
+/// shell reads another.
 #[test]
 fn repair_json_error_envelope_survives_the_bypass() {
     let out = Command::cargo_bin("mk")

@@ -8,8 +8,8 @@
 //!
 //! SPEC (`mnemonic-toolkit/design/SPEC_mk1_repair_set_level_reverify.md`) §2
 //! tri-state, §3 exit-code semantics for `mk repair`:
-//!   - Bless     (decode(group) == Ok)                    -> exit 5
-//!   - Candidate (group incomplete — a single-plate repair) -> exit 5 + advisory
+//!   - Bless     (decode(group) == Ok)                    -> exit 16
+//!   - Candidate (group incomplete — a single-plate repair) -> exit 16 + advisory
 //!   - Reject    (group complete-and-consistent, decode == Err) -> exit 2 (FUNDS FIX)
 //!
 //! Multi-group batch folds to the dominant outcome (reject > candidate > bless).
@@ -131,38 +131,41 @@ fn pinned_fixture_preconditions() {
 //
 // `mk repair <single chunk of a 2-chunk card>` is the documented workflow
 // (manual `44-mk-cli.md:247`; the shipped example there IS this same shape —
-// a single long-code chunk of a real 2-chunk card). Must stay exit 5 with a
-// loud "UNVERIFIED" advisory, NOT regress to exit 2.
+// a single long-code chunk of a real 2-chunk card). Exits 16 (REPAIRED;
+// exit-code spec decision 7: the rest of the set verifies it when
+// reassembled) with an advisory saying so, NOT regress to exit 2.
 // ============================================================================
 
 #[test]
-fn manual_example_single_plate_repair_stays_exit_5_with_advisory() {
+fn manual_example_single_plate_repair_exits_16_with_advisory() {
     let bad_chunk1 = flip_at(CHUNK1, 25); // genuine 1-substitution, within t<=4
     Command::cargo_bin("mk")
         .unwrap()
         .args(["repair", &bad_chunk1])
         .assert()
-        .code(5)
+        .code(16)
         .stdout(predicate::str::contains("# Repair report"))
         .stdout(predicate::str::contains(CHUNK1))
-        .stderr(predicate::str::contains("UNVERIFIED"))
-        .stderr(predicate::str::contains("BIP-93"));
+        .stderr(predicate::str::contains("incomplete chunk set"))
+        .stderr(predicate::str::contains(
+            "verifiable when the rest of the set is reassembled",
+        ));
 }
 
 /// Same, via `--json` — the corrected chunk still appears in the JSON
-/// envelope (exit 5), and the advisory still fires on stderr (PM-r2-4: a
+/// envelope (exit 16), and the advisory still fires on stderr (PM-r2-4: a
 /// `--json` Candidate is signalled by exit code + stderr advisory only, no
 /// wire-shape change).
 #[test]
-fn manual_example_single_plate_repair_json_form_stays_exit_5_with_advisory() {
+fn manual_example_single_plate_repair_json_form_exits_16_with_advisory() {
     let bad_chunk1 = flip_at(CHUNK1, 25);
     Command::cargo_bin("mk")
         .unwrap()
         .args(["repair", "--json", &bad_chunk1])
         .assert()
-        .code(5)
+        .code(16)
         .stdout(predicate::str::contains(CHUNK1))
-        .stderr(predicate::str::contains("UNVERIFIED"));
+        .stderr(predicate::str::contains("incomplete chunk set"));
 }
 
 // ============================================================================
@@ -203,13 +206,13 @@ fn full_set_miscorrection_json_form_also_rejects_exit_2() {
 // ============================================================================
 
 #[test]
-fn genuine_t4_full_set_correction_still_blesses_exit_5() {
+fn genuine_t4_full_set_correction_still_blesses_exit_16() {
     let bad_chunk1 = flip_many(CHUNK1, &[3, 11, 19, 27]); // 4 spread errors
     Command::cargo_bin("mk")
         .unwrap()
         .args(["repair", CHUNK0, &bad_chunk1])
         .assert()
-        .code(5)
+        .code(16)
         .stdout(predicate::str::contains("# Repair report"))
         .stdout(predicate::str::contains(CHUNK0))
         .stdout(predicate::str::contains(CHUNK1))
@@ -292,4 +295,61 @@ fn clean_partial_set_exit_0_no_advisory() {
         .code(0)
         .stdout(predicate::str::contains("# Repair report").not())
         .stderr(predicate::str::contains("UNVERIFIED").not());
+}
+
+// ============================================================================
+// Brian's ruling of 2026-11-26 (FOLLOWUP `mk1-mixed-chunk-set-id-exits-0`):
+// chunk 0 of one real card with chunk 1 of another cover every index of a
+// set of 2 under two set ids. `mk repair` refuses them (2, nothing printed),
+// as the one-card verbs already refuse any input with two set ids.
+// ============================================================================
+
+#[test]
+fn chunks_of_two_cards_covering_every_index_repair_exits_2() {
+    Command::cargo_bin("mk")
+        .unwrap()
+        .args(["repair", CHUNK0, SECOND_CHUNK1])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("together cover every index"));
+}
+
+/// A complete card is a card by itself: one co-batched with a lone chunk of
+/// another card is not a split set, so the lone chunk keeps decision 7.
+#[test]
+fn complete_card_with_lone_chunk_of_another_card_is_not_a_split_set() {
+    Command::cargo_bin("mk")
+        .unwrap()
+        .args(["repair", CHUNK0, CHUNK1, SECOND_CHUNK1])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(SECOND_CHUNK1));
+}
+
+/// The verbs that read one card refuse any input with two set ids (the
+/// codec's `ChunkSetIdMismatch`), covering or not: pinned here so every verb
+/// that groups mk1 chunks answers the mixed set with 2.
+#[test]
+fn one_card_verbs_refuse_chunks_of_two_cards_exit_2() {
+    let verbs: [&[&str]; 6] = [
+        &["decode"],
+        &["inspect"],
+        &["verify"],
+        &["address"],
+        &["derive", "--index", "0"],
+        &["decode", "--json"],
+    ];
+    for verb in verbs {
+        let mut args: Vec<&str> = verb.to_vec();
+        args.extend([CHUNK0, SECOND_CHUNK1]);
+        Command::cargo_bin("mk")
+            .unwrap()
+            .args(&args)
+            .assert()
+            .code(2)
+            .stderr(
+                predicate::str::contains("chunk_set_id mismatch").or(predicate::str::is_empty()),
+            );
+    }
 }

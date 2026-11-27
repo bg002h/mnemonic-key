@@ -114,7 +114,7 @@ fn encode_accepts_zpub_with_matching_path() {
 }
 
 /// A zpub passed with a mismatching --origin-path (purpose 49' instead of 84') must
-/// exit 64 with a SLIP-0132/origin-path mismatch message naming the expected purpose.
+/// exit 2 (an invalid input) with a SLIP-0132/origin-path mismatch message naming the expected purpose.
 #[test]
 fn encode_zpub_path_mismatch_refuses() {
     let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
@@ -135,8 +135,8 @@ fn encode_zpub_path_mismatch_refuses() {
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
     assert_eq!(
-        code, 64,
-        "expected exit 64 (UsageError), got {code}; stderr={stderr}"
+        code, 2,
+        "expected exit 2 (InvalidInput), got {code}; stderr={stderr}"
     );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),
@@ -180,7 +180,7 @@ fn encode_zpub_multisig_match() {
 }
 
 /// A Zpub (BIP-48 P2WSH multisig) with a mismatching script-type index (1' not 2')
-/// must exit 64 with a SLIP-0132/origin-path mismatch message.
+/// must exit 2 with a SLIP-0132/origin-path mismatch message.
 #[test]
 fn encode_zpub_multisig_index_mismatch() {
     let zpub_multisig = to_slip132(V1_48_MULTISIG, ZPUB_MULTISIG_V);
@@ -201,8 +201,8 @@ fn encode_zpub_multisig_index_mismatch() {
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
     assert_eq!(
-        code, 64,
-        "expected exit 64 for index mismatch; stderr={stderr}"
+        code, 2,
+        "expected exit 2 for index mismatch; stderr={stderr}"
     );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),
@@ -271,8 +271,8 @@ fn verify_zpub_without_path_ok() {
     );
 }
 
-/// `mk verify --xpub <zpub> --origin-path m/49h/0h/0h` must exit 64
-/// (UsageError) and emit the SLIP-0132/origin-path mismatch message.
+/// `mk verify --xpub <zpub> --origin-path m/49h/0h/0h` must exit 2
+/// (InvalidInput) and emit the SLIP-0132/origin-path mismatch message.
 #[test]
 fn verify_zpub_path_mismatch_refuses() {
     let card = make_card();
@@ -287,8 +287,8 @@ fn verify_zpub_path_mismatch_refuses() {
     let code = out.status.code().unwrap();
     let stderr = String::from_utf8(out.stderr.clone()).unwrap();
     assert_eq!(
-        code, 64,
-        "expected exit 64 (UsageError), got {code}; stderr={stderr}"
+        code, 2,
+        "expected exit 2 (InvalidInput), got {code}; stderr={stderr}"
     );
     assert!(
         stderr.contains("SLIP-0132/origin-path mismatch"),

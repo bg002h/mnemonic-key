@@ -46,9 +46,9 @@ fn s(b: &[u8]) -> String {
     String::from_utf8(b.to_vec()).unwrap()
 }
 
-/// exit 64, stdout empty, stderr exactly `error: ` + text.
+/// exit 2 (an invalid input), stdout empty, stderr exactly `error: ` + text.
 fn assert_refused(o: &Output, text: &str) {
-    assert_eq!(o.status.code(), Some(64), "stderr: {}", s(&o.stderr));
+    assert_eq!(o.status.code(), Some(2), "stderr: {}", s(&o.stderr));
     assert_eq!(s(&o.stdout), "", "stdout must be empty");
     assert_eq!(s(&o.stderr), format!("error: {text}\n"));
 }
@@ -98,10 +98,10 @@ fn fd_c1_address_refuses_fixed_key_card_json() {
             "--json",
         ],
     );
-    assert_eq!(o.status.code(), Some(64));
+    assert_eq!(o.status.code(), Some(2));
     assert_eq!(s(&o.stderr), "");
     let want = format!(
-        "{{\"error\":{{\"details\":null,\"exit_code\":64,\"kind\":\"UsageError\",\"message\":\"{}\"}},\"schema_version\":1}}\n",
+        "{{\"error\":{{\"details\":null,\"exit_code\":2,\"kind\":\"InvalidInput\",\"message\":\"{}\"}},\"schema_version\":1}}\n",
         c1_test("p2wpkh", "signet")
     );
     assert_eq!(s(&o.stdout), want);
@@ -145,9 +145,13 @@ fn fd_c1_refusal_precedes_other_errors() {
         ),
         &c1_test("p2wpkh", "NETWORK"),
     );
-    // (c) hardened, (d) parser-rejected, (e) empty path
+    // (c) hardened, (d) parser-rejected, (e) empty path: a bad --path is a
+    // setting judged from the command line alone, so it is 64 BEFORE the
+    // card is read (exit-code spec R2), and the card refusal never prints.
     for p in ["m/0'", "/", ""] {
-        assert_refused(&mk("derive", &leaf(), &["--path", p]), &t);
+        let o = mk("derive", &leaf(), &["--path", p]);
+        assert_eq!(o.status.code(), Some(64), "path {p:?}: {}", s(&o.stderr));
+        assert!(!s(&o.stderr).contains("fixed key"), "{}", s(&o.stderr));
     }
 }
 

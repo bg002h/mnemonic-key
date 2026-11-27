@@ -1,7 +1,7 @@
 //! bughunt-1119 F-A (bh-mk-I3, bh-mk-I4): the two line readers of `mk encode`
 //! (`--keys`/`--in` key files and `--from-md1-set` files) follow Brian's ruling
 //! B1: a leading BOM and CRLF are normalised; every other CR, every other
-//! line-break character and every other U+FEFF is refused at exit 64 naming the
+//! line-break character and every other U+FEFF is refused at exit 2 naming the
 //! line. One test per row of `design/FIX_mk_fa_line_readers.md` section 5; the
 //! same bytes and expectations as `scripts/mk-fa-line-readers-rows.sh`.
 
@@ -140,10 +140,11 @@ fn chunk(dir: &std::path::Path, file: &str, body: &str) -> Output {
     )
 }
 
+/// A refused line encoding is an invalid input: exit 2 (exit-code spec §3).
 fn refused(o: &Output, text: &str) {
     assert_eq!(
         o.status.code(),
-        Some(64),
+        Some(2),
         "stderr: {}",
         String::from_utf8_lossy(&o.stderr)
     );
@@ -198,10 +199,10 @@ fn fa_i3_keys_file_bare_cr_after_comment_refused_json() {
         &format!("{} # first{CR}{}{LF}", r0(), r1()),
         true,
     );
-    assert_eq!(o.status.code(), Some(64));
+    assert_eq!(o.status.code(), Some(2));
     assert!(o.stderr.is_empty());
     let want = format!(
-        "{{\"error\":{{\"details\":null,\"exit_code\":64,\"kind\":\"UsageError\",\"message\":\"{}\"}},\"schema_version\":1}}\n",
+        "{{\"error\":{{\"details\":null,\"exit_code\":2,\"kind\":\"InvalidInput\",\"message\":\"{}\"}},\"schema_version\":1}}\n",
         kcr("--keys", "k_cr_comment.txt", 1)
     );
     assert_eq!(String::from_utf8(o.stdout).unwrap(), want);

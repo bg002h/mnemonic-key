@@ -157,8 +157,20 @@ fn card<'a>(x: &'a str, path: &'a str, fp: &'a str, extra: &[&'a str]) -> Vec<&'
     v
 }
 
+/// The exit-code spec §3 class of each refusal text: a card whose origin
+/// contradicts its own keyed policy is a comparison that came out no (1, test
+/// 4); a repeated record, key, origin or stub, and a policy that repeats a key,
+/// are invalid inputs (2).
+fn class_of(text: &str) -> (i32, &'static str) {
+    if text.contains("contradicts its own policy") {
+        (1, "Mismatch")
+    } else {
+        (2, "InvalidInput")
+    }
+}
+
 fn refused(o: &Out, text: &str) {
-    assert_eq!(o.code, Some(64), "stderr: {}", o.stderr);
+    assert_eq!(o.code, Some(class_of(text).0), "stderr: {}", o.stderr);
     assert_eq!(o.stdout, "", "nothing on stdout");
     assert_eq!(o.stderr, format!("error: {text}\n"));
 }
@@ -209,8 +221,9 @@ fn t_stub(stub: &str) -> String {
     )
 }
 fn json_err(text: &str) -> String {
+    let (code, kind) = class_of(text);
     format!(
-        "{{\"error\":{{\"details\":null,\"exit_code\":64,\"kind\":\"UsageError\",\"message\":\"{text}\"}},\"schema_version\":1}}\n"
+        "{{\"error\":{{\"details\":null,\"exit_code\":{code},\"kind\":\"{kind}\",\"message\":\"{text}\"}},\"schema_version\":1}}\n"
     )
 }
 
@@ -230,7 +243,7 @@ fn fe_i2_path_contradicts_policy_json() {
         "73c5da0a",
         &["--from-md1-set", "a.md1", "--json"],
     ));
-    assert_eq!(o.code, Some(64));
+    assert_eq!(o.code, Some(1));
     assert_eq!(o.stderr, "");
     assert_eq!(o.stdout, json_err(&t_path(X0, 0, "38bd7cec", M0, M9)));
 }
@@ -513,7 +526,7 @@ fn fe_control_complete_policy_nonmember_refused() {
         "73c5da0a",
         &["--from-md1-set", "a.md1"],
     ));
-    assert_eq!(o.code, Some(64));
+    assert_eq!(o.code, Some(1));
     assert_eq!(o.stdout, "");
     assert!(
         o.stderr
@@ -573,7 +586,7 @@ fn fe_control_chunk_set_given_twice_unchanged() {
         "73c5da0a",
         &["--from-md1-set", "a.md1", "--from-md1-set", "a.md1"],
     ));
-    assert_eq!(o.code, Some(1), "{}", o.stderr);
+    assert_eq!(o.code, Some(2), "{}", o.stderr);
     assert_eq!(o.stdout, "");
     assert!(
         o.stderr
@@ -663,7 +676,7 @@ fn fe_i15_short_coverage_note_is_printed() {
 fn fe_i15_nonmember_of_complete_policy_is_refused() {
     let o = mint_from(X2, "m/48'/0'/2'/2'", &chunks_a());
     assert!(
-        o.code == Some(64) && o.stderr.contains("is not a cosigner"),
+        o.code == Some(1) && o.stderr.contains("is not a cosigner"),
         "{}",
         o.stderr
     );

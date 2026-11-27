@@ -22,9 +22,9 @@ use crate::error::{CliError, Result};
 /// Parse a 4-byte hex `[u8; 4]` (8 hex chars) for a `policy_id_stub`.
 pub fn parse_stub_hex(s: &str) -> Result<[u8; 4]> {
     let bytes = hex::decode(s)
-        .map_err(|e| CliError::UsageError(format!("--policy-id-stub: invalid hex {s:?}: {e}")))?;
+        .map_err(|e| CliError::Invalid(format!("--policy-id-stub: invalid hex {s:?}: {e}")))?;
     if bytes.len() != 4 {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "--policy-id-stub: expected 4 bytes (8 hex chars), got {} bytes ({s:?})",
             bytes.len()
         )));
@@ -34,11 +34,10 @@ pub fn parse_stub_hex(s: &str) -> Result<[u8; 4]> {
 
 /// Parse `--origin-fingerprint` 8-hex-chars → `Fingerprint`.
 pub fn parse_fingerprint(s: &str) -> Result<Fingerprint> {
-    let bytes = hex::decode(s).map_err(|e| {
-        CliError::UsageError(format!("--origin-fingerprint: invalid hex {s:?}: {e}"))
-    })?;
+    let bytes = hex::decode(s)
+        .map_err(|e| CliError::Invalid(format!("--origin-fingerprint: invalid hex {s:?}: {e}")))?;
     if bytes.len() != 4 {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "--origin-fingerprint: expected 4 bytes (8 hex chars), got {} bytes",
             bytes.len()
         )));
@@ -49,7 +48,7 @@ pub fn parse_fingerprint(s: &str) -> Result<Fingerprint> {
 /// Parse `--origin-path` (e.g., `m/48'/0'/0'/2'`) → `DerivationPath`.
 pub fn parse_derivation_path(s: &str) -> Result<DerivationPath> {
     DerivationPath::from_str(s).map_err(|e| {
-        CliError::UsageError(format!("--origin-path: invalid derivation path {s:?}: {e}"))
+        CliError::Invalid(format!("--origin-path: invalid derivation path {s:?}: {e}"))
     })
 }
 
@@ -113,14 +112,28 @@ fn derived_chunk_set_id(card: &mk_codec::KeyCard) -> Option<u32> {
     Some(mk_codec::derive_chunk_set_id(&bytecode))
 }
 
-/// Warn on stderr when a decoded card fails `KeyCard::validate` (T5). The card
-/// is still read as written; stdout and the exit code are unchanged.
-pub fn warn_if_invalid(card: &mk_codec::KeyCard) {
-    if let Err(e) = card.validate() {
-        eprintln!(
-            "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
-        );
+/// Warn on stderr when a decoded card fails `KeyCard::validate` (T5), and
+/// return the exit bits: INVALID for such a card, else 0. The card is still
+/// read and printed as written (mk SPEC: cards minted before mk-codec 0.6.0
+/// stay readable), and the code says it is invalid (exit-code spec test 6,
+/// decision 8's print-and-report pattern).
+#[must_use = "the verb's exit code must carry INVALID for an invalid card"]
+pub fn warn_if_invalid(card: &mk_codec::KeyCard) -> u8 {
+    if let Some(w) = invalid_card_warning(card) {
+        eprintln!("{w}");
+        crate::exit::INVALID
+    } else {
+        crate::exit::OK
     }
+}
+
+/// The T5 warning for a card that fails `KeyCard::validate`, or `None`.
+pub fn invalid_card_warning(card: &mk_codec::KeyCard) -> Option<String> {
+    card.validate().err().map(|e| {
+        format!(
+            "warning: this card is invalid ({e}); it is read as written, mk verify reports it invalid, and mk encode refuses to mint it"
+        )
+    })
 }
 
 /// Compare the declared vs. content-derived `chunk_set_id` for a decoded
@@ -223,6 +236,17 @@ pub fn correction_counts(strings: &[String]) -> Vec<(usize, usize)> {
         .collect()
 }
 
+/// Set when a verb used a BCH-corrected card (exit-code spec R6).
+static CORRECTION_USED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether this run used a BCH-corrected value: `main` then adds REPAIRED
+/// (16) to the verb's code, whatever else it reports (spec R1, R6, decision
+/// 5). Set only through [`warn_corrections_applied`], so the stderr note and
+/// the bit cannot disagree (R5).
+pub fn correction_used() -> bool {
+    CORRECTION_USED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Emit the diagnostics-followup stderr note when ANY chunk in `counts`
 /// required BCH correction. No-op on an empty slice (silent on clean
 /// input). Non-fatal, additive: mirrors `warn_chunk_set_id_mismatch`'s own
@@ -232,6 +256,7 @@ pub fn warn_corrections_applied(counts: &[(usize, usize)]) {
     if counts.is_empty() {
         return;
     }
+    CORRECTION_USED.store(true, std::sync::atomic::Ordering::Relaxed);
     let breakdown = counts
         .iter()
         .map(|(i, n)| format!("chunk {i}: {n} correction(s)"))
@@ -436,10 +461,17 @@ pub fn fmt_fingerprint(fp: &Fingerprint) -> String {
 /// (SPEC §3.2) means a grouped card and an unbroken card must both re-ingest,
 /// which is exactly what a human transcribing from the engraving card produces.
 pub fn read_mk1_strings(args: &[String], in_file: Option<&str>) -> Result<Vec<String>> {
+    const EXPECTED: &str =
+        "expected at least one mk1 string (positional, via --in FILE, or via stdin with '-')";
+    // Exit-code spec decision 3: no channel named at all is a missing
+    // required argument, 64, refused before anything is read (R2).
+    if args.is_empty() && in_file.is_none() {
+        return Err(CliError::UsageError(EXPECTED.into()));
+    }
     let mut out = Vec::with_capacity(args.len());
     if let Some(path) = in_file {
         let buf = std::fs::read_to_string(path)
-            .map_err(|e| CliError::UsageError(format!("--in {path}: {e}")))?;
+            .map_err(|e| CliError::reading(&format!("--in {path}"), &e))?;
         push_stripped_lines(&mut out, &buf);
     }
     let mut consumed_stdin = false;
@@ -457,11 +489,11 @@ pub fn read_mk1_strings(args: &[String], in_file: Option<&str>) -> Result<Vec<St
     }
     if out.is_empty() {
         // SPEC §6h: the remedy must be executable, so it names only channels
-        // that exist. `--in FILE` is one of them as of P3.
-        return Err(CliError::UsageError(
-            "expected at least one mk1 string (positional, via --in FILE, or via stdin with '-')"
-                .into(),
-        ));
+        // that exist. `--in FILE` is one of them as of P3. A named channel
+        // that yields nothing is an empty input, INVALID (2), not usage
+        // (exit-code spec decision 3): in a pipeline an empty stdin means
+        // the step before failed.
+        return Err(CliError::Invalid(EXPECTED.into()));
     }
     Ok(out)
 }
@@ -500,10 +532,16 @@ pub fn classify_code_variant(s: &str) -> &'static str {
 }
 
 /// Parse an xpub, accepting SLIP-0132 prefixes (normalized to canonical xpub/tpub).
-/// Emits a stderr note on normalization; refuses (UsageError) if a non-canonical
+/// Emits a stderr note on normalization; refuses (`Invalid`) if a non-canonical
 /// prefix's implied script type contradicts `origin_path` (when supplied).
-pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> Result<Xpub> {
-    let (xpub, variant) = crate::slip132::detect_and_normalize(s)?;
+/// `what` names the source for an error (`--xpub`, a key record); the value
+/// itself is never echoed.
+pub fn parse_xpub_normalized(
+    s: &str,
+    origin_path: Option<&DerivationPath>,
+    what: &str,
+) -> Result<Xpub> {
+    let (xpub, variant) = crate::slip132::detect_and_normalize(s, what)?;
     if let Some(v) = variant {
         eprintln!(
             "note: the xpub was a SLIP-0132 {}; normalized to canonical {} — script type is conveyed by the origin path, not the key prefix",
@@ -512,7 +550,7 @@ pub fn parse_xpub_normalized(s: &str, origin_path: Option<&DerivationPath>) -> R
         );
         if let Some(path) = origin_path {
             if !v.path_matches(path) {
-                return Err(CliError::UsageError(v.mismatch_help(path)));
+                return Err(CliError::Invalid(v.mismatch_help(path)));
             }
         }
     }

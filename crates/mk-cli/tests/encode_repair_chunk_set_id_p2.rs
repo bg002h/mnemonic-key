@@ -233,8 +233,8 @@ fn repair_blessed_damaged_pinned_card_warns_with_mint_time_clause() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(5),
-        "a genuine correction that reassembles must still exit 5; stderr={}",
+        Some(16),
+        "a genuine correction that reassembles must still exit 16; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -273,7 +273,7 @@ fn repair_json_byte_unchanged_no_chunk_set_id_field() {
         .args(["repair", "--json", &chunk0, &damaged_chunk1])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(5));
+    assert_eq!(out.status.code(), Some(16));
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert_eq!(
         stdout.trim_end(),
@@ -330,12 +330,12 @@ fn repair_single_chunk_candidate_of_pinned_card_silent() {
         .unwrap();
     assert_eq!(
         out.status.code(),
-        Some(5),
-        "a single corrected chunk supplied alone still exits 5 (Candidate)"
+        Some(16),
+        "a single corrected chunk supplied alone still exits 16 (Candidate)"
     );
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("UNVERIFIED"),
+        stderr.contains("verifiable when the rest of the set is reassembled"),
         "the existing Candidate advisory must be unaffected; stderr={stderr:?}"
     );
     assert!(

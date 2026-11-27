@@ -123,11 +123,36 @@ impl Slip132Variant {
 /// Returns `(canonical Xpub, Some(variant))` for SLIP-0132 input,
 /// `(Xpub, None)` for canonical xpub/tpub. Unrecognized versions fall through
 /// to `Xpub::from_str`'s existing error.
-pub fn detect_and_normalize(s: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
+///
+/// `what` names where the key came from (`--xpub`, a key record) for the
+/// error. The value itself is never echoed: a private key pasted in the
+/// wrong place must not reach stderr or a JSON envelope on stdout. The error
+/// names the version bytes instead, when the string is base58check.
+pub fn detect_and_normalize(s: &str, what: &str) -> Result<(Xpub, Option<Slip132Variant>)> {
     use Slip132Variant::*;
-    let from_str = |s: &str| -> Result<Xpub> {
-        Xpub::from_str(s).map_err(|e| CliError::UsageError(format!("invalid xpub {s:?}: {e}")))
-    };
+    let from_str =
+        |s: &str| -> Result<Xpub> {
+            Xpub::from_str(s).map_err(|e| {
+            let detail = match base58::decode_check(s) {
+                Ok(d) if d.len() >= 4 => {
+                    let hex = format!("{:02x}{:02x}{:02x}{:02x}", d[0], d[1], d[2], d[3]);
+                    let private = matches!(
+                        [d[0], d[1], d[2], d[3]],
+                        [0x04, 0x88, 0xAD, 0xE4] | [0x04, 0x35, 0x83, 0x94]
+                    );
+                    if private {
+                        format!(
+                            "its version bytes {hex} are a private key's (xprv/tprv); give the xpub"
+                        )
+                    } else {
+                        format!("version bytes {hex}: {e}")
+                    }
+                }
+                _ => "it is not a base58check extended key".to_string(),
+            };
+            CliError::Invalid(format!("invalid xpub in {what}: {detail} (the value is not shown)"))
+        })
+        };
     let Ok(data) = base58::decode_check(s) else {
         return Ok((from_str(s)?, None));
     };
@@ -197,7 +222,7 @@ mod tests {
             // detect_and_normalize round-trips it back to the canonical xpub
             // AND returns the expected variant.
             let slip132_str = to_slip132(V2_84_MAIN, expected_ver);
-            let (_, detected) = detect_and_normalize(&slip132_str)
+            let (_, detected) = detect_and_normalize(&slip132_str, "--xpub")
                 .unwrap_or_else(|e| panic!("detect_and_normalize failed for {variant:?}: {e}"));
             assert_eq!(
                 detected,
@@ -216,7 +241,7 @@ mod tests {
         let zpub = to_slip132(V2_84_MAIN, ZPUB_V);
         let canonical = Xpub::from_str(V2_84_MAIN).unwrap();
 
-        let (normalized, variant) = detect_and_normalize(&zpub).unwrap();
+        let (normalized, variant) = detect_and_normalize(&zpub, "--xpub").unwrap();
 
         assert_eq!(
             variant,
@@ -245,7 +270,7 @@ mod tests {
     /// A canonical xpub must be passed through without detecting any variant.
     #[test]
     fn canonical_xpub_is_none() {
-        let (_, variant) = detect_and_normalize(V2_84_MAIN).unwrap();
+        let (_, variant) = detect_and_normalize(V2_84_MAIN, "--xpub").unwrap();
         assert_eq!(
             variant, None,
             "canonical xpub must not detect a SLIP-0132 variant"
@@ -257,7 +282,7 @@ mod tests {
     #[test]
     fn unknown_version_errors() {
         let bogus = to_slip132(V2_84_MAIN, [0xDE, 0xAD, 0xBE, 0xEF]);
-        let result = detect_and_normalize(&bogus);
+        let result = detect_and_normalize(&bogus, "--xpub");
         assert!(
             result.is_err(),
             "bogus version bytes must return an error, got: {result:?}"

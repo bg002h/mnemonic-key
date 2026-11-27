@@ -51,7 +51,7 @@ pub struct KeyRecord {
 pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     let s = line.trim();
     let usage = || {
-        CliError::UsageError(format!(
+        CliError::Invalid(format!(
             "expected BIP-380 origin notation `[fingerprint/path]xpub`, got {s:?}"
         ))
     };
@@ -63,7 +63,7 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     // rather than defaulted to `m` -- a card engraved at the wrong depth is
     // indistinguishable from a correct one until recovery fails.
     let (fp_str, path_rest) = origin.split_once('/').ok_or_else(|| {
-        CliError::UsageError(format!(
+        CliError::Invalid(format!(
             "origin {origin:?} has no derivation path; a key card must declare one \
              (e.g. `[{origin}/48'/0'/0'/2']`)"
         ))
@@ -73,20 +73,20 @@ pub fn parse_key_record(line: &str) -> Result<KeyRecord> {
     // a policy, not where it was derived; accepting it silently would engrave
     // an origin the wallet never had.
     if xpub_str.contains('/') {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "key {xpub_str:?} carries a derivation suffix; `--keys` records hold an \
              ORIGIN and a bare xpub, not a use-site path"
         )));
     }
     if xpub_str.is_empty() {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "record {s:?} declares an origin but no xpub"
         )));
     }
 
     let fingerprint = parse_fingerprint(fp_str)?;
     let path = parse_derivation_path(&format!("m/{path_rest}"))?;
-    let xpub = parse_xpub_normalized(xpub_str, Some(&path))?;
+    let xpub = parse_xpub_normalized(xpub_str, Some(&path), "the key record")?;
     Ok(KeyRecord {
         fingerprint,
         path,
@@ -117,7 +117,7 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         (buf, "<stdin>".to_string())
     } else {
         let buf = std::fs::read_to_string(path)
-            .map_err(|e| CliError::UsageError(format!("{flag} {path}: {e}")))?;
+            .map_err(|e| CliError::reading(&format!("{flag} {path}"), &e))?;
         (buf, path.to_string())
     };
 
@@ -135,7 +135,7 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
     // `refuse_line_encoding`, the one rule both line readers share.
     let buf = buf.strip_prefix('\u{feff}').unwrap_or(&buf);
     if buf.contains('\r') && !buf.contains('\n') {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "{flag} {source}: the file uses CR-only line endings (classic Mac), so every \
              record after the first would be read as part of line 1. Convert it to LF or \
              CRLF."
@@ -166,14 +166,14 @@ pub fn read_key_records(path: &str, flag: &str) -> Result<Vec<KeyRecord>> {
         if line.is_empty() {
             continue;
         }
-        let rec = parse_key_record(line)
-            .map_err(|e| CliError::UsageError(format!("{source}:{}: {}", i + 1, e.message())))?;
+        let rec =
+            parse_key_record(line).map_err(|e| e.prefixed(&format!("{source}:{}: ", i + 1)))?;
         out.push(rec);
         lines.push(i + 1);
     }
     check_record_set(&out, &lines, &source)?;
     if out.is_empty() {
-        return Err(CliError::UsageError(format!(
+        return Err(CliError::Invalid(format!(
             "{flag} {source}: no key records found (blank lines and `#` comments are ignored)"
         )));
     }
@@ -200,7 +200,7 @@ pub(crate) enum LineOffence {
 /// FIX_mk_fa_line_readers). The caller has already removed a leading BOM; CRLF is
 /// fine here (a CR before LF is not an offence). Scans from the
 /// start for the first bare CR, other line break or stray BOM and refuses it
-/// (exit 64) with `text(line, offence)`, where `line` is 1 plus the number of
+/// (exit 2, an invalid input) with `text(line, offence)`, where `line` is 1 plus the number of
 /// LF before it. Runs before any line is parsed, stripped or skipped.
 pub(crate) fn refuse_line_encoding(
     buf: &str,
@@ -224,7 +224,7 @@ pub(crate) fn refuse_line_encoding(
             '\u{2029}' => LineOffence::Break("paragraph separator (U+2029)"),
             _ => continue,
         };
-        return Err(CliError::UsageError(text(line, &o)));
+        return Err(CliError::Invalid(text(line, &o)));
     }
     Ok(())
 }
@@ -268,7 +268,7 @@ fn check_record_set(recs: &[KeyRecord], lines: &[usize], source: &str) -> Result
                 ),
                 (false, false) => continue,
             };
-            return Err(CliError::UsageError(msg));
+            return Err(CliError::Invalid(msg));
         }
     }
     Ok(())

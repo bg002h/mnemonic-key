@@ -3,7 +3,7 @@
 //!
 //! Covers all 7 cells locked in the plan:
 //!   1. `repair_already_valid_input_exits_0`
-//!   2. `repair_one_substitution_exits_5`
+//!   2. `repair_one_substitution_exits_16`
 //!   3. `repair_beyond_t4_capacity_exits_2`
 //!   4. `repair_hrp_mismatch_exits_2` — NO Levenshtein suggestion (single-HRP)
 //!   5. `repair_long_code_happy_path` — 108-data-part chunk corruption
@@ -97,10 +97,10 @@ fn repair_already_valid_input_exits_0() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Cell 2: one substitution → exit 5, 1 correction reported.
+// Cell 2: one substitution → exit 16, 1 correction reported.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn repair_one_substitution_exits_5() {
+fn repair_one_substitution_exits_16() {
     let chunks = generate_valid_mk1_chunks();
     // Use the regular-code chunk (index 1) and flip 1 char at data-part pos 5.
     let valid = &chunks[1];
@@ -114,8 +114,8 @@ fn repair_one_substitution_exits_5() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 (REPAIR_APPLIED); stderr={}",
+        16,
+        "expected exit 16 (REPAIRED); stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -229,8 +229,8 @@ fn repair_long_code_happy_path() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for long-code 1-substitution repair; stderr={}",
+        16,
+        "expected exit 16 for long-code 1-substitution repair; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -274,8 +274,8 @@ fn repair_stdin_input_via_dash() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for stdin-with-corrupted-input; stderr={}",
+        16,
+        "expected exit 16 for stdin-with-corrupted-input; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8(out.stdout).expect("stdout utf-8");
@@ -426,8 +426,8 @@ fn repair_json_envelope_shape() {
     let code = out.status.code().expect("exited normally");
     assert_eq!(
         code,
-        5,
-        "expected exit 5 for JSON-mode repair; stderr={}",
+        16,
+        "expected exit 16 for JSON-mode repair; stderr={}",
         String::from_utf8_lossy(&out.stderr)
     );
 
@@ -490,14 +490,15 @@ fn repair_json_envelope_shape() {
 // `group_is_complete_and_consistent` SingleString arm).
 //
 // A valid single-string mk1 cannot carry a real xpub (65 bytes > the 56-byte
-// single-string cap), so the reachable single-string verdict is Reject: a
-// BCH-valid single string whose bytecode does not decode. After a 1-char
-// correction the group is complete (1 member) and MUST be re-decoded and
-// refused (exit 2, SetReassemblyMismatch), not emitted as an UNVERIFIED
-// candidate (exit 5).
+// single-string cap), so a corrected single string never decodes and 20
+// (REPAIRED + UNVERIFIED) is unreachable in mk. A non-chunked string has no
+// oracle: after a 1-char correction it is still printed, with a "do not
+// trust it" error, at 16 + 4 + 2 = 22 (exit-code spec decision 6; the
+// coordinator's ruling, matching md). A CHUNKED set of one follows the
+// complete-set rule instead (exit_codes_spec.rs).
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn repair_corrected_single_string_that_fails_decode_exits_2() {
+fn repair_corrected_single_string_that_fails_decode_exits_22() {
     use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
     use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
 
@@ -518,16 +519,299 @@ fn repair_corrected_single_string_that_fails_decode_exits_2() {
         .args(["repair", &corrupted])
         .output()
         .expect("invoke mk repair");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(
         out.status.code(),
-        Some(2),
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        Some(22),
+        "stdout={stdout} stderr={stderr}"
     );
     assert!(
+        stdout.contains(&valid),
+        "the corrected string is still printed; got {stdout:?}"
+    );
+    assert!(
+        stderr.contains("not chunked") && stderr.contains("Do not trust it"),
+        "the error names a non-chunked string; got {stderr:?}"
+    );
+    assert!(
+        !stderr.contains("reassemble"),
+        "no set-reassembly wording for a non-chunked string; got {stderr:?}"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Final review I-1: a group that is not a complete set and not a short set
+// of distinct chunks (a duplicate, over-full, out-of-range or disagreeing
+// totals) is MALFORMED: 2, nothing printed, the reason on stderr. Only a
+// short set takes decision 7's "verifiable later" (16).
+// ──────────────────────────────────────────────────────────────────────────
+
+fn run_repair(args: &[&str]) -> std::process::Output {
+    let mut a = vec!["repair"];
+    a.extend_from_slice(args);
+    Command::cargo_bin("mk")
+        .expect("mk binary")
+        .args(&a)
+        .output()
+        .expect("invoke mk repair")
+}
+
+fn assert_malformed(args: &[&str], reason: &str) {
+    let out = run_repair(args);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{args:?}: stderr={stderr}");
+    assert!(
         out.stdout.is_empty(),
-        "a Reject suppresses all output; got {:?}",
+        "{args:?}: nothing printed; got {:?}",
         String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        stderr.contains(reason),
+        "{args:?}: want {reason:?} in {stderr}"
+    );
+    assert!(
+        !stderr.contains("verifiable when the rest of the set"),
+        "{args:?}: no decision-7 advisory; got {stderr}"
+    );
+}
+
+#[test]
+fn repair_duplicate_chunk_a_a_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    assert_malformed(&[&c[0], &c[0]], "chunk index 0 appears twice");
+}
+
+#[test]
+fn repair_over_full_a_b_b_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    assert_malformed(&[&c[0], &c[1], &c[1]], "3 chunks, but the set declares 2");
+}
+
+#[test]
+fn repair_corrected_over_full_a_prime_b_b_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    assert_malformed(&[&a, &c[1], &c[1]], "3 chunks, but the set declares 2");
+}
+
+#[test]
+fn repair_corrected_duplicate_a_prime_a_is_malformed_2() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    assert_malformed(&[&a, &c[0]], "chunk index 0 appears twice");
+}
+
+#[test]
+fn repair_disagreeing_totals_is_malformed_2() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let chunk = |total: u8, index: u8| {
+        let mut d = StringLayerHeader::Chunked {
+            version: VERSION_V0_1,
+            chunk_set_id: 0x0abcd,
+            total_chunks: total,
+            chunk_index: index,
+        }
+        .to_5bit_symbols();
+        d.extend(bytes_to_5bit(&[0x11; 10]));
+        encode_5bit_to_string(&d).unwrap()
+    };
+    let (a, b) = (chunk(2, 0), chunk(3, 1));
+    assert_malformed(&[&a, &b], "disagree on the number of chunks");
+}
+
+/// The short set keeps decision 7: one corrected chunk of two is 16, with
+/// the advisory, and `--json` marks it `"incomplete": true`.
+#[test]
+fn repair_short_set_is_16_and_json_marks_incomplete() {
+    let c = generate_valid_mk1_chunks();
+    let a = flip_at(&c[0], 10);
+    let out = run_repair(&[&a]);
+    assert_eq!(out.status.code(), Some(16));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("verifiable when the rest of the set"));
+    let out = run_repair(&["--json", &a]);
+    assert_eq!(out.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["incomplete"], true);
+    assert!(v.get("not_a_card").is_none());
+    // A complete set carries neither field.
+    let out = run_repair(&["--json", &a, &c[1]]);
+    assert_eq!(out.status.code(), Some(16));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v.get("incomplete").is_none() && v.get("not_a_card").is_none());
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Final review M-1: repair validates the card it decodes, as every other
+// verb does. A card that fails `KeyCard::validate()` is still printed, at 2
+// (clean) or 18 (corrected).
+// ──────────────────────────────────────────────────────────────────────────
+const LEGACY_I8: [&str; 2] = [
+    "mk1qpeffzpqqqqaatd7allqqpp4sl8szqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqnehen8u5yagl2mw0p43h3j",
+    "mk1qpeffzppl8wthtz45p3ftn58pvrs9xlumvkuu2xet8egzkcklqte3jjj9mtsugd0x98xyvntv",
+];
+
+#[test]
+fn repair_of_an_invalid_card_is_2_or_18_and_printed() {
+    let out = run_repair(&LEGACY_I8);
+    assert_eq!(out.status.code(), Some(2));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(LEGACY_I8[0]) && stdout.contains(LEGACY_I8[1]));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("this card is invalid"));
+    let a = flip_at(LEGACY_I8[1], 10);
+    let out = run_repair(&[LEGACY_I8[0], &a]);
+    assert_eq!(out.status.code(), Some(18));
+    assert!(String::from_utf8_lossy(&out.stdout).contains(LEGACY_I8[1]));
+}
+
+/// Final review M-3: `--json` at 22 names why the string is not a card.
+#[test]
+fn repair_json_not_a_card_at_22() {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let mut d = StringLayerHeader::SingleString {
+        version: VERSION_V0_1,
+    }
+    .to_5bit_symbols();
+    d.extend(bytes_to_5bit(&[0xFF; 10]));
+    let valid = encode_5bit_to_string(&d).unwrap();
+    let out = run_repair(&["--json", &flip_at(&valid, 5)]);
+    assert_eq!(out.status.code(), Some(22));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v["not_a_card"]["kind"].is_string(), "{v}");
+    assert!(v["not_a_card"]["message"].is_string(), "{v}");
+    assert_eq!(v["corrected_chunks"][0], valid.as_str());
+    // Field order is part of the schema: `not_a_card` right after `kind`,
+    // where ms has it after `verdict` (mk has no `verdict`).
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let at = |k: &str| raw.find(&format!("\"{k}\"")).unwrap();
+    assert!(
+        at("kind") < at("not_a_card") && at("not_a_card") < at("corrected_chunks"),
+        "{raw}"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Brian's ruling of 2026-11-26 (exit-code spec §2b item 3; FOLLOWUP
+// `mk1-mixed-chunk-set-id-exits-0`): short groups under DIFFERENT
+// `chunk_set_id`s that declare one total and together cover every index of
+// it are one set split by a miscorrected id, or chunks of two cards mixed.
+// Either way they are refused: 2, nothing printed. Only short groups count
+// (a complete group is a card by itself), and short groups that do not cover
+// their total keep decision 7 (0 clean, 16 corrected).
+// ──────────────────────────────────────────────────────────────────────────
+
+fn synthetic_chunk(chunk_set_id: u32, total: u8, index: u8) -> String {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let mut d = StringLayerHeader::Chunked {
+        version: VERSION_V0_1,
+        chunk_set_id,
+        total_chunks: total,
+        chunk_index: index,
+    }
+    .to_5bit_symbols();
+    d.extend(bytes_to_5bit(&[0x11; 10]));
+    encode_5bit_to_string(&d).unwrap()
+}
+
+fn assert_split_set_refused(args: &[&str]) {
+    let out = run_repair(args);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{args:?}: stderr={stderr}");
+    assert!(
+        out.stdout.is_empty(),
+        "{args:?}: nothing printed; got {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        stderr.contains("together cover every index") && stderr.contains("miscorrect"),
+        "{args:?}: the refusal names the split set; got {stderr}"
+    );
+    assert!(
+        !stderr.contains("verifiable when the rest of the set"),
+        "{args:?}: no decision-7 advisory; got {stderr}"
+    );
+}
+
+#[test]
+fn repair_two_set_ids_covering_every_index_is_2() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    assert_split_set_refused(&[&a, &b]);
+    assert_split_set_refused(&[&b, &a]);
+}
+
+#[test]
+fn repair_corrected_two_set_ids_covering_every_index_is_2() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    assert_split_set_refused(&[&flip_at(&a, 10), &b]);
+    assert_split_set_refused(&[&a, &flip_at(&b, 10)]);
+}
+
+#[test]
+fn repair_json_two_set_ids_covering_every_index_is_2_envelope_only() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    let out = run_repair(&["--json", &flip_at(&a, 10), &b]);
+    assert_eq!(out.status.code(), Some(2));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(
+        v.get("corrected_chunks").is_none(),
+        "an error envelope only, no repair report: {v}"
+    );
+}
+
+#[test]
+fn repair_three_set_ids_or_overlapping_groups_covering_every_index_is_2() {
+    let (a, b, c) = (
+        synthetic_chunk(0x0aaaa, 3, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+        synthetic_chunk(0x0cccc, 3, 2),
+    );
+    assert_split_set_refused(&[&a, &b, &c]);
+    // Overlap does not matter: {0, 1} under one id and {1, 2} under another.
+    let (a1, b2) = (
+        synthetic_chunk(0x0aaaa, 3, 1),
+        synthetic_chunk(0x0bbbb, 3, 2),
+    );
+    assert_split_set_refused(&[&a, &a1, &b, &b2]);
+}
+
+#[test]
+fn repair_short_groups_that_do_not_cover_keep_decision_7() {
+    // Two ids, a set of 3, indices 0 and 1 only: two incomplete cards.
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 3, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+    );
+    let out = run_repair(&[&a, &b]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = run_repair(&[&flip_at(&a, 10), &b]);
+    assert_eq!(out.status.code(), Some(16));
+    // Different totals never cover one set: 0 of 2 and 1 of 3.
+    let (c, d) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+    );
+    let out = run_repair(&[&c, &d]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
 }
