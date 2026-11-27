@@ -52,8 +52,14 @@ Next release: 0.18.0
     one card's chunk set (a chunk given twice, more chunks than the set
     declares, an index out of range, chunks that disagree on the set's size)
     are **2** with nothing printed and the reason on stderr; they used to be
-    reported as an incomplete set at 0 or 16. Only a short set of distinct
-    chunks keeps the 16 and its "verifiable when the rest of the set is
+    reported as an incomplete set at 0 or 16. Short sets under different
+    chunk-set ids that declare one size and together cover every index of it
+    (one set split by a miscorrected id, or chunks of two cards mixed) are
+    **2** with nothing printed, as `md` refuses chunks of two cards (Brian's
+    ruling of 2026-11-26, exit-code spec §2b item 3); they used to be read as
+    separate incomplete sets at 0 or 16. Short sets that do not cover their
+    size stay separate incomplete sets, and a complete card in the batch never
+    counts. Only a short set of distinct chunks keeps the 16 and its "verifiable when the rest of the set is
     reassembled" warning. A card `mk verify` calls invalid is still printed,
     at **2** (**18** when corrected). `repair --json` gains two additive
     fields after `kind`: `"not_a_card": {"kind", "message"}` at 22 (ms's

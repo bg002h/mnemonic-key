@@ -31,7 +31,10 @@
 //! correcting decode (the bypass in [`run`]); a clean string whose chunk
 //! header does not parse; a clean single string that does not decode; a
 //! malformed group (an index twice, out of range, more chunks than declared,
-//! or chunks that disagree on the set's size); and a complete chunk set that
+//! or chunks that disagree on the set's size); short groups under different
+//! `chunk_set_id`s that declare one size and together cover every index of
+//! it ([`split_set`], Brian's ruling of 2026-11-26: a miscorrected id or two
+//! cards mixed); and a complete chunk set that
 //! does not reassemble (`CliError::SetReassemblyMismatch` when a correction
 //! was applied — THE FUNDS FIX: a per-chunk BCH correction aliased to a
 //! DIFFERENT valid codeword — or `Invalid` when none was).
@@ -316,6 +319,61 @@ fn group_shape(headers: &[&StringLayerHeader]) -> GroupShape {
     }
 }
 
+/// Brian's ruling of 2026-11-26 (exit-code spec §2b item 3): two or more
+/// SHORT groups under different `chunk_set_id`s that declare one total and
+/// whose indices together cover every index of it are one set split by a
+/// miscorrected id, or chunks of two cards mixed. `md` refuses chunks of two
+/// cards; `mk repair` takes a batch of cards, so it refuses only this shape:
+/// short groups that do not cover their total stay separate incomplete sets
+/// (decision 7), and a complete group is a card by itself and never counts.
+/// Returns the refusal's message, or `None`.
+fn split_set(
+    order: &[GroupKey],
+    members: &HashMap<GroupKey, Vec<usize>>,
+    header_results: &[std::result::Result<StringLayerHeader, mk_codec::Error>],
+) -> Option<String> {
+    // total -> (the short groups declaring it, the indices they hold)
+    let mut by_total: Vec<(usize, Vec<GroupKey>, Vec<bool>)> = Vec::new();
+    for key in order {
+        let headers: Vec<&StringLayerHeader> = members[key]
+            .iter()
+            .filter_map(|&i| header_results[i].as_ref().ok())
+            .collect();
+        if group_shape(&headers) != GroupShape::Short {
+            continue;
+        }
+        let StringLayerHeader::Chunked { total_chunks, .. } = headers[0] else {
+            continue;
+        };
+        let total = *total_chunks as usize;
+        let at = match by_total.iter().position(|(t, ..)| *t == total) {
+            Some(at) => at,
+            None => {
+                by_total.push((total, Vec::new(), vec![false; total]));
+                by_total.len() - 1
+            }
+        };
+        let (_, keys, seen) = &mut by_total[at];
+        keys.push(*key);
+        for h in &headers {
+            if let StringLayerHeader::Chunked { chunk_index, .. } = h {
+                seen[*chunk_index as usize] = true;
+            }
+        }
+    }
+    let (total, keys, _) = by_total
+        .into_iter()
+        .find(|(_, keys, seen)| keys.len() >= 2 && seen.iter().all(|&s| s))?;
+    let names: Vec<String> = keys.into_iter().map(describe_group_key).collect();
+    Some(format!(
+        "chunks under {} different chunk-set ids ({}) together cover every index of a set of \
+         {total}: a suspected miscorrection of a chunk-set id, or chunks of two cards mixed, so \
+         nothing is printed. Re-read the plates, and give each card's chunks separately",
+        names.len(),
+        names.join(", ")
+    ))
+}
+
 /// The set-level re-verify and per-string decode check over the FULL
 /// supplied `corrected_chunks` (already per-string BCH-corrected), for every
 /// group, corrected or not (decision 6: `repair` no longer exits 0 on a
@@ -403,6 +461,10 @@ fn classify_mk1_set(
                 )));
             }
         }
+    }
+
+    if let Some(reason) = split_set(&order, &members, header_results) {
+        return Err(CliError::Invalid(reason));
     }
 
     for key in &order {

@@ -691,3 +691,127 @@ fn repair_json_not_a_card_at_22() {
         "{raw}"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Brian's ruling of 2026-11-26 (exit-code spec §2b item 3; FOLLOWUP
+// `mk1-mixed-chunk-set-id-exits-0`): short groups under DIFFERENT
+// `chunk_set_id`s that declare one total and together cover every index of
+// it are one set split by a miscorrected id, or chunks of two cards mixed.
+// Either way they are refused: 2, nothing printed. Only short groups count
+// (a complete group is a card by itself), and short groups that do not cover
+// their total keep decision 7 (0 clean, 16 corrected).
+// ──────────────────────────────────────────────────────────────────────────
+
+fn synthetic_chunk(chunk_set_id: u32, total: u8, index: u8) -> String {
+    use mk_codec::string_layer::bch::{bytes_to_5bit, encode_5bit_to_string};
+    use mk_codec::string_layer::header::{StringLayerHeader, VERSION_V0_1};
+    let mut d = StringLayerHeader::Chunked {
+        version: VERSION_V0_1,
+        chunk_set_id,
+        total_chunks: total,
+        chunk_index: index,
+    }
+    .to_5bit_symbols();
+    d.extend(bytes_to_5bit(&[0x11; 10]));
+    encode_5bit_to_string(&d).unwrap()
+}
+
+fn assert_split_set_refused(args: &[&str]) {
+    let out = run_repair(args);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{args:?}: stderr={stderr}");
+    assert!(
+        out.stdout.is_empty(),
+        "{args:?}: nothing printed; got {:?}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        stderr.contains("together cover every index") && stderr.contains("miscorrect"),
+        "{args:?}: the refusal names the split set; got {stderr}"
+    );
+    assert!(
+        !stderr.contains("verifiable when the rest of the set"),
+        "{args:?}: no decision-7 advisory; got {stderr}"
+    );
+}
+
+#[test]
+fn repair_two_set_ids_covering_every_index_is_2() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    assert_split_set_refused(&[&a, &b]);
+    assert_split_set_refused(&[&b, &a]);
+}
+
+#[test]
+fn repair_corrected_two_set_ids_covering_every_index_is_2() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    assert_split_set_refused(&[&flip_at(&a, 10), &b]);
+    assert_split_set_refused(&[&a, &flip_at(&b, 10)]);
+}
+
+#[test]
+fn repair_json_two_set_ids_covering_every_index_is_2_envelope_only() {
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 2, 1),
+    );
+    let out = run_repair(&["--json", &flip_at(&a, 10), &b]);
+    assert_eq!(out.status.code(), Some(2));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(
+        v.get("corrected_chunks").is_none(),
+        "an error envelope only, no repair report: {v}"
+    );
+}
+
+#[test]
+fn repair_three_set_ids_or_overlapping_groups_covering_every_index_is_2() {
+    let (a, b, c) = (
+        synthetic_chunk(0x0aaaa, 3, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+        synthetic_chunk(0x0cccc, 3, 2),
+    );
+    assert_split_set_refused(&[&a, &b, &c]);
+    // Overlap does not matter: {0, 1} under one id and {1, 2} under another.
+    let (a1, b2) = (
+        synthetic_chunk(0x0aaaa, 3, 1),
+        synthetic_chunk(0x0bbbb, 3, 2),
+    );
+    assert_split_set_refused(&[&a, &a1, &b, &b2]);
+}
+
+#[test]
+fn repair_short_groups_that_do_not_cover_keep_decision_7() {
+    // Two ids, a set of 3, indices 0 and 1 only: two incomplete cards.
+    let (a, b) = (
+        synthetic_chunk(0x0aaaa, 3, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+    );
+    let out = run_repair(&[&a, &b]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = run_repair(&[&flip_at(&a, 10), &b]);
+    assert_eq!(out.status.code(), Some(16));
+    // Different totals never cover one set: 0 of 2 and 1 of 3.
+    let (c, d) = (
+        synthetic_chunk(0x0aaaa, 2, 0),
+        synthetic_chunk(0x0bbbb, 3, 1),
+    );
+    let out = run_repair(&[&c, &d]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

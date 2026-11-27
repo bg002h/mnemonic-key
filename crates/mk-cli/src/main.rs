@@ -72,7 +72,7 @@ enum Command {
     GuiSchema(cmd::gui_schema::GuiSchemaArgs),
     /// Repair mk1 strings via BCH error correction (exit 16 = a correction was applied).
     #[command(
-        after_help = "Exit status: 0 = nothing to correct. 16 = a correction was applied (verified by reassembly, or verifiable once the rest of a short chunk set is given). 22 = a corrected string that is not a card (16 + 4 verify before trusting + 2 invalid; it is still printed). 2 = an input is invalid: uncorrectable, not one card's chunk set, or a card that does not decode (nothing printed); a printed card that fails the key-origin checks is 2, or 18 after a correction. 32 is added when an input file or stdout failed. 64 = bad command line."
+        after_help = "Exit status: 0 = nothing to correct. 16 = a correction was applied (verified by reassembly, or verifiable once the rest of a short chunk set is given). 22 = a corrected string that is not a card (16 + 4 verify before trusting + 2 invalid; it is still printed). 2 = an input is invalid: uncorrectable, not one card's chunk set (chunks under different chunk-set ids that together cover every index of one set are refused as a suspected miscorrection or two cards mixed), or a card that does not decode (nothing printed); a printed card that fails the key-origin checks is 2, or 18 after a correction. 32 is added when an input file or stdout failed. 64 = bad command line."
     )]
     Repair(cmd::repair::RepairArgs),
     /// Render receive/change addresses controlled by a card's xpub (read-only).

@@ -296,3 +296,60 @@ fn clean_partial_set_exit_0_no_advisory() {
         .stdout(predicate::str::contains("# Repair report").not())
         .stderr(predicate::str::contains("UNVERIFIED").not());
 }
+
+// ============================================================================
+// Brian's ruling of 2026-11-26 (FOLLOWUP `mk1-mixed-chunk-set-id-exits-0`):
+// chunk 0 of one real card with chunk 1 of another cover every index of a
+// set of 2 under two set ids. `mk repair` refuses them (2, nothing printed),
+// as the one-card verbs already refuse any input with two set ids.
+// ============================================================================
+
+#[test]
+fn chunks_of_two_cards_covering_every_index_repair_exits_2() {
+    Command::cargo_bin("mk")
+        .unwrap()
+        .args(["repair", CHUNK0, SECOND_CHUNK1])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("together cover every index"));
+}
+
+/// A complete card is a card by itself: one co-batched with a lone chunk of
+/// another card is not a split set, so the lone chunk keeps decision 7.
+#[test]
+fn complete_card_with_lone_chunk_of_another_card_is_not_a_split_set() {
+    Command::cargo_bin("mk")
+        .unwrap()
+        .args(["repair", CHUNK0, CHUNK1, SECOND_CHUNK1])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(SECOND_CHUNK1));
+}
+
+/// The verbs that read one card refuse any input with two set ids (the
+/// codec's `ChunkSetIdMismatch`), covering or not: pinned here so every verb
+/// that groups mk1 chunks answers the mixed set with 2.
+#[test]
+fn one_card_verbs_refuse_chunks_of_two_cards_exit_2() {
+    let verbs: [&[&str]; 6] = [
+        &["decode"],
+        &["inspect"],
+        &["verify"],
+        &["address"],
+        &["derive", "--index", "0"],
+        &["decode", "--json"],
+    ];
+    for verb in verbs {
+        let mut args: Vec<&str> = verb.to_vec();
+        args.extend([CHUNK0, SECOND_CHUNK1]);
+        Command::cargo_bin("mk")
+            .unwrap()
+            .args(&args)
+            .assert()
+            .code(2)
+            .stderr(
+                predicate::str::contains("chunk_set_id mismatch").or(predicate::str::is_empty()),
+            );
+    }
+}
